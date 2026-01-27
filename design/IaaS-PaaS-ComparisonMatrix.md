@@ -26,10 +26,10 @@
 | Tier | IaaS Workshop | PaaS Workshop |
 |------|---------------|---------------|
 | **WAF/Gateway** | Application Gateway with WAF v2 | Application Gateway with WAF v2 |
-| **Web Tier** | NGINX on Ubuntu VMs (2 instances, AZ spread) | **Azure Static Web Apps** (global CDN) |
+| **Web Tier** | NGINX on Ubuntu VMs (2 instances, AZ spread) | **Azure Static Web Apps** (globally distributed) |
 | **App Tier** | Express/Node.js on Ubuntu VMs (2 instances) | **Azure App Service** (Linux, Node.js) |
 | **Load Balancing** | Internal Load Balancer between Web→App | Built-in (App Service handles internally) |
-| **DB Tier** | MongoDB Replica Set on VMs (2 nodes) | **Azure Cosmos DB** (MongoDB API or NoSQL) |
+| **DB Tier** | MongoDB Replica Set on VMs (2 nodes) | **Azure Cosmos DB for MongoDB vCore** |
 | **Networking** | VNet, Subnets, NSGs, NAT Gateway | VNet Integration, Private Endpoints |
 
 ### 2.2 Architecture Diagrams
@@ -41,9 +41,27 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 
 **PaaS Architecture:**
 ```
-Internet → App Gateway (WAF) → Static Web Apps (React SPA)
-                             → App Service (Express API) → Cosmos DB
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  Static Asset Flow (No WAF needed - read-only content with built-in protection) │
+│                                                                                 │
+│  Browser ──→ Internet ──→ Static Web Apps (React SPA)                           │
+│                           └── Built-in: Global CDN, Free SSL, DDoS protection   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  API Flow (WAF required - protects writable endpoints and sensitive data)       │
+│                                                                                 │
+│  Browser ──→ Internet ──→ App Gateway (WAF v2) ──→ App Service ──→ Cosmos DB    │
+│                           └── WAF: SQL injection, XSS, Bot protection           │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Why No App Gateway for Static Web Apps?**
+- SWA serves **read-only static assets** (HTML, CSS, JS, images)
+- SWA includes **built-in DDoS protection**, **global CDN**, and **free SSL**
+- WAF rules (SQL injection, XSS) are irrelevant for static file serving
+- Adding App Gateway would increase **latency** (+10-50ms) and **cost** (~$250/month) with minimal security benefit
+- **Attack surface is the API**, not the static frontend
 
 ---
 
@@ -75,16 +93,20 @@ Internet → App Gateway (WAF) → Static Web Apps (React SPA)
 
 ### 3.3 Database Tier
 
-| Aspect | IaaS (MongoDB on VMs) | PaaS (Cosmos DB) |
-|--------|----------------------|------------------|
-| **Deployment** | VM setup + RS initialization | Bicep resource creation |
-| **High Availability** | Manual RS config (2 nodes) | Built-in (multi-region optional) |
-| **Scaling** | Vertical (larger VMs) | Horizontal (RU/s or autoscale) |
-| **Backup** | Azure Backup + mongodump | Automatic continuous backup |
-| **Connection** | mongodb:// connection string | Cosmos DB connection string |
-| **SDK** | Mongoose ODM | **Cosmos DB SDK** or Mongoose (MongoDB API) |
-| **Cost** | VM hours + Premium SSD | RU/s consumption or serverless |
-| **Ops Overhead** | High (patching, RS management) | Near zero |
+| Aspect | IaaS (MongoDB on VMs) | PaaS (Cosmos DB for MongoDB vCore) |
+|--------|----------------------|------------------------------------|
+| **Service Type** | Self-managed MongoDB | Fully managed, MongoDB-compatible |
+| **Foundation** | MongoDB Community Edition | Cosmos DB engine with MongoDB wire protocol |
+| **Deployment** | VM setup + RS initialization | Bicep resource creation (cluster) |
+| **High Availability** | Manual RS config (2 nodes) | Built-in HA (99.995% SLA) |
+| **Scaling** | Vertical (larger VMs) | Vertical (vCore tiers) + Horizontal (sharding) |
+| **Backup** | Azure Backup + mongodump | Automatic continuous backup (PITR) |
+| **Connection** | mongodb:// connection string | mongodb+srv:// connection string (compatible) |
+| **SDK** | Mongoose ODM | Mongoose ODM (compatible) |
+| **Global Distribution** | N/A | Optional geo-replicas |
+| **Vector Search** | Manual setup required | Built-in vector search support |
+| **Cost** | VM hours + Premium SSD | vCore-based (M30: ~$200/mo, predictable) |
+| **Ops Overhead** | High (patching, RS management) | Near zero (fully managed) |
 
 ### 3.4 Networking & Security
 
@@ -103,8 +125,9 @@ Internet → App Gateway (WAF) → Static Web Apps (React SPA)
 
 | Component | IaaS Implementation | PaaS Changes Required |
 |-----------|--------------------|-----------------------|
-| **Database Connection** | Mongoose + MongoDB RS connection string | Option A: Mongoose + Cosmos DB MongoDB API<br>Option B: @azure/cosmos SDK |
-| **Environment Config** | `MONGODB_URI` env var | `COSMOS_CONNECTION_STRING` or `COSMOS_ENDPOINT` + MI |
+| **Database Connection** | Mongoose + MongoDB RS connection string | Mongoose + Cosmos DB vCore connection string |
+| **Environment Config** | `MONGODB_URI` env var | `COSMOS_CONNECTION_STRING` or same `MONGODB_URI` |
+| **Code Changes** | N/A | Minimal (connection string format only) |
 | **Health Checks** | Custom `/health` endpoint | Same + App Service health checks |
 | **Logging** | Winston to stdout/files | Winston to stdout → App Service logs |
 
@@ -121,7 +144,7 @@ Internet → App Gateway (WAF) → Static Web Apps (React SPA)
 | Component | IaaS (Bicep) | PaaS (Bicep) |
 |-----------|--------------|--------------|
 | **Compute** | VM resources, extensions, availability sets | App Service Plan + Web App |
-| **Database** | VM resources + Custom Script for MongoDB | Cosmos DB account + database + containers |
+| **Database** | VM resources + Custom Script for MongoDB | Cosmos DB account + database (Microsoft.DocumentDB/mongoClusters) |
 | **Networking** | VNet, subnets, NSGs, LBs | VNet, Private Endpoints, VNet Integration |
 | **Gateway** | Application Gateway | Application Gateway (similar) |
 | **Secrets** | Key Vault + VM MI | Key Vault + App Service MI |
@@ -141,24 +164,27 @@ Internet → App Gateway (WAF) → Static Web Apps (React SPA)
 ### 5.2 PaaS Workshop Objectives
 - ✅ Compare IaaS vs PaaS trade-offs
 - ✅ Deploy App Service with deployment slots
-- ✅ Configure Cosmos DB (data modeling, partition keys)
+- ✅ Configure Cosmos DB for MongoDB vCore (data modeling, indexing)
 - ✅ Use Static Web Apps for frontend hosting
 - ✅ Implement VNet Integration and Private Endpoints
 - ✅ Use Application Gateway with WAF for PaaS backends
 - ✅ Understand auto-scaling and cost optimization
+- ✅ Learn Cosmos DB benefits (global distribution options, vector search)
 
 ---
 
 ## 6. Decision Points for PaaS Workshop
 
-### 6.1 Cosmos DB API Choice
+### 6.1 Database Service Choice
 
 | Option | Pros | Cons | Recommendation |
 |--------|------|------|----------------|
-| **MongoDB API** | Minimal code changes, reuse Mongoose | Limited Cosmos DB features | ✅ For minimal migration effort |
-| **NoSQL API** | Full Cosmos DB features, better perf | Requires SDK rewrite | Consider for advanced workshop |
+| **Cosmos DB for MongoDB vCore** | High MongoDB compatibility, vCore pricing familiar, Mongoose works, mature ecosystem with extensive documentation, vector search built-in | Regional deployment (not global by default) | ✅ **Selected** - Mature service with comprehensive learning resources |
+| **Cosmos DB for MongoDB (RU-based)** | Serverless option, global distribution, 99.999% SLA | RU pricing unfamiliar, partial MongoDB compatibility | For global-scale scenarios |
+| **Cosmos DB NoSQL API** | Best Cosmos DB features, highest performance | Requires complete SDK rewrite | Not recommended (too different from IaaS) |
+| **Azure DocumentDB** | 99.03% MongoDB compatible, open-source (MIT), multi-cloud | Newer service with less documentation available | Alternative for multi-cloud focus |
 
-**Decision**: _TBD - Document in DatabaseDesign.md_
+**Decision**: ✅ **Cosmos DB for MongoDB vCore** - Selected for its mature ecosystem, extensive documentation and tutorials, good MongoDB compatibility, and familiar vCore pricing model that workshop participants can easily understand.
 
 ### 6.2 Frontend Hosting
 
@@ -183,22 +209,29 @@ Internet → App Gateway (WAF) → Static Web Apps (React SPA)
 
 ## 7. Next Steps
 
-1. [ ] Finalize Cosmos DB API choice (MongoDB API vs NoSQL API)
-2. [ ] Create `AzureArchitectureDesign.md` with PaaS components
-3. [ ] Create `DatabaseDesign.md` for Cosmos DB data modeling
-4. [ ] Create `BackendApplicationDesign.md` with SDK changes
-5. [ ] Create `FrontendApplicationDesign.md` with SWA configuration
+1. [x] ~~Finalize Database service choice~~ → **Cosmos DB for MongoDB vCore**
+2. [x] ~~Finalize Frontend hosting~~ → **Static Web Apps (direct access, no App GW)**
+3. [x] ~~Finalize App Gateway scope~~ → **API protection only (App Service)**
+4. [x] ~~Create `AzureArchitectureDesign.md`~~ → PaaS infrastructure specification
+5. [x] ~~Create `DatabaseDesign.md`~~ → Cosmos DB vCore data modeling
+6. [x] ~~Create `BackendApplicationDesign.md`~~ → App Service deployment patterns
+7. [x] ~~Create `FrontendApplicationDesign.md`~~ → SWA configuration
+8. [x] ~~Create `IaaS-to-PaaS-Migration-Changes.md`~~ → Detailed file-by-file change document
+9. [ ] Create `RepositoryWideDesignRules.md` for PaaS-specific patterns
+10. [ ] Implement Bicep templates based on specifications
+11. [ ] Adapt backend code for Cosmos DB connection
+12. [ ] Adapt frontend code for SWA deployment
 
 ---
 
 ## Appendix: Cost Comparison Estimates
 
-| Component | IaaS Monthly Cost (Est.) | PaaS Monthly Cost (Est.) |
-|-----------|--------------------------|--------------------------|
-| Web Tier | 2x Standard_B2s (~$60) | SWA Free tier ($0) |
-| App Tier | 2x Standard_B2s (~$60) | App Service B1 (~$13) or S1 (~$73) |
-| DB Tier | 2x Standard_B4ms (~$240) | Cosmos DB Serverless (~$25-50) |
-| App Gateway | WAF v2 (~$250) | WAF v2 (~$250) |
-| **Total** | **~$610/month** | **~$290-375/month** |
+| Component | IaaS Monthly Cost (Est.) | PaaS Monthly Cost (Est.) | Notes |
+|-----------|--------------------------|--------------------------|-------|
+| Web Tier | 2x Standard_B2s (~$60) | SWA Free tier ($0) | No App GW needed for SWA |
+| App Tier | 2x Standard_B2s (~$60) | App Service B1 (~$13) or S1 (~$73) | Protected by App GW |
+| DB Tier | 2x Standard_B4ms (~$240) | Cosmos DB vCore M30 (~$200) | Managed MongoDB compatible |
+| App Gateway | WAF v2 (~$250) | WAF v2 (~$250) | API protection only |
+| **Total** | **~$610/month** | **~$465-525/month** | ~25% cost reduction |
 
 *Note: Estimates for Japan East region, actual costs vary by usage*
