@@ -115,7 +115,7 @@ get_configuration() {
     fi
     
     # Azure configuration
-    LOCATION="${AZURE_LOCATION:-japaneast}"
+    LOCATION="${AZURE_LOCATION:-japanwest}"
     RESOURCE_GROUP="rg-paasworkshop-${GITHUB_USER}"
     APP_NAME="gha-${GITHUB_USER}-paasworkshop"
     
