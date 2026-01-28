@@ -1,0 +1,61 @@
+# =============================================================================
+# Local Development Environment - Azure PaaS Workshop
+# =============================================================================
+# Uses MongoDB for local development
+#
+# NOTE ON COSMOS DB EMULATOR:
+#   The Azure Cosmos DB Emulator (MongoDB API) only supports x64 architecture.
+#   For Apple Silicon (M1/M2/M3) and Windows ARM, we use standard MongoDB.
+#   The Cosmos DB vNext emulator supports ARM64 but only NoSQL API (not MongoDB).
+#   Reference: https://learn.microsoft.com/en-us/azure/cosmos-db/emulator-linux
+#
+# In production, the app uses Azure Cosmos DB for MongoDB vCore.
+# The Mongoose ODM works identically with both MongoDB and Cosmos DB MongoDB API.
+#
+# Usage:
+#   docker-compose up -d      # Start MongoDB
+#   docker-compose down       # Stop MongoDB
+#   docker-compose down -v    # Stop and remove data
+#
+# Ports:
+#   27017 - MongoDB
+#   8081  - Mongo Express (Web UI)
+# =============================================================================
+
+services:
+  # MongoDB for local development
+  # Compatible with Cosmos DB for MongoDB vCore in production
+  mongodb:
+    image: mongo:7.0
+    container_name: paas-blogapp-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Mongo Express - Web-based MongoDB admin interface
+  mongo-express:
+    image: mongo-express:1.0
+    container_name: paas-blogapp-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
+
+networks:
+  default:
+    name: paas-workshop-network

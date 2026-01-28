@@ -1,0 +1,212 @@
+# Azure PaaS Workshop - Bicep Templates
+
+This directory contains Infrastructure as Code (IaC) templates for deploying the Azure PaaS Workshop environment.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Internet                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │                                    │
+         ▼                                    ▼
+┌─────────────────────┐            ┌─────────────────────────────────┐
+│  Static Web Apps    │            │  Application Gateway + WAF v2   │
+│  (React Frontend)   │            │  (Public IP)                    │
+└─────────────────────┘            └─────────────────────────────────┘
+                                               │
+                                               ▼ (via Private Endpoint)
+                            ┌─────────────────────────────────────────────┐
+                            │              Virtual Network                 │
+                            │                                             │
+                            │  ┌──────────────────────────────────────┐   │
+                            │  │  App Service (Node.js 20 LTS)        │   │
+                            │  │  + VNet Integration (outbound)       │   │
+                            │  │  + Private Endpoint (inbound)        │   │
+                            │  └──────────────────────────────────────┘   │
+                            │           │              │          │       │
+                            │           ▼              ▼          ▼       │
+                            │  ┌────────────┐  ┌────────────┐  ┌──────┐  │
+                            │  │ Cosmos DB  │  │ Key Vault  │  │ NAT  │  │
+                            │  │ (MongoDB)  │  │ (Secrets)  │  │ GW   │──┼──→ Internet
+                            │  │ Private EP │  │ Private EP │  └──────┘  │   (App Insights)
+                            │  └────────────┘  └────────────┘            │
+                            └─────────────────────────────────────────────┘
+```
+
+## Module Structure
+
+```
+modules/
+├── network.bicep       # VNet, Subnets, NAT Gateway, Private DNS Zones
+├── monitoring.bicep    # Log Analytics, Application Insights
+├── keyvault.bicep      # Key Vault with Private Endpoint
+├── cosmosdb.bicep      # Cosmos DB for MongoDB vCore with Private Endpoint
+├── appservice.bicep    # App Service with VNet Integration & Private Endpoint
+├── appgateway.bicep    # Application Gateway WAF v2
+└── staticwebapp.bicep  # Azure Static Web Apps
+```
+
+## Prerequisites
+
+- Azure CLI installed and logged in
+- Resource Group created
+- Microsoft Entra ID App Registrations created:
+  - Backend API (server application)
+  - Frontend SPA (public client)
+
+## Quick Start
+
+### 1. Create Resource Group
+
+```bash
+az group create --name rg-paasworkshop-dev --location japaneast
+```
+
+### 2. Configure Parameters
+
+Copy the parameter template and fill in your values:
+
+```bash
+cp main.bicepparam main.local.bicepparam
+```
+
+Edit `main.local.bicepparam`:
+
+```bicep
+using 'main.bicep'
+
+param environment = 'dev'
+param location = 'japaneast'
+param baseName = 'blogapp'
+param entraTenantId = '<your-tenant-id>'
+param entraBackendClientId = '<your-backend-app-id>'
+param entraFrontendClientId = '<your-frontend-app-id>'
+param cosmosDbAdminPassword = '<strong-password>'
+```
+
+### 3. Deploy
+
+```bash
+az deployment group create \
+  --resource-group rg-paasworkshop-dev \
+  --template-file main.bicep \
+  --parameters main.local.bicepparam
+```
+
+### 4. Get Outputs
+
+```bash
+# Get all outputs
+az deployment group show \
+  --resource-group rg-paasworkshop-dev \
+  --name main \
+  --query properties.outputs
+
+# Get specific outputs
+az deployment group show \
+  --resource-group rg-paasworkshop-dev \
+  --name main \
+  --query properties.outputs.appGatewayFqdn.value -o tsv
+```
+
+## Post-Deployment Steps
+
+### 1. Get Static Web Apps Deployment Token
+
+```bash
+SWA_NAME=$(az deployment group show -g rg-paasworkshop-dev -n main --query properties.outputs.staticWebAppName.value -o tsv)
+az staticwebapp secrets list --name $SWA_NAME --query "properties.apiKey" -o tsv
+```
+
+### 2. Configure GitHub Secrets
+
+Add to your GitHub repository secrets:
+- `AZURE_STATIC_WEB_APPS_API_TOKEN`: Token from step 1
+
+### 3. Update Entra ID Redirect URIs
+
+Add redirect URI to your Frontend App Registration:
+```
+https://<swa-url>/.auth/login/aad/callback
+```
+
+### 4. Update Frontend Configuration
+
+Update `materials/frontend/staticwebapp.config.json` with the Application Gateway URL:
+```json
+{
+  "routes": [
+    {
+      "route": "/api/*",
+      "rewrite": "https://<app-gateway-fqdn>/api/*"
+    }
+  ]
+}
+```
+
+## Resource Naming Convention
+
+| Resource Type | Pattern | Example |
+|--------------|---------|---------|
+| Resource Group | `rg-{baseName}-{env}` | `rg-blogapp-dev` |
+| Virtual Network | `vnet-{baseName}-{env}` | `vnet-blogapp-dev` |
+| App Service Plan | `asp-{baseName}-{env}` | `asp-blogapp-dev` |
+| App Service | `app-{baseName}-{env}` | `app-blogapp-dev` |
+| Cosmos DB | `cosmos-{baseName}-{env}` | `cosmos-blogapp-dev` |
+| Key Vault | `kv-{baseName}-{env}` | `kv-blogapp-dev` |
+| Application Gateway | `agw-{baseName}-{env}` | `agw-blogapp-dev` |
+| Static Web Apps | `swa-{baseName}-{env}` | `swa-blogapp-dev` |
+| NAT Gateway | `nat-{baseName}-{env}` | `nat-blogapp-dev` |
+| Private Endpoint | `pe-{service}-{baseName}` | `pe-appservice-blogapp` |
+
+## Estimated Costs (Japan East)
+
+| Resource | SKU | Monthly Cost |
+|----------|-----|--------------|
+| Static Web Apps | Free | $0 |
+| App Service | B1 | ~$13 |
+| Cosmos DB vCore | M30 | ~$200 |
+| Application Gateway | WAF_v2 (1 instance) | ~$250 |
+| Key Vault | Standard | ~$1 |
+| NAT Gateway | Standard | ~$45 |
+| VNet / Private Endpoints | - | ~$10 |
+| **Total** | | **~$520/month** |
+
+## Cleanup
+
+Delete all resources:
+
+```bash
+az group delete --name rg-paasworkshop-dev --yes --no-wait
+```
+
+## Troubleshooting
+
+### Deployment Fails with "Key Vault not found"
+
+The Key Vault module needs to complete before Cosmos DB can store secrets. The deployment handles dependencies automatically, but if you see this error, try deploying again.
+
+### App Service Can't Access Key Vault
+
+Ensure the App Service Managed Identity has the `Key Vault Secrets User` role on the Key Vault. The template handles this via RBAC.
+
+### Application Gateway Shows Unhealthy Backend
+
+1. Check that the App Service health endpoint (`/health`) returns 200 OK
+2. Verify the Private DNS Zone is correctly linked to the VNet
+3. Check NSG rules aren't blocking traffic
+
+### GitHub Actions Can't Deploy to App Service
+
+Ensure SCM site allows public access:
+- `scmIpSecurityRestrictionsUseMain` should be `false`
+- `scmIpSecurityRestrictionsDefaultAction` should be `Allow`
+
+## References
+
+- [Azure Static Web Apps Documentation](https://docs.microsoft.com/azure/static-web-apps/)
+- [Azure App Service Documentation](https://docs.microsoft.com/azure/app-service/)
+- [Cosmos DB for MongoDB vCore](https://docs.microsoft.com/azure/cosmos-db/mongodb/vcore/)
+- [Application Gateway WAF](https://docs.microsoft.com/azure/web-application-firewall/ag/ag-overview)
+- [Private Endpoints](https://docs.microsoft.com/azure/private-link/private-endpoint-overview)
