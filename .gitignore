@@ -1,4 +1,5 @@
 iaas/
+localwork/
 
 .ssh/*
 *.key
@@ -11,12 +12,11 @@ cert-base64.txt
 # =============================================================================
 # Bicep Parameter Files with Personal/Sensitive Values
 # =============================================================================
-# main.bicepparam is the TEMPLATE (committed, empty values)
+# main.bicepparam and dev.bicepparam are TEMPLATES (committed, empty values)
 # main.local.bicepparam is for YOUR values (gitignored)
 # =============================================================================
 *.local.bicepparam
 *.local.bicepparam.*
-materials/bicep/dev.bicepparam
 
 # =============================================================================
 # Environment Files

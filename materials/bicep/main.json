@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "11734807373533196483"
+      "templateHash": "11326589670862494040"
     }
   },
   "parameters": {
@@ -37,6 +37,26 @@
         "description": "Base name for all resources (will be combined with resource type prefix)"
       }
     },
+    "groupId": {
+      "type": "string",
+      "defaultValue": "",
+      "allowedValues": [
+        "",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J"
+      ],
+      "metadata": {
+        "description": "Workshop group identifier (A-J) for multi-group deployments. Leave empty for single-group."
+      }
+    },
     "entraTenantId": {
       "type": "string",
       "metadata": {
@@ -52,7 +72,7 @@
     "entraFrontendClientId": {
       "type": "string",
       "metadata": {
-        "description": "Microsoft Entra ID Frontend SPA Client ID"
+        "description": "Microsoft Entra ID Frontend SPA Client ID - stored in Key Vault for frontend configuration"
       }
     },
     "cosmosDbAdminPassword": {
@@ -113,7 +133,7 @@
     "appGatewayMinCapacity": {
       "type": "int",
       "defaultValue": 1,
-      "minValue": 0,
+      "minValue": 1,
       "maxValue": 10,
       "metadata": {
         "description": "Application Gateway minimum instances"
@@ -122,10 +142,17 @@
     "appGatewayMaxCapacity": {
       "type": "int",
       "defaultValue": 2,
-      "minValue": 1,
+      "minValue": 2,
       "maxValue": 10,
       "metadata": {
         "description": "Application Gateway maximum instances"
+      }
+    },
+    "deployAppGateway": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy Application Gateway (set to false to save costs in dev)"
       }
     }
   },
@@ -133,7 +160,8 @@
     "tags": {
       "Environment": "[parameters('environment')]",
       "Project": "Azure-PaaS-Workshop",
-      "ManagedBy": "Bicep"
+      "ManagedBy": "Bicep",
+      "GroupId": "[if(empty(parameters('groupId')), 'single', parameters('groupId'))]"
     }
   },
   "resources": [
@@ -852,7 +880,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "10903801018982498186"
+              "templateHash": "3014898110420182057"
             }
           },
           "parameters": {
@@ -967,8 +995,7 @@
                     "diskSizeGB": "[parameters('storageSizeGb')]",
                     "enableHa": "[parameters('enableHa')]"
                   }
-                ],
-                "publicNetworkAccess": "Disabled"
+                ]
               }
             },
             {
@@ -1667,7 +1694,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "9663145189097395713"
+              "templateHash": "12011780813263981731"
             }
           },
           "parameters": {
@@ -1705,7 +1732,7 @@
             "minCapacity": {
               "type": "int",
               "defaultValue": 1,
-              "minValue": 0,
+              "minValue": 1,
               "maxValue": 10,
               "metadata": {
                 "description": "Minimum capacity for autoscale"
@@ -1714,7 +1741,7 @@
             "maxCapacity": {
               "type": "int",
               "defaultValue": 2,
-              "minValue": 1,
+              "minValue": 2,
               "maxValue": 10,
               "metadata": {
                 "description": "Maximum capacity for autoscale"
@@ -2161,6 +2188,10 @@
     "appInsightsName": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.Resources/deployments', 'monitoring-deployment'), '2025-04-01').outputs.appInsightsName.value]"
+    },
+    "recommendedResourceGroupName": {
+      "type": "string",
+      "value": "[if(empty(parameters('groupId')), format('rg-{0}-workshop', parameters('baseName')), format('rg-{0}-{1}-workshop', parameters('baseName'), parameters('groupId')))]"
     }
   }
 }

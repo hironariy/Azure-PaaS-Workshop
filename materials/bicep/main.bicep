@@ -33,6 +33,19 @@ param location string = resourceGroup().location
 @maxLength(15)
 param baseName string = 'blogapp'
 
+// =============================================================================
+// Multi-Group Workshop Support
+// =============================================================================
+// For workshops with multiple groups (A-J) deploying to the same subscription,
+// each group should use a unique resource group name.
+// The groupId is used to generate a recommended resource group name.
+// Example: Group A → rg-blogapp-A-workshop
+// =============================================================================
+
+@description('Workshop group identifier (A-J) for multi-group deployments. Leave empty for single-group.')
+@allowed(['', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'])
+param groupId string = ''
+
 @description('Microsoft Entra ID Tenant ID')
 param entraTenantId string
 
@@ -90,6 +103,9 @@ param appGatewayMinCapacity int = 1
 @maxValue(10)
 param appGatewayMaxCapacity int = 2
 
+@description('Deploy Application Gateway (set to false to save costs in dev)')
+param deployAppGateway bool = true
+
 // =============================================================================
 // Variables
 // =============================================================================
@@ -98,6 +114,7 @@ var tags = {
   Environment: environment
   Project: 'Azure-PaaS-Workshop'
   ManagedBy: 'Bicep'
+  GroupId: empty(groupId) ? 'single' : groupId
 }
 
 // =============================================================================
@@ -275,6 +292,11 @@ output staticWebAppUrl string = staticWebApp.outputs.staticWebAppUrl
 // Monitoring outputs
 output logAnalyticsWorkspaceId string = monitoring.outputs.logAnalyticsWorkspaceId
 output appInsightsName string = monitoring.outputs.appInsightsName
+
+// Multi-group workshop support
+output recommendedResourceGroupName string = empty(groupId) 
+  ? 'rg-${baseName}-workshop' 
+  : 'rg-${baseName}-${groupId}-workshop'
 
 // =============================================================================
 // Post-Deployment Instructions

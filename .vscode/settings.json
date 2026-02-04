@@ -1,0 +1,7 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "az": true,
+        "npm install": true,
+        "npm run dev": true
+    }
+}

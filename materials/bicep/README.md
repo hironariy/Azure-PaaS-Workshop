@@ -60,18 +60,26 @@ modules/
 ### 1. Create Resource Group
 
 ```bash
+# For single-group workshops
 az group create --name rg-paasworkshop-dev --location japaneast
+
+# For multi-group workshops (use your assigned group letter A-J)
+az group create --name rg-blogapp-A-workshop --location japaneast
 ```
 
 ### 2. Configure Parameters
 
-Copy the parameter template and fill in your values:
-
+**Option A: Full deployment (production-like)**
 ```bash
 cp main.bicepparam main.local.bicepparam
 ```
 
-Edit `main.local.bicepparam`:
+**Option B: Cost-optimized deployment (development/testing)**
+```bash
+cp dev.bicepparam main.local.bicepparam
+```
+
+Edit `main.local.bicepparam` with your values:
 
 ```bicep
 using 'main.bicep'
@@ -79,6 +87,7 @@ using 'main.bicep'
 param environment = 'dev'
 param location = 'japaneast'
 param baseName = 'blogapp'
+param groupId = ''  // Set to 'A'-'J' for multi-group workshops
 param entraTenantId = '<your-tenant-id>'
 param entraBackendClientId = '<your-backend-app-id>'
 param entraFrontendClientId = '<your-frontend-app-id>'
