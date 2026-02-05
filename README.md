@@ -285,14 +285,31 @@ You need access to the following:
 > **For Personal/Free Azure Accounts:**
 > If you created your own Azure account, you are automatically the Global Administrator and can create app registrations without any additional setup.
 
-#### 2.1.4 Clone the Repository
+#### 2.1.4 Create Your Repository
 
-Clone the workshop repository to your local machine:
+Since this is a **template repository**, you need to create your own copy first.
+
+**Step 1: Create from Template**
+
+1. Go to [https://github.com/hironariy/Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop)
+2. Click the green **"Use this template"** button
+3. Select **"Create a new repository"**
+
+| Setting | Recommendation |
+|---------|----------------|
+| **Owner** | Your GitHub username or organization |
+| **Repository name** | `Azure-PaaS-Workshop` (or any name) |
+| **Visibility** | Public (required for free GitHub Actions) |
+| **Include all branches** | ☐ Unchecked |
+
+4. Click **"Create repository"**
+
+**Step 2: Clone Your Repository**
 
 **macOS/Linux:**
 ```bash
-# Clone the official repository
-git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
+# Clone YOUR repository (not the template)
+git clone https://github.com/YOUR_USERNAME/Azure-PaaS-Workshop.git
 
 # Navigate to the project folder
 cd Azure-PaaS-Workshop
@@ -300,20 +317,16 @@ cd Azure-PaaS-Workshop
 
 **Windows PowerShell:**
 ```powershell
-# Clone the official repository
-git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
+# Clone YOUR repository (not the template)
+git clone https://github.com/YOUR_USERNAME/Azure-PaaS-Workshop.git
 
 # Navigate to the project folder
 cd Azure-PaaS-Workshop
 ```
 
-> **💡 For Workshop Participants:** If you forked this repository to your own GitHub account, clone your fork instead:
-> ```bash
-> git clone https://github.com/YOUR_USERNAME/Azure-PaaS-Workshop.git
-> cd Azure-PaaS-Workshop
-> ```
+> **⚠️ Important:** Replace `YOUR_USERNAME` with your actual GitHub username.
 
-✅ **Checkpoint:** Repository cloned and you are in the project directory.
+✅ **Checkpoint:** Repository created from template and cloned to your local machine.
 
 #### 2.1.5 Microsoft Entra ID App Registrations
 
