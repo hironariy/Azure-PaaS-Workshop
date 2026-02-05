@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "11326589670862494040"
+      "templateHash": "14096522552174128781"
     }
   },
   "parameters": {
@@ -130,29 +130,18 @@
         "description": "Static Web Apps SKU"
       }
     },
-    "appGatewayMinCapacity": {
-      "type": "int",
-      "defaultValue": 1,
-      "minValue": 1,
-      "maxValue": 10,
+    "staticWebAppLocation": {
+      "type": "string",
+      "defaultValue": "eastasia",
+      "allowedValues": [
+        "westus2",
+        "centralus",
+        "eastus2",
+        "westeurope",
+        "eastasia"
+      ],
       "metadata": {
-        "description": "Application Gateway minimum instances"
-      }
-    },
-    "appGatewayMaxCapacity": {
-      "type": "int",
-      "defaultValue": 2,
-      "minValue": 2,
-      "maxValue": 10,
-      "metadata": {
-        "description": "Application Gateway maximum instances"
-      }
-    },
-    "deployAppGateway": {
-      "type": "bool",
-      "defaultValue": true,
-      "metadata": {
-        "description": "Deploy Application Gateway (set to false to save costs in dev)"
+        "description": "Static Web Apps location (limited regions available: westus2, centralus, eastus2, westeurope, eastasia)"
       }
     }
   },
@@ -162,7 +151,8 @@
       "Project": "Azure-PaaS-Workshop",
       "ManagedBy": "Bicep",
       "GroupId": "[if(empty(parameters('groupId')), 'single', parameters('groupId'))]"
-    }
+    },
+    "uniqueSuffix": "[substring(uniqueString(resourceGroup().id, parameters('groupId'), parameters('baseName')), 0, 6)]"
   },
   "resources": [
     {
@@ -195,7 +185,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "15750714213364955996"
+              "templateHash": "3755423324119954429"
             }
           },
           "parameters": {
@@ -223,13 +213,6 @@
               "defaultValue": "10.1.0.0/16",
               "metadata": {
                 "description": "VNet address space"
-              }
-            },
-            "appGatewaySubnetPrefix": {
-              "type": "string",
-              "defaultValue": "10.1.0.0/24",
-              "metadata": {
-                "description": "Application Gateway subnet CIDR"
               }
             },
             "appServiceSubnetPrefix": {
@@ -310,14 +293,6 @@
                 },
                 "subnets": [
                   {
-                    "name": "snet-appgw",
-                    "properties": {
-                      "addressPrefix": "[parameters('appGatewaySubnetPrefix')]",
-                      "privateEndpointNetworkPolicies": "Enabled",
-                      "privateLinkServiceNetworkPolicies": "Enabled"
-                    }
-                  },
-                  {
                     "name": "snet-appservice",
                     "properties": {
                       "addressPrefix": "[parameters('appServiceSubnetPrefix')]",
@@ -348,30 +323,6 @@
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Network/natGateways', variables('natGatewayName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Network/privateDnsZones",
-              "apiVersion": "2020-06-01",
-              "name": "privatelink.azurewebsites.net",
-              "location": "global",
-              "tags": "[parameters('tags')]"
-            },
-            {
-              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
-              "apiVersion": "2020-06-01",
-              "name": "[format('{0}/{1}', 'privatelink.azurewebsites.net', format('link-{0}', variables('vnetName')))]",
-              "location": "global",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "registrationEnabled": false,
-                "virtualNetwork": {
-                  "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
-                }
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.azurewebsites.net')]",
-                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
               ]
             },
             {
@@ -432,21 +383,13 @@
               "type": "string",
               "value": "[variables('vnetName')]"
             },
-            "appGatewaySubnetId": {
+            "appServiceSubnetId": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')), '2023-09-01').subnets[0].id]"
             },
-            "appServiceSubnetId": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')), '2023-09-01').subnets[1].id]"
-            },
             "privateEndpointSubnetId": {
               "type": "string",
-              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')), '2023-09-01').subnets[2].id]"
-            },
-            "appServicePrivateDnsZoneId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.azurewebsites.net')]"
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', variables('vnetName')), '2023-09-01').subnets[1].id]"
             },
             "cosmosPrivateDnsZoneId": {
               "type": "string",
@@ -639,6 +582,9 @@
           "baseName": {
             "value": "[parameters('baseName')]"
           },
+          "uniqueSuffix": {
+            "value": "[variables('uniqueSuffix')]"
+          },
           "privateEndpointSubnetId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.privateEndpointSubnetId.value]"
           },
@@ -659,7 +605,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "11994819126382265182"
+              "templateHash": "7928785523076703939"
             }
           },
           "parameters": {
@@ -680,6 +626,12 @@
               "type": "string",
               "metadata": {
                 "description": "Base name for resources"
+              }
+            },
+            "uniqueSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for globally unique resource names"
               }
             },
             "privateEndpointSubnetId": {
@@ -716,8 +668,8 @@
             }
           },
           "variables": {
-            "keyVaultName": "[format('kv-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-            "privateEndpointName": "[format('pe-keyvault-{0}', parameters('baseName'))]",
+            "keyVaultName": "[format('kv-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
+            "privateEndpointName": "[format('pe-keyvault-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
             "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6"
           },
           "resources": [
@@ -742,7 +694,7 @@
                 "publicNetworkAccess": "Disabled",
                 "networkAcls": {
                   "defaultAction": "Deny",
-                  "bypass": "None",
+                  "bypass": "AzureServices",
                   "ipRules": [],
                   "virtualNetworkRules": []
                 }
@@ -851,6 +803,9 @@
           "baseName": {
             "value": "[parameters('baseName')]"
           },
+          "uniqueSuffix": {
+            "value": "[variables('uniqueSuffix')]"
+          },
           "privateEndpointSubnetId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.privateEndpointSubnetId.value]"
           },
@@ -880,7 +835,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "3014898110420182057"
+              "templateHash": "14502735417150560341"
             }
           },
           "parameters": {
@@ -901,6 +856,12 @@
               "type": "string",
               "metadata": {
                 "description": "Base name for resources"
+              }
+            },
+            "uniqueSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for globally unique resource names"
               }
             },
             "privateEndpointSubnetId": {
@@ -972,8 +933,8 @@
             }
           },
           "variables": {
-            "clusterName": "[format('cosmos-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-            "privateEndpointName": "[format('pe-cosmos-{0}', parameters('baseName'))]",
+            "clusterName": "[format('cosmos-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
+            "privateEndpointName": "[format('pe-cosmos-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
             "connectionString": "[format('mongodb+srv://{0}:{1}@{2}.mongocluster.cosmos.azure.com/?tls=true&authMechanism=SCRAM-SHA-256&retrywrites=false&maxIdleTimeMS=120000', parameters('administratorLogin'), parameters('administratorPassword'), variables('clusterName'))]"
           },
           "resources": [
@@ -1108,14 +1069,11 @@
           "baseName": {
             "value": "[parameters('baseName')]"
           },
+          "uniqueSuffix": {
+            "value": "[variables('uniqueSuffix')]"
+          },
           "appServiceSubnetId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.appServiceSubnetId.value]"
-          },
-          "privateEndpointSubnetId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.privateEndpointSubnetId.value]"
-          },
-          "appServicePrivateDnsZoneId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.appServicePrivateDnsZoneId.value]"
           },
           "keyVaultName": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'keyvault-deployment'), '2025-04-01').outputs.keyVaultName.value]"
@@ -1143,7 +1101,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "6171784477132548310"
+              "templateHash": "7940416640151876704"
             }
           },
           "parameters": {
@@ -1166,22 +1124,16 @@
                 "description": "Base name for resources"
               }
             },
+            "uniqueSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for globally unique resource names"
+              }
+            },
             "appServiceSubnetId": {
               "type": "string",
               "metadata": {
                 "description": "Subnet ID for VNet Integration (outbound)"
-              }
-            },
-            "privateEndpointSubnetId": {
-              "type": "string",
-              "metadata": {
-                "description": "Subnet ID for Private Endpoint (inbound)"
-              }
-            },
-            "appServicePrivateDnsZoneId": {
-              "type": "string",
-              "metadata": {
-                "description": "Private DNS Zone ID for App Service"
               }
             },
             "keyVaultName": {
@@ -1243,14 +1195,13 @@
             }
           },
           "variables": {
-            "appServicePlanName": "[format('asp-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-            "appServiceName": "[format('app-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-            "privateEndpointName": "[format('pe-appservice-{0}', parameters('baseName'))]"
+            "appServicePlanName": "[format('asp-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
+            "appServiceName": "[format('app-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]"
           },
           "resources": [
             {
               "type": "Microsoft.Web/serverfarms",
-              "apiVersion": "2023-01-01",
+              "apiVersion": "2024-04-01",
               "name": "[variables('appServicePlanName')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
@@ -1264,7 +1215,7 @@
             },
             {
               "type": "Microsoft.Web/sites",
-              "apiVersion": "2023-01-01",
+              "apiVersion": "2024-04-01",
               "name": "[variables('appServiceName')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
@@ -1275,18 +1226,19 @@
               "properties": {
                 "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
                 "httpsOnly": true,
-                "publicNetworkAccess": "Disabled",
+                "publicNetworkAccess": "Enabled",
                 "virtualNetworkSubnetId": "[parameters('appServiceSubnetId')]",
                 "vnetRouteAllEnabled": true,
                 "siteConfig": {
-                  "linuxFxVersion": "NODE|20-lts",
+                  "linuxFxVersion": "NODE|22-lts",
                   "alwaysOn": true,
                   "ftpsState": "Disabled",
                   "minTlsVersion": "1.2",
                   "http20Enabled": true,
                   "healthCheckPath": "/health",
-                  "ipSecurityRestrictionsDefaultAction": "Deny",
-                  "scmIpSecurityRestrictionsUseMain": false,
+                  "appCommandLine": "node src/app.js",
+                  "ipSecurityRestrictionsDefaultAction": "Allow",
+                  "scmIpSecurityRestrictionsUseMain": true,
                   "scmIpSecurityRestrictionsDefaultAction": "Allow",
                   "appSettings": [
                     {
@@ -1345,8 +1297,30 @@
               ]
             },
             {
+              "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+              "apiVersion": "2024-04-01",
+              "name": "[format('{0}/{1}', variables('appServiceName'), 'ftp')]",
+              "properties": {
+                "allow": false
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('appServiceName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+              "apiVersion": "2024-04-01",
+              "name": "[format('{0}/{1}', variables('appServiceName'), 'scm')]",
+              "properties": {
+                "allow": false
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('appServiceName'))]"
+              ]
+            },
+            {
               "type": "Microsoft.Web/sites/networkConfig",
-              "apiVersion": "2023-01-01",
+              "apiVersion": "2024-04-01",
               "name": "[format('{0}/{1}', variables('appServiceName'), 'virtualNetwork')]",
               "properties": {
                 "subnetResourceId": "[parameters('appServiceSubnetId')]",
@@ -1354,50 +1328,6 @@
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Web/sites', variables('appServiceName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Network/privateEndpoints",
-              "apiVersion": "2023-09-01",
-              "name": "[variables('privateEndpointName')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "subnet": {
-                  "id": "[parameters('privateEndpointSubnetId')]"
-                },
-                "privateLinkServiceConnections": [
-                  {
-                    "name": "appservice-connection",
-                    "properties": {
-                      "privateLinkServiceId": "[resourceId('Microsoft.Web/sites', variables('appServiceName'))]",
-                      "groupIds": [
-                        "sites"
-                      ]
-                    }
-                  }
-                ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', variables('appServiceName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
-              "apiVersion": "2023-09-01",
-              "name": "[format('{0}/{1}', variables('privateEndpointName'), 'default')]",
-              "properties": {
-                "privateDnsZoneConfigs": [
-                  {
-                    "name": "config",
-                    "properties": {
-                      "privateDnsZoneId": "[parameters('appServicePrivateDnsZoneId')]"
-                    }
-                  }
-                ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]"
               ]
             }
           ],
@@ -1412,19 +1342,11 @@
             },
             "appServiceDefaultHostName": {
               "type": "string",
-              "value": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName')), '2023-01-01').defaultHostName]"
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName')), '2024-04-01').defaultHostName]"
             },
             "appServicePrincipalId": {
               "type": "string",
-              "value": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName')), '2023-01-01', 'full').identity.principalId]"
-            },
-            "privateEndpointId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]"
-            },
-            "appServicePrivateLinkFqdn": {
-              "type": "string",
-              "value": "[format('{0}.privatelink.azurewebsites.net', variables('appServiceName'))]"
+              "value": "[reference(resourceId('Microsoft.Web/sites', variables('appServiceName')), '2024-04-01', 'full').identity.principalId]"
             }
           }
         }
@@ -1455,6 +1377,9 @@
           "baseName": {
             "value": "[parameters('baseName')]"
           },
+          "uniqueSuffix": {
+            "value": "[variables('uniqueSuffix')]"
+          },
           "privateEndpointSubnetId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.privateEndpointSubnetId.value]"
           },
@@ -1478,7 +1403,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "11994819126382265182"
+              "templateHash": "7928785523076703939"
             }
           },
           "parameters": {
@@ -1499,6 +1424,12 @@
               "type": "string",
               "metadata": {
                 "description": "Base name for resources"
+              }
+            },
+            "uniqueSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for globally unique resource names"
               }
             },
             "privateEndpointSubnetId": {
@@ -1535,8 +1466,8 @@
             }
           },
           "variables": {
-            "keyVaultName": "[format('kv-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-            "privateEndpointName": "[format('pe-keyvault-{0}', parameters('baseName'))]",
+            "keyVaultName": "[format('kv-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
+            "privateEndpointName": "[format('pe-keyvault-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
             "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6"
           },
           "resources": [
@@ -1561,7 +1492,7 @@
                 "publicNetworkAccess": "Disabled",
                 "networkAcls": {
                   "defaultAction": "Deny",
-                  "bypass": "None",
+                  "bypass": "AzureServices",
                   "ipRules": [],
                   "virtualNetworkRules": []
                 }
@@ -1655,334 +1586,6 @@
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "appgateway-deployment",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "environment": {
-            "value": "[parameters('environment')]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "baseName": {
-            "value": "[parameters('baseName')]"
-          },
-          "appGatewaySubnetId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.appGatewaySubnetId.value]"
-          },
-          "appServicePrivateLinkFqdn": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appservice-deployment'), '2025-04-01').outputs.appServicePrivateLinkFqdn.value]"
-          },
-          "minCapacity": {
-            "value": "[parameters('appGatewayMinCapacity')]"
-          },
-          "maxCapacity": {
-            "value": "[parameters('appGatewayMaxCapacity')]"
-          },
-          "tags": {
-            "value": "[variables('tags')]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "12011780813263981731"
-            }
-          },
-          "parameters": {
-            "environment": {
-              "type": "string",
-              "metadata": {
-                "description": "Environment name (dev, staging, prod)"
-              }
-            },
-            "location": {
-              "type": "string",
-              "defaultValue": "[resourceGroup().location]",
-              "metadata": {
-                "description": "Azure region for resources"
-              }
-            },
-            "baseName": {
-              "type": "string",
-              "metadata": {
-                "description": "Base name for resources"
-              }
-            },
-            "appGatewaySubnetId": {
-              "type": "string",
-              "metadata": {
-                "description": "Subnet ID for Application Gateway"
-              }
-            },
-            "appServicePrivateLinkFqdn": {
-              "type": "string",
-              "metadata": {
-                "description": "App Service FQDN (private link)"
-              }
-            },
-            "minCapacity": {
-              "type": "int",
-              "defaultValue": 1,
-              "minValue": 1,
-              "maxValue": 10,
-              "metadata": {
-                "description": "Minimum capacity for autoscale"
-              }
-            },
-            "maxCapacity": {
-              "type": "int",
-              "defaultValue": 2,
-              "minValue": 2,
-              "maxValue": 10,
-              "metadata": {
-                "description": "Maximum capacity for autoscale"
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Tags to apply to all resources"
-              }
-            }
-          },
-          "variables": {
-            "appGatewayName": "[format('agw-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-            "appGatewayPipName": "[format('pip-agw-{0}-{1}', parameters('baseName'), parameters('environment'))]",
-            "wafPolicyName": "[format('waf-{0}-{1}', parameters('baseName'), parameters('environment'))]"
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Network/publicIPAddresses",
-              "apiVersion": "2023-09-01",
-              "name": "[variables('appGatewayPipName')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "sku": {
-                "name": "Standard",
-                "tier": "Regional"
-              },
-              "properties": {
-                "publicIPAllocationMethod": "Static",
-                "publicIPAddressVersion": "IPv4",
-                "dnsSettings": {
-                  "domainNameLabel": "[format('{0}-{1}-api', parameters('baseName'), parameters('environment'))]"
-                }
-              }
-            },
-            {
-              "type": "Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies",
-              "apiVersion": "2023-09-01",
-              "name": "[variables('wafPolicyName')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "policySettings": {
-                  "mode": "Prevention",
-                  "state": "Enabled",
-                  "requestBodyCheck": true,
-                  "maxRequestBodySizeInKb": 128,
-                  "fileUploadLimitInMb": 100,
-                  "requestBodyInspectLimitInKB": 128
-                },
-                "managedRules": {
-                  "managedRuleSets": [
-                    {
-                      "ruleSetType": "OWASP",
-                      "ruleSetVersion": "3.2",
-                      "ruleGroupOverrides": []
-                    },
-                    {
-                      "ruleSetType": "Microsoft_BotManagerRuleSet",
-                      "ruleSetVersion": "1.0",
-                      "ruleGroupOverrides": []
-                    }
-                  ],
-                  "exclusions": []
-                },
-                "customRules": []
-              }
-            },
-            {
-              "type": "Microsoft.Network/applicationGateways",
-              "apiVersion": "2023-09-01",
-              "name": "[variables('appGatewayName')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "sku": {
-                  "name": "WAF_v2",
-                  "tier": "WAF_v2"
-                },
-                "autoscaleConfiguration": {
-                  "minCapacity": "[parameters('minCapacity')]",
-                  "maxCapacity": "[parameters('maxCapacity')]"
-                },
-                "enableHttp2": true,
-                "firewallPolicy": {
-                  "id": "[resourceId('Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies', variables('wafPolicyName'))]"
-                },
-                "gatewayIPConfigurations": [
-                  {
-                    "name": "appGatewayIpConfig",
-                    "properties": {
-                      "subnet": {
-                        "id": "[parameters('appGatewaySubnetId')]"
-                      }
-                    }
-                  }
-                ],
-                "frontendIPConfigurations": [
-                  {
-                    "name": "appGatewayFrontendIp",
-                    "properties": {
-                      "publicIPAddress": {
-                        "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('appGatewayPipName'))]"
-                      }
-                    }
-                  }
-                ],
-                "frontendPorts": [
-                  {
-                    "name": "port_80",
-                    "properties": {
-                      "port": 80
-                    }
-                  },
-                  {
-                    "name": "port_443",
-                    "properties": {
-                      "port": 443
-                    }
-                  }
-                ],
-                "backendAddressPools": [
-                  {
-                    "name": "appServiceBackendPool",
-                    "properties": {
-                      "backendAddresses": [
-                        {
-                          "fqdn": "[parameters('appServicePrivateLinkFqdn')]"
-                        }
-                      ]
-                    }
-                  }
-                ],
-                "backendHttpSettingsCollection": [
-                  {
-                    "name": "appServiceHttpSettings",
-                    "properties": {
-                      "port": 443,
-                      "protocol": "Https",
-                      "cookieBasedAffinity": "Disabled",
-                      "pickHostNameFromBackendAddress": true,
-                      "requestTimeout": 30,
-                      "probe": {
-                        "id": "[resourceId('Microsoft.Network/applicationGateways/probes', variables('appGatewayName'), 'appServiceHealthProbe')]"
-                      }
-                    }
-                  }
-                ],
-                "probes": [
-                  {
-                    "name": "appServiceHealthProbe",
-                    "properties": {
-                      "protocol": "Https",
-                      "path": "/health",
-                      "interval": 30,
-                      "timeout": 30,
-                      "unhealthyThreshold": 3,
-                      "pickHostNameFromBackendHttpSettings": true,
-                      "minServers": 0,
-                      "match": {
-                        "statusCodes": [
-                          "200-399"
-                        ]
-                      }
-                    }
-                  }
-                ],
-                "httpListeners": [
-                  {
-                    "name": "httpListener",
-                    "properties": {
-                      "frontendIPConfiguration": {
-                        "id": "[resourceId('Microsoft.Network/applicationGateways/frontendIPConfigurations', variables('appGatewayName'), 'appGatewayFrontendIp')]"
-                      },
-                      "frontendPort": {
-                        "id": "[resourceId('Microsoft.Network/applicationGateways/frontendPorts', variables('appGatewayName'), 'port_80')]"
-                      },
-                      "protocol": "Http"
-                    }
-                  }
-                ],
-                "redirectConfigurations": [],
-                "requestRoutingRules": [
-                  {
-                    "name": "httpToBackendRule",
-                    "properties": {
-                      "priority": 100,
-                      "ruleType": "Basic",
-                      "httpListener": {
-                        "id": "[resourceId('Microsoft.Network/applicationGateways/httpListeners', variables('appGatewayName'), 'httpListener')]"
-                      },
-                      "backendAddressPool": {
-                        "id": "[resourceId('Microsoft.Network/applicationGateways/backendAddressPools', variables('appGatewayName'), 'appServiceBackendPool')]"
-                      },
-                      "backendHttpSettings": {
-                        "id": "[resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', variables('appGatewayName'), 'appServiceHttpSettings')]"
-                      }
-                    }
-                  }
-                ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Network/publicIPAddresses', variables('appGatewayPipName'))]",
-                "[resourceId('Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies', variables('wafPolicyName'))]"
-              ]
-            }
-          ],
-          "outputs": {
-            "appGatewayId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Network/applicationGateways', variables('appGatewayName'))]"
-            },
-            "appGatewayName": {
-              "type": "string",
-              "value": "[variables('appGatewayName')]"
-            },
-            "appGatewayPublicIp": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('appGatewayPipName')), '2023-09-01').ipAddress]"
-            },
-            "appGatewayFqdn": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('appGatewayPipName')), '2023-09-01').dnsSettings.fqdn]"
-            },
-            "wafPolicyId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies', variables('wafPolicyName'))]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', 'appservice-deployment')]",
-        "[resourceId('Microsoft.Resources/deployments', 'network-deployment')]"
-      ]
-    },
-    {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
       "name": "staticwebapp-deployment",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1994,16 +1597,22 @@
             "value": "[parameters('environment')]"
           },
           "location": {
-            "value": "[parameters('location')]"
+            "value": "[parameters('staticWebAppLocation')]"
           },
           "baseName": {
             "value": "[parameters('baseName')]"
           },
+          "uniqueSuffix": {
+            "value": "[variables('uniqueSuffix')]"
+          },
           "sku": {
             "value": "[parameters('staticWebAppSku')]"
           },
-          "apiBackendUrl": {
-            "value": "[format('https://{0}', reference(resourceId('Microsoft.Resources/deployments', 'appgateway-deployment'), '2025-04-01').outputs.appGatewayFqdn.value)]"
+          "linkedBackendResourceId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appservice-deployment'), '2025-04-01').outputs.appServiceId.value]"
+          },
+          "linkedBackendRegion": {
+            "value": "[parameters('location')]"
           },
           "tags": {
             "value": "[variables('tags')]"
@@ -2016,7 +1625,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "10486908306287683425"
+              "templateHash": "4537178054100492999"
             }
           },
           "parameters": {
@@ -2037,6 +1646,12 @@
               "type": "string",
               "metadata": {
                 "description": "Base name for resources"
+              }
+            },
+            "uniqueSuffix": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for globally unique resource names"
               }
             },
             "sku": {
@@ -2050,11 +1665,18 @@
                 "description": "Static Web Apps SKU"
               }
             },
-            "apiBackendUrl": {
+            "linkedBackendResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Application Gateway API URL for backend proxy"
+                "description": "App Service resource ID for Linked Backend"
+              }
+            },
+            "linkedBackendRegion": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "App Service region (may differ from SWA location)"
               }
             },
             "tags": {
@@ -2066,7 +1688,7 @@
             }
           },
           "variables": {
-            "staticWebAppName": "[format('swa-{0}-{1}', parameters('baseName'), parameters('environment'))]"
+            "staticWebAppName": "[format('swa-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]"
           },
           "resources": [
             {
@@ -2088,12 +1710,23 @@
               }
             },
             {
+              "condition": "[and(not(empty(parameters('linkedBackendResourceId'))), equals(parameters('sku'), 'Standard'))]",
+              "type": "Microsoft.Web/staticSites/linkedBackends",
+              "apiVersion": "2023-01-01",
+              "name": "[format('{0}/{1}', variables('staticWebAppName'), 'backend')]",
+              "properties": {
+                "backendResourceId": "[parameters('linkedBackendResourceId')]",
+                "region": "[parameters('linkedBackendRegion')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/staticSites', variables('staticWebAppName'))]"
+              ]
+            },
+            {
               "type": "Microsoft.Web/staticSites/config",
               "apiVersion": "2023-01-01",
               "name": "[format('{0}/{1}', variables('staticWebAppName'), 'appsettings')]",
-              "properties": {
-                "API_BACKEND_URL": "[parameters('apiBackendUrl')]"
-              },
+              "properties": {},
               "dependsOn": [
                 "[resourceId('Microsoft.Web/staticSites', variables('staticWebAppName'))]"
               ]
@@ -2120,11 +1753,140 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', 'appgateway-deployment')]"
+        "[resourceId('Microsoft.Resources/deployments', 'appservice-deployment')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "appservice-auth-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appServiceName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appservice-deployment'), '2025-04-01').outputs.appServiceName.value]"
+          },
+          "entraTenantId": {
+            "value": "[parameters('entraTenantId')]"
+          },
+          "entraBackendClientId": {
+            "value": "[parameters('entraBackendClientId')]"
+          },
+          "staticWebAppDefaultHostName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppDefaultHostName.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "11259939779811537895"
+            }
+          },
+          "parameters": {
+            "appServiceName": {
+              "type": "string",
+              "metadata": {
+                "description": "App Service name to configure"
+              }
+            },
+            "entraTenantId": {
+              "type": "string",
+              "metadata": {
+                "description": "Microsoft Entra ID Tenant ID"
+              }
+            },
+            "entraBackendClientId": {
+              "type": "string",
+              "metadata": {
+                "description": "Microsoft Entra ID Backend Client ID"
+              }
+            },
+            "staticWebAppDefaultHostName": {
+              "type": "string",
+              "metadata": {
+                "description": "Static Web App default hostname (for SWA linked backend identity provider)"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/sites/config",
+              "apiVersion": "2024-04-01",
+              "name": "[format('{0}/{1}', parameters('appServiceName'), 'authsettingsV2')]",
+              "properties": {
+                "platform": {
+                  "enabled": true,
+                  "runtimeVersion": "~1"
+                },
+                "globalValidation": {
+                  "requireAuthentication": true,
+                  "unauthenticatedClientAction": "Return401",
+                  "excludedPaths": [
+                    "/health",
+                    "/api/health",
+                    "/robots933456.txt",
+                    "/api/posts",
+                    "/api/posts/*"
+                  ]
+                },
+                "identityProviders": {
+                  "azureActiveDirectory": {
+                    "enabled": true,
+                    "registration": {
+                      "clientId": "[parameters('entraBackendClientId')]",
+                      "openIdIssuer": "[format('https://sts.windows.net/{0}/v2.0', parameters('entraTenantId'))]"
+                    },
+                    "validation": {
+                      "allowedAudiences": [
+                        "[format('api://{0}', parameters('entraBackendClientId'))]"
+                      ]
+                    }
+                  },
+                  "azureStaticWebApps": {
+                    "enabled": true,
+                    "registration": {
+                      "clientId": "[parameters('staticWebAppDefaultHostName')]"
+                    }
+                  }
+                },
+                "login": {
+                  "tokenStore": {
+                    "enabled": false
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "authSettingsConfigured": {
+              "type": "bool",
+              "value": true
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'appservice-deployment')]",
+        "[resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment')]"
       ]
     }
   ],
   "outputs": {
+    "uniqueSuffix": {
+      "type": "string",
+      "value": "[variables('uniqueSuffix')]"
+    },
+    "groupId": {
+      "type": "string",
+      "value": "[parameters('groupId')]"
+    },
     "vnetId": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.vnetId.value]"
@@ -2157,21 +1919,9 @@
       "type": "string",
       "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appservice-deployment'), '2025-04-01').outputs.appServiceDefaultHostName.value]"
     },
-    "appGatewayName": {
+    "appServiceUrl": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appgateway-deployment'), '2025-04-01').outputs.appGatewayName.value]"
-    },
-    "appGatewayPublicIp": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appgateway-deployment'), '2025-04-01').outputs.appGatewayPublicIp.value]"
-    },
-    "appGatewayFqdn": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appgateway-deployment'), '2025-04-01').outputs.appGatewayFqdn.value]"
-    },
-    "apiUrl": {
-      "type": "string",
-      "value": "[format('https://{0}/api', reference(resourceId('Microsoft.Resources/deployments', 'appgateway-deployment'), '2025-04-01').outputs.appGatewayFqdn.value)]"
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Resources/deployments', 'appservice-deployment'), '2025-04-01').outputs.appServiceDefaultHostName.value)]"
     },
     "staticWebAppName": {
       "type": "string",
@@ -2180,6 +1930,10 @@
     "staticWebAppUrl": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppUrl.value]"
+    },
+    "apiUrl": {
+      "type": "string",
+      "value": "[format('{0}/api', reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppUrl.value)]"
     },
     "logAnalyticsWorkspaceId": {
       "type": "string",

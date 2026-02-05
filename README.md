@@ -96,7 +96,7 @@ The sample application is a **multi-user blog platform** with the following feat
 | Layer | Technology |
 |-------|------------|
 | Frontend | React 18, TypeScript, TailwindCSS, Vite |
-| Backend | Node.js 20, Express.js, TypeScript |
+| Backend | Node.js 22, Express.js, TypeScript |
 | Database | Azure DocumentDB (formerly called as Cosmos DB for MongoDB vCore) |
 | Authentication | Microsoft Entra ID with MSAL.js |
 
@@ -148,16 +148,17 @@ Install these tools on your computer:
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
 | **Azure CLI** | 2.60+ | Azure management | [Install Guide](https://docs.microsoft.com/cli/azure/install-azure-cli) |
-| **Node.js** | 20.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
+| **Node.js** | 22.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps | `npm install -g @azure/static-web-apps-cli` |
 
 **Windows:**
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
+| **Git Bash** | Latest | Run deployment scripts | Included with [Git for Windows](https://git-scm.com/download/win) |
 | **Azure PowerShell** | 12.0+ | Azure management | [Install Guide](https://docs.microsoft.com/powershell/azure/install-azure-powershell) |
 | **Bicep CLI** | Latest | Infrastructure as Code | [Install Guide](https://learn.microsoft.com/azure/azure-resource-manager/bicep/install#windows) |
-| **Node.js** | 20.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
+| **Node.js** | 22.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps | `npm install -g @azure/static-web-apps-cli` |
 | **Azure CLI** | 2.60+ | For deployment scripts | [Install Guide](https://docs.microsoft.com/cli/azure/install-azure-cli) |
 
@@ -207,7 +208,7 @@ az bicep version
 
 # Check Node.js
 node --version
-# Expected: v20.x.x
+# Expected: v22.x.x
 
 # Check SWA CLI
 swa --version
@@ -231,7 +232,7 @@ bicep --version
 
 # Check Node.js
 node --version
-# Expected: v20.x.x
+# Expected: v22.x.x
 
 # Check SWA CLI
 swa --version
@@ -552,11 +553,11 @@ param cosmosDbAdminPassword = 'your-secure-password-here'
 **macOS/Linux:**
 ```bash
 # Create resource group (use your own name)
-az group create --name rg-blogapp-paas --location japaneast
+az group create --name <Resource-Group-Name> --location japaneast
 
 # Deploy infrastructure
 az deployment group create \
-  --resource-group rg-blogapp-paas \
+  --resource-group <Resource-Group-Name> \
   --template-file main.bicep \
   --parameters dev.local.bicepparam
 
@@ -566,11 +567,11 @@ az deployment group create \
 **Windows PowerShell:**
 ```powershell
 # Create resource group (use your own name)
-New-AzResourceGroup -Name "rg-blogapp-paas" -Location "japaneast"
+New-AzResourceGroup -Name "<Resource-Group-Name>" -Location "japaneast"
 
 # Deploy infrastructure
 New-AzResourceGroupDeployment `
-  -ResourceGroupName "rg-blogapp-paas" `
+  -ResourceGroupName "<Resource-Group-Name>" `
   -TemplateFile "main.bicep" `
   -TemplateParameterFile "dev.local.bicepparam"
 
@@ -602,13 +603,13 @@ New-AzResourceGroupDeployment `
 **macOS/Linux:**
 ```bash
 # List deployed resources
-az resource list --resource-group rg-blogapp-paas --output table
+az resource list --resource-group <Resource-Group-Name> --output table
 ```
 
 **Windows PowerShell:**
 ```powershell
 # List deployed resources
-Get-AzResource -ResourceGroupName "rg-blogapp-paas" | Format-Table Name, ResourceType
+Get-AzResource -ResourceGroupName "<Resource-Group-Name>" | Format-Table Name, ResourceType
 ```
 
 ✅ **Checkpoint:** Bicep deployment completed successfully. You can see the resources in Azure Portal.
@@ -633,16 +634,16 @@ After deployment, you need to add the Static Web App URL to your Frontend app re
    ```bash
    # Get the SWA hostname
    az staticwebapp show \
-     --name $(az staticwebapp list --resource-group rg-blogapp-paas --query "[0].name" -o tsv) \
-     --resource-group rg-blogapp-paas \
+     --name $(az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv) \
+     --resource-group <Resource-Group-Name> \
      --query "defaultHostname" -o tsv
    ```
 
    **Windows PowerShell:**
    ```powershell
    # Get the SWA hostname
-   $swaName = (Get-AzStaticWebApp -ResourceGroupName "rg-blogapp-paas")[0].Name
-   (Get-AzStaticWebApp -ResourceGroupName "rg-blogapp-paas" -Name $swaName).DefaultHostname
+   $swaName = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>")[0].Name
+   (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).DefaultHostname
    ```
 
 2. **Add Redirect URI in Azure Portal:**
@@ -658,6 +659,8 @@ After deployment, you need to add the Static Web App URL to your Frontend app re
 
 Use the deployment script to deploy the backend API.
 
+> 📖 **Script Details:** See [Deployment Scripts Guide](docs/deployment-scripts-guide.md#backend-deployment-script) for a detailed explanation of what the script does.
+
 **macOS/Linux:**
 ```bash
 # Return to repository root
@@ -665,14 +668,14 @@ cd ../..
 
 # Get the App Service name from deployment outputs
 APP_SERVICE_NAME=$(az deployment group show \
-  --resource-group rg-blogapp-paas \
+  --resource-group <Resource-Group-Name> \
   --name main \
   --query "properties.outputs.appServiceName.value" -o tsv)
 
 echo "App Service Name: $APP_SERVICE_NAME"
 
 # Deploy backend
-./scripts/deploy-backend.sh rg-blogapp-paas $APP_SERVICE_NAME
+./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
 ```
 
 **Windows (Git Bash or WSL):**
@@ -682,18 +685,18 @@ cd /path/to/Azure-PaaS-Workshop
 
 # Get the App Service name
 APP_SERVICE_NAME=$(az deployment group show \
-  --resource-group rg-blogapp-paas \
+  --resource-group <Resource-Group-Name> \
   --name main \
   --query "properties.outputs.appServiceName.value" -o tsv)
 
 # Deploy backend
-./scripts/deploy-backend.sh rg-blogapp-paas $APP_SERVICE_NAME
+./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
 ```
 
 **Windows PowerShell (Alternative):**
 ```powershell
 # Get the App Service name
-$deployment = Get-AzResourceGroupDeployment -ResourceGroupName "rg-blogapp-paas" -Name "main"
+$deployment = Get-AzResourceGroupDeployment -ResourceGroupName "<Resource-Group-Name>" -Name "main"
 $appServiceName = $deployment.Outputs.appServiceName.Value
 Write-Host "App Service Name: $appServiceName"
 
@@ -713,18 +716,18 @@ Pop-Location
 
 # Configure App Service
 az webapp config appsettings set `
-  --resource-group "rg-blogapp-paas" `
+  --resource-group "<Resource-Group-Name>" `
   --name $appServiceName `
   --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false"
 
 az webapp config set `
-  --resource-group "rg-blogapp-paas" `
+  --resource-group "<Resource-Group-Name>" `
   --name $appServiceName `
   --startup-file "node src/app.js"
 
 # Deploy
 az webapp deploy `
-  --resource-group "rg-blogapp-paas" `
+  --resource-group "<Resource-Group-Name>" `
   --name $appServiceName `
   --src-path deploy.zip `
   --type zip `
@@ -750,6 +753,8 @@ The script will:
 ✅ **Checkpoint:** Backend deployed. Health check returns `{"status":"healthy"}`.
 
 #### Step 6: Deploy Frontend to Static Web Apps
+
+> 📖 **Script Details:** See [Deployment Scripts Guide](docs/deployment-scripts-guide.md#frontend-deployment-script) for a detailed explanation of what the script does.
 
 **Setup (one-time):**
 
@@ -783,21 +788,21 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 **macOS/Linux:**
 ```bash
 # Deploy frontend
-./scripts/deploy-frontend.sh rg-blogapp-paas
+./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
 **Windows (Git Bash or WSL):**
 ```bash
 # Run in Git Bash or WSL
-./scripts/deploy-frontend.sh rg-blogapp-paas
+./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
 **Windows PowerShell (Alternative):**
 ```powershell
 # Get SWA details
-$swaName = (Get-AzStaticWebApp -ResourceGroupName "rg-blogapp-paas")[0].Name
-$swaHostname = (Get-AzStaticWebApp -ResourceGroupName "rg-blogapp-paas" -Name $swaName).DefaultHostname
-$deploymentToken = (Get-AzStaticWebAppSecret -ResourceGroupName "rg-blogapp-paas" -Name $swaName).Properties.ApiKey
+$swaName = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>")[0].Name
+$swaHostname = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).DefaultHostname
+$deploymentToken = (Get-AzStaticWebAppSecret -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).Properties.ApiKey
 
 # Build frontend
 cd materials\frontend
@@ -834,13 +839,13 @@ cd ..\..
 ```bash
 # Get URLs
 APP_SERVICE_NAME=$(az deployment group show \
-  --resource-group rg-blogapp-paas \
+  --resource-group <Resource-Group-Name> \
   --name main \
   --query "properties.outputs.appServiceName.value" -o tsv)
 
 SWA_HOSTNAME=$(az staticwebapp show \
-  --name $(az staticwebapp list --resource-group rg-blogapp-paas --query "[0].name" -o tsv) \
-  --resource-group rg-blogapp-paas \
+  --name $(az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv) \
+  --resource-group <Resource-Group-Name> \
   --query "defaultHostname" -o tsv)
 
 echo "=== Deployment URLs ==="
@@ -858,10 +863,10 @@ curl -s "https://$SWA_HOSTNAME/api/health" | jq .
 **Windows PowerShell:**
 ```powershell
 # Get URLs
-$deployment = Get-AzResourceGroupDeployment -ResourceGroupName "rg-blogapp-paas" -Name "main"
+$deployment = Get-AzResourceGroupDeployment -ResourceGroupName "<Resource-Group-Name>" -Name "main"
 $appServiceName = $deployment.Outputs.appServiceName.Value
-$swaName = (Get-AzStaticWebApp -ResourceGroupName "rg-blogapp-paas")[0].Name
-$swaHostname = (Get-AzStaticWebApp -ResourceGroupName "rg-blogapp-paas" -Name $swaName).DefaultHostname
+$swaName = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>")[0].Name
+$swaHostname = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).DefaultHostname
 
 Write-Host "=== Deployment URLs ==="
 Write-Host "Frontend: https://$swaHostname"
@@ -895,9 +900,9 @@ GitHub Actions can automate deployments on every push to the main branch.
 ```bash
 # Create service principal with Contributor role
 az ad sp create-for-rbac \
-  --name "github-actions-blogapp" \
+  --name "github-actions-blogapp-<TeamName>" \
   --role contributor \
-  --scopes /subscriptions/<subscription-id>/resourceGroups/rg-blogapp-paas \
+  --scopes /subscriptions/<subscription-id>/resourceGroups/<Resource-Group-Name> \
   --json-auth
 ```
 
@@ -1109,7 +1114,7 @@ After completing the workshop, delete all Azure resources:
 **macOS/Linux:**
 ```bash
 # Delete resource group (removes all contained resources)
-az group delete --name rg-blogapp-paas --yes --no-wait
+az group delete --name <Resource-Group-Name> --yes --no-wait
 
 # Optional: Delete Entra ID app registrations
 az ad app delete --id <frontend-app-id>
@@ -1119,7 +1124,7 @@ az ad app delete --id <backend-app-id>
 **Windows PowerShell:**
 ```powershell
 # Delete resource group (removes all contained resources)
-Remove-AzResourceGroup -Name "rg-blogapp-paas" -Force -AsJob
+Remove-AzResourceGroup -Name "<Resource-Group-Name>" -Force -AsJob
 
 # Optional: Delete Entra ID app registrations
 Remove-AzADApplication -ObjectId <frontend-app-object-id>
@@ -1148,11 +1153,11 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 **macOS/Linux:**
 ```bash
 # Stream live logs
-az webapp log tail --resource-group rg-blogapp-paas --name <app-service-name>
+az webapp log tail --resource-group <Resource-Group-Name> --name <app-service-name>
 
 # Download logs
 az webapp log download \
-  --resource-group rg-blogapp-paas \
+  --resource-group <Resource-Group-Name> \
   --name <app-service-name> \
   --log-file /tmp/app-logs.zip
 ```
@@ -1160,11 +1165,11 @@ az webapp log download \
 **Windows PowerShell:**
 ```powershell
 # Stream live logs (requires Azure CLI)
-az webapp log tail --resource-group rg-blogapp-paas --name <app-service-name>
+az webapp log tail --resource-group <Resource-Group-Name> --name <app-service-name>
 
 # Download logs
 az webapp log download `
-  --resource-group rg-blogapp-paas `
+  --resource-group <Resource-Group-Name> `
   --name <app-service-name> `
   --log-file C:\Temp\app-logs.zip
 ```
@@ -1178,7 +1183,7 @@ Copy this section and fill in your values for quick reference:
 ```
 === Azure PaaS Workshop - Quick Reference ===
 
-Resource Group:     rg-blogapp-paas
+Resource Group:     <Resource-Group-Name>
 Subscription:       ________________________________
 
 --- Entra ID ---
@@ -1199,13 +1204,13 @@ API via SWA:        https://________________________________.azurestaticapps.net
 
 --- Useful Commands ---
 # View resources
-az resource list --resource-group rg-blogapp-paas --output table
+az resource list --resource-group <Resource-Group-Name> --output table
 
 # Stream logs
-az webapp log tail --resource-group rg-blogapp-paas --name <app-service-name>
+az webapp log tail --resource-group <Resource-Group-Name> --name <app-service-name>
 
 # Cleanup
-az group delete --name rg-blogapp-paas --yes --no-wait
+az group delete --name <Resource-Group-Name> --yes --no-wait
 ```
 
 ---

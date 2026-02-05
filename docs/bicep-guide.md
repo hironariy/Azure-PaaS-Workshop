@@ -183,7 +183,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
     serverFarmId: appServicePlan.id  // Reference another resource
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'NODE|20-lts'
+      linuxFxVersion: 'NODE|22-lts'
       alwaysOn: true
     }
   }

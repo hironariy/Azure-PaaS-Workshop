@@ -20,7 +20,7 @@ This directory contains Infrastructure as Code (IaC) templates for deploying the
                             │              Virtual Network                 │
                             │                                             │
                             │  ┌──────────────────────────────────────┐   │
-                            │  │  App Service (Node.js 20 LTS)        │   │
+                            │  │  App Service (Node.js 22 LTS)        │   │
                             │  │  + VNet Integration (outbound)       │   │
                             │  │  + Private Endpoint (inbound)        │   │
                             │  └──────────────────────────────────────┘   │

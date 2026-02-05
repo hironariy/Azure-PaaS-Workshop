@@ -104,7 +104,7 @@ resource appService 'Microsoft.Web/sites@2024-04-01' = {
     virtualNetworkSubnetId: appServiceSubnetId
     vnetRouteAllEnabled: true
     siteConfig: {
-      linuxFxVersion: 'NODE|20-lts'
+      linuxFxVersion: 'NODE|22-lts'
       alwaysOn: true
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
