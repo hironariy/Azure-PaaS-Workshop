@@ -351,11 +351,11 @@ cp dev.bicepparam dev.local.bicepparam
 
 ```bash
 # Create resource group
-az group create --name rg-blogapp-dev --location japaneast
+az group create --name <resource-group> --location japaneast
 
 # Deploy infrastructure with local parameters
 az deployment group create \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --template-file main.bicep \
   --parameters dev.local.bicepparam
 ```
@@ -497,7 +497,7 @@ Go to your GitHub repository → Settings → Secrets and variables → Actions:
 az ad sp create-for-rbac \
   --name "github-actions-blogapp-<Team Name>" \
   --role contributor \
-  --scopes /subscriptions/<subscription-id>/resourceGroups/rg-blogapp-dev \
+  --scopes /subscriptions/<subscription-id>/resourceGroups/<resource-group> \
   --json-auth
 
 # Copy the entire JSON output to AZURE_CREDENTIALS secret
@@ -518,7 +518,7 @@ The output looks like:
 Before first deployment, set the startup command (one-time):
 
 ```bash
-az webapp config set --resource-group rg-blogapp-dev \
+az webapp config set --resource-group <resource-group> \
   --name <app-service-name> \
   --startup-file "node src/app.js"
 ```
@@ -532,7 +532,7 @@ The App Service managed identity must have access to read secrets:
 ```bash
 # Get App Service managed identity principal ID
 PRINCIPAL_ID=$(az webapp identity show \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --name <app-service-name> \
   --query principalId -o tsv)
 
@@ -665,7 +665,7 @@ jobs:
 ```bash
 az staticwebapp secrets list \
   --name <swa-name> \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --query "properties.apiKey" -o tsv
 ```
 
@@ -715,13 +715,13 @@ cd ..
 ```bash
 # Disable remote build (CRITICAL - prevents "tsc not found" errors)
 az webapp config appsettings set \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --name <app-service-name> \
   --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false"
 
 # Set startup command (src/app.js because built files are at root of package)
 az webapp config set \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --name <app-service-name> \
   --startup-file "node src/app.js"
 ```
@@ -733,14 +733,14 @@ The App Service managed identity must have access to read secrets. This is a com
 ```bash
 # Get App Service managed identity principal ID
 PRINCIPAL_ID=$(az webapp identity show \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --name <app-service-name> \
   --query principalId -o tsv)
 
 # Get Key Vault resource ID
 KV_ID=$(az keyvault show \
   --name <keyvault-name> \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --query id -o tsv)
 
 # Check existing role assignments
@@ -759,7 +759,7 @@ Use the deployment script which handles the expected 60-90 second startup time:
 
 ```bash
 # From the repository root
-./scripts/deploy-backend.sh rg-blogapp-dev <app-service-name>
+./scripts/deploy-backend.sh <resource-group> <app-service-name>
 ```
 
 The script covers these manual steps:
@@ -770,18 +770,18 @@ The script covers these manual steps:
 
 **Alternative: Manual Deploy with Polling (Manual Only)**
 
-The `az webapp deploy` command may report timeout/failure even when the deployment succeeds, because App Service startup takes 60-90 seconds (VNet + Key Vault initialization). Use this approach:
+The `az webapp deploy` command by default waits for site startup (`--track-status true`), which can timeout for slow-starting apps. Use `--async true` to complete after upload, then poll health:
 
 ```bash
-# Deploy with short timeout (ignore timeout error)
+# Deploy asynchronously (exits after upload completes)
 az webapp deploy \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --name <app-service-name> \
   --src-path deploy.zip \
   --type zip \
   --clean true \
   --restart true \
-  --timeout 120 || true
+  --async true
 
 # Poll health endpoint (startup takes 60-90 seconds)
 echo "Waiting for app to start..."
@@ -804,7 +804,7 @@ curl -v https://<app-service-name>.azurewebsites.net/health
 
 # Check application logs
 az webapp log download \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --name <app-service-name> \
   --log-file /tmp/app-logs.zip
 
@@ -839,7 +839,7 @@ cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
 
 ```bash
 # From the repository root
-./scripts/deploy-frontend.sh rg-blogapp-dev
+./scripts/deploy-frontend.sh <resource-group>
 ```
 
 The script will:
@@ -881,14 +881,14 @@ The SCM (Kudu) site may not be ready. Restart the App Service and retry:
 
 ```bash
 # Restart App Service to reset SCM site
-az webapp restart --resource-group rg-blogapp-dev --name <app-service-name>
+az webapp restart --resource-group <resource-group> --name <app-service-name>
 
 # Wait for restart
 sleep 30
 
 # Retry deployment with extended timeout
 az webapp deploy \
-  --resource-group rg-blogapp-dev \
+  --resource-group <resource-group> \
   --name <app-service-name> \
   --src-path deploy.zip \
   --type zip \
@@ -903,7 +903,7 @@ The deployment may have actually succeeded - startup can take 60-90 seconds. Che
 
 ```bash
 # Download and check docker logs
-az webapp log download --resource-group rg-blogapp-dev \
+az webapp log download --resource-group <resource-group> \
   --name <app-service-name> \
   --log-file /tmp/app-logs.zip
 
@@ -939,7 +939,7 @@ The platform initialization phase includes:
 **Enable Logging:**
 
 ```bash
-az webapp log config --resource-group rg-blogapp-dev \
+az webapp log config --resource-group <resource-group> \
   --name <app-service-name> \
   --docker-container-logging filesystem \
   --application-logging filesystem \
@@ -950,10 +950,10 @@ az webapp log config --resource-group rg-blogapp-dev \
 
 ```bash
 # Stream live logs
-az webapp log tail --resource-group rg-blogapp-dev --name <app-service-name>
+az webapp log tail --resource-group <resource-group> --name <app-service-name>
 
 # Download logs
-az webapp log download --resource-group rg-blogapp-dev \
+az webapp log download --resource-group <resource-group> \
   --name <app-service-name> \
   --log-file /tmp/app-logs.zip
 unzip -p /tmp/app-logs.zip "LogFiles/*default_docker.log"
@@ -963,10 +963,10 @@ unzip -p /tmp/app-logs.zip "LogFiles/*default_docker.log"
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| 502 error during deployment | SCM site not ready | Restart App Service, wait 30s, retry with `--timeout 600` |
+| 502 error during deployment | SCM site not ready | Restart App Service, wait 30s, retry |
 | Deployment never completes (600+ sec) | **EasyAuth blocks /health endpoint** | Add `/health` to `excludedPaths` in EasyAuth config |
 | `az webapp deploy` reports "Site failed to start" | Transient startup failure (first attempt fails, retry succeeds) | Use `scripts/deploy-backend.sh` which polls health endpoint |
-| Deployment timeout (inprogress) | Startup takes 60-90s | Check logs - may have actually succeeded |
+| Deployment always times out | Startup takes 60-90s due to VNet + Key Vault | Use `--async true` flag (deploy-backend.sh already does this) |
 | 60-90 second startup time | VNet + Key Vault + Private DNS initialization | Expected behavior; Always On is already enabled |
 | `sh: 1: tsc: not found` | Remote build enabled | Set `SCM_DO_BUILD_DURING_DEPLOYMENT=false` |
 | `Cannot find module` | Wrong startup path | Use `node src/app.js` for pre-built package |

@@ -23,9 +23,9 @@ NC='\033[0m' # No Color
 # Configuration
 RESOURCE_GROUP="${1:-}"
 APP_SERVICE_NAME="${2:-}"
-MAX_RETRIES=20
+MAX_RETRIES=30
 RETRY_INTERVAL=15
-DEPLOY_TIMEOUT=120
+INITIAL_HEALTH_DELAY=20
 
 # Validate arguments
 if [ -z "$RESOURCE_GROUP" ] || [ -z "$APP_SERVICE_NAME" ]; then
@@ -93,9 +93,15 @@ echo -e "${GREEN}✅ App Service configured${NC}"
 # Step 4: Deploy to App Service
 echo ""
 echo -e "${YELLOW}Step 4: Deploying to App Service...${NC}"
-echo "Note: Ignoring deployment timeout - startup takes 60-90 seconds"
+echo "Note: Using async deployment - will poll health endpoint separately"
 
-# Deploy with short timeout (just upload the zip)
+TRACK_STATUS_FLAG=""
+if az webapp deploy -h 2>/dev/null | grep -q "track-status"; then
+    TRACK_STATUS_FLAG="--track-status false"
+fi
+
+# Deploy asynchronously (exits after upload, doesn't wait for site startup)
+# This avoids the timeout issue when site startup takes 60-90 seconds
 az webapp deploy \
     --resource-group "$RESOURCE_GROUP" \
     --name "$APP_SERVICE_NAME" \
@@ -103,9 +109,10 @@ az webapp deploy \
     --type zip \
     --clean true \
     --restart true \
-    --timeout "$DEPLOY_TIMEOUT" 2>&1 || true
+    --async true \
+    $TRACK_STATUS_FLAG
 
-echo -e "${YELLOW}Deployment command complete (may have timed out, which is expected)${NC}"
+echo -e "${GREEN}✅ Deployment package uploaded${NC}"
 
 # Step 5: Wait for app to be healthy
 echo ""
@@ -113,6 +120,9 @@ echo -e "${YELLOW}Step 5: Waiting for app to start (this may take 60-90 seconds)
 
 HEALTH_URL="https://$APP_SERVICE_NAME.azurewebsites.net/health"
 echo "Health endpoint: $HEALTH_URL"
+
+echo "Initial wait: ${INITIAL_HEALTH_DELAY}s"
+sleep "$INITIAL_HEALTH_DELAY"
 
 for i in $(seq 1 $MAX_RETRIES); do
     echo "Attempt $i/$MAX_RETRIES..."
