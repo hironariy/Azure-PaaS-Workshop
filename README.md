@@ -52,20 +52,7 @@ This workshop is designed for engineers who want to learn **Azure Platform as a 
 
 **Companion Workshop:** This is the PaaS version of the [Azure IaaS Workshop](https://github.com/hironariy/Azure-IaaS-Workshop). If you completed Day 1, you'll see how the same application can be deployed using managed services instead of VMs!
 
-<details>
-<summary>🎓 <strong>Instructor Notes</strong></summary>
-
-**Key Teaching Points:**
-- Emphasize the trade-offs between IaaS (control) and PaaS (convenience)
-- Highlight how managed services reduce operational overhead
-- Discuss when to choose PaaS vs IaaS based on requirements
-
-**Common Student Questions:**
-- "When should I use App Service vs VMs?" → Discuss stateless vs stateful workloads
-- "Is PaaS more expensive?" → Show the TCO including operational costs
-- "Can I migrate from IaaS to PaaS?" → Yes, this workshop demonstrates the same app on both
-
-</details>
+> 🎓 **For Instructors:** See the [Instructor Guide](docs/instructor-guide.md) for teaching points, common issues, and facilitation notes.
 
 ### 1.2 What You Will Learn
 
@@ -131,23 +118,6 @@ The sample application is a **multi-user blog platform** with the following feat
 | **Private Endpoints** | Secure access to Cosmos DB and Key Vault |
 | **NAT Gateway** | Outbound internet for VNet-integrated services |
 | **Application Insights** | Monitoring and observability |
-
-<details>
-<summary>🎓 <strong>Instructor Notes</strong></summary>
-
-**Architecture Highlights to Explain:**
-1. **Static Web Apps + Linked Backend** - SWA proxies `/api/*` requests to App Service (no need for Application Gateway for API protection in this pattern)
-2. **Private Endpoints** - Database and Key Vault are not exposed to the internet
-3. **VNet Integration** - App Service can access private resources
-4. **Managed Identity** - No credentials stored in code; App Service authenticates to Key Vault automatically
-
-**Comparison with IaaS (Day 1):**
-- VMs → App Service (no OS patching required)
-- MongoDB on VMs → Cosmos DB (managed replication, backups)
-- Application Gateway for SSL → Static Web Apps provides free SSL
-- Manual scaling → Auto-scaling built-in
-
-</details>
 
 ---
 
@@ -451,19 +421,6 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
 
 ✅ **Checkpoint:** Both app registrations created. You have the three IDs noted above.
 
-<details>
-<summary>🎓 <strong>Instructor Notes</strong></summary>
-
-**Common Issues with Entra ID:**
-1. **Wrong redirect URI type** - Must be "SPA", not "Web"
-2. **Missing API permission** - Frontend must have permission to call Backend API
-3. **Scope not created** - `access_as_user` scope must exist on Backend API
-
-**Time-saving Tip:**
-If participants struggle with Entra ID setup, consider pre-creating the app registrations and sharing the client IDs.
-
-</details>
-
 ---
 
 ### 2.2 Local Development Environment (Optional)
@@ -626,28 +583,6 @@ New-AzResourceGroupDeployment `
 >   -TemplateParameterFile "dev.local.bicepparam" `
 >   -groupId "A"
 > ```
-
-<details>
-<summary>🎓 <strong>Instructor Notes</strong></summary>
-
-**Deployment Time:**
-- First deployment: ~10-15 minutes (Cosmos DB takes the longest)
-- Subsequent deployments: ~3-5 minutes (incremental updates)
-
-**Common Deployment Errors:**
-1. **Missing Entra ID parameters** - Ensure all three IDs are provided
-2. **Invalid password format** - Use alphanumeric + special characters
-3. **Name conflicts** - Use unique resource group names per team
-
-**Teaching Point:**
-Explain what's being deployed while waiting:
-- Virtual Network with subnets
-- Cosmos DB with private endpoint
-- Key Vault with private endpoint
-- App Service with VNet integration
-- Static Web App (deployed empty, will add code later)
-
-</details>
 
 **Verify Deployment:**
 
@@ -1036,16 +971,6 @@ After signing in:
 4. **Delete Post:** Click "Delete" → Confirm
 
 ✅ **Checkpoint:** All CRUD operations work correctly.
-
-<details>
-<summary>🎓 <strong>Instructor Notes</strong></summary>
-
-**Common Test Issues:**
-1. **401 on API calls** - Check if Linked Backend is configured in SWA
-2. **CORS errors** - Should not occur with Linked Backend; check SWA configuration
-3. **Login redirect fails** - Ensure redirect URI is added in Entra ID
-
-</details>
 
 ---
 
