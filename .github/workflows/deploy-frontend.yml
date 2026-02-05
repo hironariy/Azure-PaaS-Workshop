@@ -1,0 +1,57 @@
+name: Deploy Frontend to Azure Static Web Apps
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'materials/frontend/**'
+  workflow_dispatch:
+
+env:
+  FRONTEND_DIR: materials/frontend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy Frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '${{ env.FRONTEND_DIR }}/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm ci
+
+      - name: Build
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm run build
+
+      - name: Inject config into index.html
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: |
+          # Create config JSON (single line)
+          CONFIG_JSON='{"ENTRA_TENANT_ID":"${{ secrets.ENTRA_TENANT_ID }}","ENTRA_FRONTEND_CLIENT_ID":"${{ secrets.ENTRA_FRONTEND_CLIENT_ID }}","ENTRA_BACKEND_CLIENT_ID":"${{ secrets.ENTRA_BACKEND_CLIENT_ID }}","API_BASE_URL":"/api"}'
+          
+          # Replace placeholder in index.html
+          sed -i "s|window.__APP_CONFIG__=null;|window.__APP_CONFIG__=$CONFIG_JSON;|g" dist/index.html
+          
+          echo "Config injected into index.html (no separate config.json for security)"
+
+      - name: Deploy to Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: 'upload'
+          app_location: '${{ env.FRONTEND_DIR }}/dist'
+          skip_app_build: true
+          skip_api_build: true

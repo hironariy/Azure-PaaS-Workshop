@@ -150,17 +150,50 @@ frontend/
 
 ## Deployment
 
-### Azure Static Web Apps (Recommended)
+In production, configuration is **injected into index.html at deploy time** (not served as a separate file for security). The config is embedded as `window.__APP_CONFIG__` and read by the app at startup.
 
-1. Push code to GitHub
-2. GitHub Actions automatically builds and deploys
-3. SWA provides:
-   - Global CDN
-   - Free SSL
-   - Preview environments for PRs
-   - API integration
+### Option 1: GitHub Actions (Recommended)
 
-### Manual Build
+1. Configure repository secrets:
+   - `ENTRA_TENANT_ID` - Your Entra ID tenant ID
+   - `ENTRA_FRONTEND_CLIENT_ID` - Frontend SPA app registration client ID
+   - `ENTRA_BACKEND_CLIENT_ID` - Backend API app registration client ID
+   - `SWA_DEPLOYMENT_TOKEN` - Static Web App deployment token
+
+2. Push code to `main` branch
+3. GitHub Actions automatically:
+   - Builds the frontend
+   - Injects config into index.html
+   - Deploys to Static Web Apps
+
+See `.github/workflows/deploy-frontend.yml` for workflow details.
+
+### Option 2: CLI Deployment (Alternative)
+
+1. Create local config from template (one-time setup):
+
+```bash
+cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
+```
+
+2. Edit `scripts/deploy-frontend.local.env` with your Entra ID values
+
+3. Run deployment:
+
+```bash
+./scripts/deploy-frontend.sh rg-blogapp-dev
+```
+
+The script will:
+1. Load Entra ID values from `deploy-frontend.local.env`
+2. Query Azure for SWA info and deployment token
+3. Build the frontend
+4. Inject config into `dist/index.html`
+5. Deploy using SWA CLI
+
+> **Note**: `deploy-frontend.local.env` is gitignored to keep your values private.
+
+### Manual Build (Local Testing)
 
 ```bash
 npm run build

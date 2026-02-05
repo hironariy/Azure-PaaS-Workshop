@@ -29,11 +29,12 @@ materials/backend/*.zip
 # =============================================================================
 # Local Scripts with Personal Values
 # =============================================================================
-# Template files (.template.sh, .template.ps1) are committed
-# Local files (.local.sh, .local.ps1) contain your values and are gitignored
+# Template files (.template.sh, .template.ps1, .template.env) are committed
+# Local files (.local.sh, .local.ps1, .local.env) contain your values and are gitignored
 # =============================================================================
 *.local.sh
 *.local.ps1
+*.local.env
 
 # =============================================================================
 # Workshop Setup Configuration

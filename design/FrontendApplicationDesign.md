@@ -156,22 +156,59 @@ Built-in security headers equivalent to NGINX configuration:
 
 ### MSAL Configuration for Static Web Apps
 
-**File**: `src/config/msal.ts`
+**File**: `src/config/appConfig.ts`
+
+The frontend uses a runtime configuration pattern that supports both local development and Azure production:
+
+- **Development**: Uses Vite environment variables (`VITE_*`)
+- **Production**: Uses `window.__APP_CONFIG__` injected into index.html at deploy time
 
 ```typescript
-import { Configuration, LogLevel } from '@azure/msal-browser';
+// Extend Window interface for runtime config
+declare global {
+  interface Window {
+    __APP_CONFIG__?: {
+      ENTRA_TENANT_ID?: string;
+      ENTRA_FRONTEND_CLIENT_ID?: string;
+      ENTRA_BACKEND_CLIENT_ID?: string;
+      API_BASE_URL?: string;
+    } | null;
+  }
+}
 
-// Get configuration from environment or runtime config
-const getConfig = () => {
-  // For Static Web Apps, use environment variables or fetch from config endpoint
-  return {
-    clientId: import.meta.env.VITE_ENTRA_CLIENT_ID || '',
-    tenantId: import.meta.env.VITE_ENTRA_TENANT_ID || '',
-    backendClientId: import.meta.env.VITE_ENTRA_BACKEND_CLIENT_ID || '',
-    // SWA URL - dynamically determined or from env
-    redirectUri: import.meta.env.VITE_REDIRECT_URI || window.location.origin,
-  };
-};
+export async function loadConfig(): Promise<AppConfig> {
+  // Development: use Vite environment variables
+  if (import.meta.env.DEV) {
+    return buildConfigFromEnv();
+  }
+
+  // Production: read from window.__APP_CONFIG__ (injected at deploy time)
+  const inlineConfig = window.__APP_CONFIG__;
+  if (inlineConfig && inlineConfig.ENTRA_TENANT_ID) {
+    return {
+      entraTenantId: inlineConfig.ENTRA_TENANT_ID,
+      entraFrontendClientId: inlineConfig.ENTRA_FRONTEND_CLIENT_ID || '',
+      entraBackendClientId: inlineConfig.ENTRA_BACKEND_CLIENT_ID || '',
+      apiBaseUrl: inlineConfig.API_BASE_URL || '/api',
+      redirectUri: window.location.origin,
+    };
+  }
+
+  // Fallback to /config.json for backwards compatibility (IaaS pattern)
+  // ...
+}
+```
+
+**File**: `index.html` (placeholder for deploy-time injection)
+
+```html
+<!-- Runtime configuration injected at deploy time -->
+<script>window.__APP_CONFIG__=null;</script>
+```
+
+The deploy script replaces `window.__APP_CONFIG__=null;` with actual values at deployment time.
+
+**File**: `src/config/msal.ts`
 
 export const getMsalConfig = (): Configuration => {
   const config = getConfig();
@@ -220,21 +257,26 @@ export const apiRequest = {
 ```env
 VITE_ENTRA_CLIENT_ID=<frontend-app-registration-id>
 VITE_ENTRA_TENANT_ID=<tenant-id>
-VITE_ENTRA_BACKEND_CLIENT_ID=<backend-app-registration-id>
-VITE_API_URL=/api
-VITE_REDIRECT_URI=http://localhost:5173
+VITE_API_CLIENT_ID=<backend-app-registration-id>
+VITE_API_BASE_URL=/api
+VITE_ENTRA_REDIRECT_URI=http://localhost:5173
 ```
 
-**Production** (SWA Environment Variables):
-Set via Azure Portal → Static Web Apps → Configuration → Application settings:
+**Production** (Deploy-time injection):
 
-| Name | Value |
-|------|-------|
-| `VITE_ENTRA_CLIENT_ID` | `<frontend-app-registration-id>` |
-| `VITE_ENTRA_TENANT_ID` | `<tenant-id>` |
-| `VITE_ENTRA_BACKEND_CLIENT_ID` | `<backend-app-registration-id>` |
-| `VITE_API_URL` | `/api` |
-| `VITE_REDIRECT_URI` | `https://<swa-name>.azurestaticapps.net` |
+Configuration is injected into `index.html` at deploy time, not via SWA environment variables. This provides:
+- Security: Config not exposed via predictable URL
+- Flexibility: No need to configure SWA environment settings in portal
+- Consistency: Same pattern as IaaS (Bicep generates config)
+
+**Deployment Configuration** (`scripts/deploy-frontend.local.env` - gitignored):
+```env
+ENTRA_TENANT_ID=<tenant-id>
+ENTRA_FRONTEND_CLIENT_ID=<frontend-app-registration-id>
+ENTRA_BACKEND_CLIENT_ID=<backend-app-registration-id>
+```
+
+The deploy script injects these values into `index.html` as `window.__APP_CONFIG__`.
 
 ---
 
@@ -533,9 +575,100 @@ frontend/
 
 ## Deployment
 
-### GitHub Actions Workflow
+### Runtime Configuration Pattern
 
-**File**: `.github/workflows/azure-static-web-apps.yml`
+In production, configuration is **injected into index.html at deploy time** as `window.__APP_CONFIG__`. This is more secure than serving a separate `/config.json` file:
+
+- Config values are embedded inline in HTML (not accessible via predictable URL)
+- Deploy script generates config from local environment file (gitignored)
+- Matches the IaaS pattern where Bicep generates config on NGINX VMs
+
+### Option 1: CLI Deployment (Recommended for Workshop)
+
+Use the deployment script for manual deployments:
+
+**Setup (one-time):**
+
+```bash
+# Copy template to local config file (gitignored)
+cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
+
+# Edit with your Entra ID values
+```
+
+**Deploy:**
+
+```bash
+./scripts/deploy-frontend.sh rg-blogapp-dev
+```
+
+The script will:
+1. Load Entra ID values from `deploy-frontend.local.env`
+2. Query Azure for SWA hostname and deployment token
+3. Build the frontend
+4. Inject config into `dist/index.html` as `window.__APP_CONFIG__`
+5. Deploy using SWA CLI
+
+### Option 2: GitHub Actions Workflow
+
+**File**: `.github/workflows/deploy-frontend.yml`
+
+```yaml
+name: Deploy Frontend to Azure Static Web Apps
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'materials/frontend/**'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install and Build
+        working-directory: materials/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Inject config into index.html
+        working-directory: materials/frontend
+        run: |
+          CONFIG_JSON='{"ENTRA_TENANT_ID":"${{ secrets.ENTRA_TENANT_ID }}","ENTRA_FRONTEND_CLIENT_ID":"${{ secrets.ENTRA_FRONTEND_CLIENT_ID }}","ENTRA_BACKEND_CLIENT_ID":"${{ secrets.ENTRA_BACKEND_CLIENT_ID }}","API_BASE_URL":"/api"}'
+          sed -i "s|window.__APP_CONFIG__=null;|window.__APP_CONFIG__=$CONFIG_JSON;|g" dist/index.html
+
+      - name: Deploy to Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: 'upload'
+          app_location: 'materials/frontend/dist'
+          skip_app_build: true
+```
+
+**Required Secrets:**
+
+| Secret | Value |
+|--------|-------|
+| `ENTRA_TENANT_ID` | Your Entra ID tenant ID |
+| `ENTRA_FRONTEND_CLIENT_ID` | Frontend SPA app registration client ID |
+| `ENTRA_BACKEND_CLIENT_ID` | Backend API app registration client ID |
+| `SWA_DEPLOYMENT_TOKEN` | Static Web App deployment token |
+
+### Legacy: GitHub Actions with Build-time Environment Variables
+
+**File**: `.github/workflows/azure-static-web-apps.yml` (alternative pattern)
 
 ```yaml
 name: Azure Static Web Apps CI/CD

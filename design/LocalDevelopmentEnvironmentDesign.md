@@ -163,13 +163,26 @@ This workshop uses **real Microsoft Entra ID authentication** for both local dev
 │  ───────────                          ──────────                  │
 │                                                                   │
 │  Frontend:                            Frontend:                   │
-│  .env.local → Vite → Browser          SWA Config → /config.json   │
+│  .env.local → Vite → Browser          Deploy script → index.html  │
+│                                        (window.__APP_CONFIG__)    │
 │                                                                   │
 │  Backend:                             Backend:                    │
 │  .env → process.env                   App Service → process.env   │
+│                                       (Key Vault refs)            │
 │                                                                   │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+### Production Configuration Pattern
+
+In production, frontend configuration is **injected into index.html at deploy time**:
+
+1. Deploy script loads values from `scripts/deploy-frontend.local.env` (gitignored)
+2. Values are injected as `window.__APP_CONFIG__` in the HTML
+3. Frontend reads from `window.__APP_CONFIG__` at startup
+4. No separate `/config.json` file is exposed (security)
+
+This pattern is consistent with IaaS (where Bicep generates config on NGINX VMs).
 
 ### Backend Environment Variables
 

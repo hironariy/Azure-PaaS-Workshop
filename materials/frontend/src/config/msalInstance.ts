@@ -58,27 +58,7 @@ export async function initializeMsal(): Promise<void> {
   const config: Configuration = createMsalConfig();
   msalInstance = new PublicClientApplication(config);
 
-  // Initialize and handle redirect
-  msalInitPromise = msalInstance.initialize().then(() => {
-    return msalInstance
-      .handleRedirectPromise()
-      .then((response) => {
-        if (response) {
-          msalInstance.setActiveAccount(response.account);
-        } else {
-          const accounts = msalInstance.getAllAccounts();
-          if (accounts.length > 0 && accounts[0] !== undefined) {
-            msalInstance.setActiveAccount(accounts[0]);
-          }
-        }
-        console.log('[MSAL] Initialization complete');
-      })
-      .catch((error) => {
-        console.error('[MSAL] Redirect handling error:', error);
-      });
-  });
-
-  // Set up event callbacks
+  // Set up event callbacks BEFORE handling redirect
   msalInstance.addEventCallback((event) => {
     if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
       const payload = event.payload as { account: unknown };
@@ -93,8 +73,30 @@ export async function initializeMsal(): Promise<void> {
     }
   });
 
+  // Initialize MSAL
+  await msalInstance.initialize();
+
+  // Handle redirect response (CRITICAL: must complete before React renders)
+  try {
+    const response = await msalInstance.handleRedirectPromise();
+    if (response) {
+      console.log('[MSAL] Redirect response received, setting active account');
+      msalInstance.setActiveAccount(response.account);
+    } else {
+      // No redirect response - check for existing accounts
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0 && accounts[0] !== undefined) {
+        console.log('[MSAL] Found existing account, setting as active');
+        msalInstance.setActiveAccount(accounts[0]);
+      }
+    }
+  } catch (error) {
+    console.error('[MSAL] Redirect handling error:', error);
+  }
+
   msalInitialized = true;
-  return msalInitPromise;
+  msalInitPromise = Promise.resolve();
+  console.log('[MSAL] Initialization complete');
 }
 
 /**

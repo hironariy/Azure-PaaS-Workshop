@@ -380,6 +380,19 @@ az deployment group create \
 
 This workshop uses **GitHub Actions** as the primary deployment method for both backend and frontend. This approach is more reliable, provides better visibility, and teaches industry-standard CI/CD practices.
 
+#### Step 0: Update Frontend App Registration Redirect URI (Required)
+
+Before testing login in Azure, add the SWA production URL to the Frontend SPA app registration.
+
+**Azure Portal → Microsoft Entra ID → App registrations → BlogApp Frontend SPA → Authentication**
+
+- Add Redirect URI (Single-page application):
+  - `https://<swa-hostname>.azurestaticapps.net`
+
+**Verification Points:**
+- [ ] Redirect URI for SWA production URL added
+- [ ] Login redirects back to the SWA site after authentication
+
 #### Deployment Method Comparison
 
 | Method | Reliability | Setup Time | Learning Value | Recommended |
@@ -678,7 +691,7 @@ For quick testing before setting up GitHub Actions, deploy a pre-built package d
 
 > **Important:** `az webapp up` attempts remote builds which often fail due to missing TypeScript compiler on the server. Use the pre-built package method below instead.
 
-**Step 1: Build and Package Locally**
+**Step 1: Build and Package Locally (Manual Only. If you use script at Step 4, this step is not required)**
 
 ```bash
 cd materials/backend
@@ -697,7 +710,7 @@ zip -r ../deploy.zip .
 cd ..
 ```
 
-**Step 2: Configure App Service**
+**Step 2: Configure App Service (Manual Only If you use script at Step 4, this step is not required)**
 
 ```bash
 # Disable remote build (CRITICAL - prevents "tsc not found" errors)
@@ -740,20 +753,49 @@ az role assignment create \
   --scope "$KV_ID"
 ```
 
-**Step 4: Deploy**
+**Step 4: Deploy Using Script (Recommended)**
+
+Use the deployment script which handles the expected 60-90 second startup time:
 
 ```bash
-# Deploy with clean flag (replaces all files, skips build)
+# From the repository root
+./scripts/deploy-backend.sh rg-blogapp-dev <app-service-name>
+```
+
+The script covers these manual steps:
+1. Build and package locally (Step 1)
+2. Configure App Service (Step 2)
+3. Deploy to App Service (Step 4 manual)
+4. Poll health endpoint (Step 5 manual)
+
+**Alternative: Manual Deploy with Polling (Manual Only)**
+
+The `az webapp deploy` command may report timeout/failure even when the deployment succeeds, because App Service startup takes 60-90 seconds (VNet + Key Vault initialization). Use this approach:
+
+```bash
+# Deploy with short timeout (ignore timeout error)
 az webapp deploy \
   --resource-group rg-blogapp-dev \
   --name <app-service-name> \
   --src-path deploy.zip \
   --type zip \
   --clean true \
-  --restart true
+  --restart true \
+  --timeout 120 || true
+
+# Poll health endpoint (startup takes 60-90 seconds)
+echo "Waiting for app to start..."
+for i in {1..20}; do
+  if curl -sf "https://<app-service-name>.azurewebsites.net/health" >/dev/null 2>&1; then
+    echo "✅ App is healthy!"
+    break
+  fi
+  echo "Attempt $i/20: waiting 15s..."
+  sleep 15
+done
 ```
 
-**Step 5: Verify Deployment**
+**Step 5: Verify Backend Deployment (Manual Only If you use script at Step 4, this step is not required)**
 
 ```bash
 # Wait for deployment and check health
@@ -775,6 +817,56 @@ Expected log output on successful startup:
 🚀 Server started on port 8080
 📝 Environment: production
 🏥 Health check: http://localhost:8080/health
+```
+
+**Step 6: Deploy Frontend with SWA CLI (Recommended for Testing)**
+
+The frontend deployment script generates runtime configuration and injects it into `index.html` at deploy time. This is more secure than serving a separate `/config.json` file.
+
+**Setup (one-time):**
+
+```bash
+# Copy template to local config file (gitignored)
+cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
+
+# Edit with your Entra ID values:
+# - ENTRA_TENANT_ID: Your tenant ID
+# - ENTRA_FRONTEND_CLIENT_ID: Frontend SPA app registration client ID
+# - ENTRA_BACKEND_CLIENT_ID: Backend API app registration client ID
+```
+
+**Deploy:**
+
+```bash
+# From the repository root
+./scripts/deploy-frontend.sh rg-blogapp-dev
+```
+
+The script will:
+1. Load Entra ID values from `deploy-frontend.local.env`
+2. Query Azure for SWA hostname and deployment token
+3. Build the frontend (`npm run build`)
+4. Inject config into `dist/index.html` as `window.__APP_CONFIG__`
+5. Deploy to SWA using SWA CLI
+
+**Note:** The config is embedded inline in index.html, not served as a separate `/config.json` file. This prevents public access to configuration values.
+
+**Verification Points:**
+- [ ] Script loads config from `deploy-frontend.local.env`
+- [ ] SWA deployment completes successfully
+- [ ] `/config.json` returns 404 (config is embedded, not exposed)
+- [ ] Frontend loads and MSAL initializes correctly
+
+**Step 7: Verify End-to-End via SWA Linked Backend**
+
+```bash
+SWA_URL="https://<swa-hostname>.azurestaticapps.net"
+
+# Frontend
+curl -s "$SWA_URL" | head -20
+
+# API via SWA Linked Backend
+curl -s "$SWA_URL/api/health" | jq .
 ```
 
 > **Note:** This method is useful for quick validation but GitHub Actions is recommended for consistent, reproducible deployments.
@@ -873,6 +965,7 @@ unzip -p /tmp/app-logs.zip "LogFiles/*default_docker.log"
 |---------|-------|-----|
 | 502 error during deployment | SCM site not ready | Restart App Service, wait 30s, retry with `--timeout 600` |
 | Deployment never completes (600+ sec) | **EasyAuth blocks /health endpoint** | Add `/health` to `excludedPaths` in EasyAuth config |
+| `az webapp deploy` reports "Site failed to start" | Transient startup failure (first attempt fails, retry succeeds) | Use `scripts/deploy-backend.sh` which polls health endpoint |
 | Deployment timeout (inprogress) | Startup takes 60-90s | Check logs - may have actually succeeded |
 | 60-90 second startup time | VNet + Key Vault + Private DNS initialization | Expected behavior; Always On is already enabled |
 | `sh: 1: tsc: not found` | Remote build enabled | Set `SCM_DO_BUILD_DURING_DEPLOYMENT=false` |
@@ -881,6 +974,7 @@ unzip -p /tmp/app-logs.zip "LogFiles/*default_docker.log"
 | Container exits with code 1 | Multiple possible causes | Check `*default_docker.log` for Node.js errors |
 | Container exits after 30s | Database connection timeout | Check VNet integration and private endpoint DNS |
 | 401 on /health endpoint | EasyAuth enabled without exclusion | Add `/health` to EasyAuth `excludedPaths` |
+| SWA `/api/*` returns 404 | Frontend not deployed yet | Deploy frontend first; `staticwebapp.config.json` enables routing |
 | GitHub Actions fails at login | Invalid credentials | Regenerate service principal, update secret |
 | SWA deployment fails | Invalid token | Regenerate deployment token |
 
@@ -1134,6 +1228,7 @@ echo "API (direct): $APP_SERVICE_URL"
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-05 | 0.6 | Updated frontend deployment to use inline config injection pattern (window.__APP_CONFIG__), added deploy-frontend.sh script documentation |
 | 2026-02-04 | 0.5 | Updated alternative CLI deployment with validated pre-built package method, expanded troubleshooting |
 | 2026-02-04 | 0.4 | Added GitHub Actions as primary deployment method, moved ZIP deploy to not recommended |
 | 2026-02-04 | 0.3 | Removed Application Gateway, switched to SWA Linked Backend architecture |

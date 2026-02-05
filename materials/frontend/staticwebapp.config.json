@@ -2,7 +2,15 @@
   "$schema": "https://json.schemastore.org/staticwebapp.config.json",
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "/*.ico", "/*.png", "/*.jpg", "/*.svg", "/*.woff2"]
+    "exclude": [
+      "/assets/*",
+      "/*.ico",
+      "/*.png",
+      "/*.jpg",
+      "/*.svg",
+      "/*.woff2",
+      "/config.json"
+    ]
   },
   "routes": [
     {

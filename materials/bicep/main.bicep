@@ -264,6 +264,7 @@ module appServiceAuth 'modules/appservice-auth.bicep' = {
     appServiceName: appService.outputs.appServiceName
     entraTenantId: entraTenantId
     entraBackendClientId: entraBackendClientId
+    staticWebAppDefaultHostName: staticWebApp.outputs.staticWebAppDefaultHostName
   }
   dependsOn: [
     staticWebApp  // CRITICAL: Must run AFTER SWA Linked Backend is created
