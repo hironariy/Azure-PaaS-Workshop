@@ -6,9 +6,12 @@
 // 2. Monitoring (Log Analytics, Application Insights)
 // 3. Key Vault with Private Endpoint
 // 4. Cosmos DB with Private Endpoint
-// 5. App Service with VNet Integration and Private Endpoint
-// 6. Application Gateway with WAF v2
-// 7. Static Web Apps
+// 5. App Service with VNet Integration (public access for simplicity)
+// 6. Static Web Apps with Linked Backend to App Service
+//
+// Note: This architecture uses SWA Linked Backend instead of Application Gateway
+// for API routing. This simplifies the architecture and avoids certificate
+// management issues with self-signed certificates.
 // =============================================================================
 
 targetScope = 'resourceGroup'
@@ -93,18 +96,15 @@ param cosmosDbEnableHa bool = false
 ])
 param staticWebAppSku string = 'Free'
 
-@description('Application Gateway minimum instances')
-@minValue(1)
-@maxValue(10)
-param appGatewayMinCapacity int = 1
-
-@description('Application Gateway maximum instances')
-@minValue(2)
-@maxValue(10)
-param appGatewayMaxCapacity int = 2
-
-@description('Deploy Application Gateway (set to false to save costs in dev)')
-param deployAppGateway bool = true
+@description('Static Web Apps location (limited regions available: westus2, centralus, eastus2, westeurope, eastasia)')
+@allowed([
+  'westus2'
+  'centralus'
+  'eastus2'
+  'westeurope'
+  'eastasia'
+])
+param staticWebAppLocation string = 'eastasia'
 
 // =============================================================================
 // Variables
@@ -116,6 +116,10 @@ var tags = {
   ManagedBy: 'Bicep'
   GroupId: empty(groupId) ? 'single' : groupId
 }
+
+// Generate unique suffix for globally unique resource names
+// This ensures multiple workshop groups can deploy to the same subscription
+var uniqueSuffix = substring(uniqueString(resourceGroup().id, groupId, baseName), 0, 6)
 
 // =============================================================================
 // Module: Network
@@ -155,6 +159,7 @@ module keyVault 'modules/keyvault.bicep' = {
     environment: environment
     location: location
     baseName: baseName
+    uniqueSuffix: uniqueSuffix
     privateEndpointSubnetId: network.outputs.privateEndpointSubnetId
     keyVaultPrivateDnsZoneId: network.outputs.keyVaultPrivateDnsZoneId
     tenantId: entraTenantId
@@ -172,6 +177,7 @@ module cosmosDb 'modules/cosmosdb.bicep' = {
     environment: environment
     location: location
     baseName: baseName
+    uniqueSuffix: uniqueSuffix
     privateEndpointSubnetId: network.outputs.privateEndpointSubnetId
     cosmosPrivateDnsZoneId: network.outputs.cosmosPrivateDnsZoneId
     administratorPassword: cosmosDbAdminPassword
@@ -192,9 +198,8 @@ module appService 'modules/appservice.bicep' = {
     environment: environment
     location: location
     baseName: baseName
+    uniqueSuffix: uniqueSuffix
     appServiceSubnetId: network.outputs.appServiceSubnetId
-    privateEndpointSubnetId: network.outputs.privateEndpointSubnetId
-    appServicePrivateDnsZoneId: network.outputs.appServicePrivateDnsZoneId
     keyVaultName: keyVault.outputs.keyVaultName
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     entraTenantId: entraTenantId
@@ -217,6 +222,7 @@ module keyVaultRbac 'modules/keyvault.bicep' = {
     environment: environment
     location: location
     baseName: baseName
+    uniqueSuffix: uniqueSuffix
     privateEndpointSubnetId: network.outputs.privateEndpointSubnetId
     keyVaultPrivateDnsZoneId: network.outputs.keyVaultPrivateDnsZoneId
     tenantId: entraTenantId
@@ -226,42 +232,51 @@ module keyVaultRbac 'modules/keyvault.bicep' = {
 }
 
 // =============================================================================
-// Module: Application Gateway
-// =============================================================================
-
-module appGateway 'modules/appgateway.bicep' = {
-  name: 'appgateway-deployment'
-  params: {
-    environment: environment
-    location: location
-    baseName: baseName
-    appGatewaySubnetId: network.outputs.appGatewaySubnetId
-    appServicePrivateLinkFqdn: appService.outputs.appServicePrivateLinkFqdn
-    minCapacity: appGatewayMinCapacity
-    maxCapacity: appGatewayMaxCapacity
-    tags: tags
-  }
-}
-
-// =============================================================================
-// Module: Static Web Apps
+// Module: Static Web Apps with Linked Backend
 // =============================================================================
 
 module staticWebApp 'modules/staticwebapp.bicep' = {
   name: 'staticwebapp-deployment'
   params: {
     environment: environment
-    location: location
+    location: staticWebAppLocation  // SWA has limited region availability
     baseName: baseName
+    uniqueSuffix: uniqueSuffix
     sku: staticWebAppSku
-    apiBackendUrl: 'https://${appGateway.outputs.appGatewayFqdn}'
+    // Link to App Service backend (SWA Linked Backend feature)
+    linkedBackendResourceId: appService.outputs.appServiceId
+    linkedBackendRegion: location  // App Service region (may differ from SWA location)
     tags: tags
   }
 }
 
 // =============================================================================
+// Module: App Service EasyAuth Configuration (MUST RUN AFTER SWA Linked Backend)
+// =============================================================================
+// SWA Linked Backend automatically configures EasyAuth with default settings
+// (RedirectToLoginPage) which breaks API deployments. This module runs AFTER
+// the Linked Backend to override those settings with correct API configuration.
+// =============================================================================
+
+module appServiceAuth 'modules/appservice-auth.bicep' = {
+  name: 'appservice-auth-deployment'
+  params: {
+    appServiceName: appService.outputs.appServiceName
+    entraTenantId: entraTenantId
+    entraBackendClientId: entraBackendClientId
+  }
+  dependsOn: [
+    staticWebApp  // CRITICAL: Must run AFTER SWA Linked Backend is created
+  ]
+}
+
+// =============================================================================
 // Outputs
 // =============================================================================
+
+// Deployment info
+output uniqueSuffix string = uniqueSuffix
+output groupId string = groupId
 
 // Network outputs
 output vnetId string = network.outputs.vnetId
@@ -278,16 +293,14 @@ output cosmosDbClusterName string = cosmosDb.outputs.clusterName
 // App Service outputs
 output appServiceName string = appService.outputs.appServiceName
 output appServiceDefaultHostName string = appService.outputs.appServiceDefaultHostName
-
-// Application Gateway outputs
-output appGatewayName string = appGateway.outputs.appGatewayName
-output appGatewayPublicIp string = appGateway.outputs.appGatewayPublicIp
-output appGatewayFqdn string = appGateway.outputs.appGatewayFqdn
-output apiUrl string = 'https://${appGateway.outputs.appGatewayFqdn}/api'
+output appServiceUrl string = 'https://${appService.outputs.appServiceDefaultHostName}'
 
 // Static Web Apps outputs
 output staticWebAppName string = staticWebApp.outputs.staticWebAppName
 output staticWebAppUrl string = staticWebApp.outputs.staticWebAppUrl
+
+// API URL (via SWA Linked Backend - accessed through SWA's /api/* routes)
+output apiUrl string = '${staticWebApp.outputs.staticWebAppUrl}/api'
 
 // Monitoring outputs
 output logAnalyticsWorkspaceId string = monitoring.outputs.logAnalyticsWorkspaceId
@@ -312,6 +325,10 @@ output recommendedResourceGroupName string = empty(groupId)
 // 3. Update Entra ID App Registration redirect URIs:
 //    - Frontend: https://<swa-url>/.auth/login/aad/callback
 //
-// 4. Update frontend staticwebapp.config.json with API URL:
-//    - API rewrite target: https://<app-gateway-fqdn>/api/*
+// 4. The SWA Linked Backend automatically proxies /api/* requests to App Service
+//    No additional configuration needed for API routing.
+//
+// 5. Deploy backend to App Service:
+//    az webapp deploy --resource-group <rg> --name <app-service-name> --src-path dist.zip --type zip
+//    az webapp config set --resource-group <rg> --name <app-service-name> --startup-file "node dist/src/app.js"
 // =============================================================================

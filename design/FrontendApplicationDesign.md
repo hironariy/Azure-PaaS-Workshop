@@ -47,7 +47,7 @@ This document defines the frontend application requirements for the Azure PaaS W
 | Aspect | IaaS Implementation | PaaS Implementation | Change Required |
 |--------|--------------------|--------------------|-----------------|
 | **Hosting** | NGINX on VMs | Azure Static Web Apps | ✅ Deployment method |
-| **API Proxy** | NGINX proxy_pass | SWA routes config | ✅ Configuration file |
+| **API Proxy** | NGINX proxy_pass | **SWA Linked Backend** | ✅ Bicep configuration |
 | **SSL/TLS** | App Gateway cert | SWA built-in SSL | ❌ Automatic |
 | **CDN** | None (or manual) | Built-in global CDN | ❌ Automatic |
 | **CI/CD** | Manual SCP | GitHub Actions | ✅ Workflow file |
@@ -59,13 +59,15 @@ This document defines the frontend application requirements for the Azure PaaS W
 1. **`staticwebapp.config.json`** - SWA routing and headers (NEW)
 2. **`.github/workflows/azure-static-web-apps.yml`** - CI/CD (NEW)
 3. **`src/config/msal.ts`** - Update redirect URI
-4. **`src/services/api/client.ts`** - Update API base URL
+4. **`src/services/api/client.ts`** - API base URL (use `/api` for Linked Backend)
 
 ---
 
 ## Static Web Apps Configuration
 
 ### staticwebapp.config.json
+
+With **SWA Linked Backend**, the API routing is handled automatically. No `rewrite` rules are needed for `/api/*` routes.
 
 ```json
 {
@@ -77,8 +79,7 @@ This document defines the frontend application requirements for the Azure PaaS W
     {
       "route": "/api/*",
       "methods": ["GET", "POST", "PUT", "DELETE"],
-      "allowedRoles": ["anonymous", "authenticated"],
-      "rewrite": "https://<app-gateway-url>/api/*"
+      "allowedRoles": ["anonymous", "authenticated"]
     },
     {
       "route": "/login",
@@ -104,7 +105,7 @@ This document defines the frontend application requirements for the Azure PaaS W
     "X-XSS-Protection": "1; mode=block",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://login.microsoftonline.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://login.microsoftonline.com https://*.azurestaticapps.net https://<app-gateway-url>; frame-ancestors 'none'"
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://login.microsoftonline.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://login.microsoftonline.com https://*.azurestaticapps.net; frame-ancestors 'none'"
   },
   "mimeTypes": {
     ".json": "application/json",
@@ -128,18 +129,20 @@ This document defines the frontend application requirements for the Azure PaaS W
 - React Router handles client-side routing
 - Same effect as NGINX `try_files $uri $uri/ /index.html`
 
-#### API Proxy Routes
-```json
-{
-  "route": "/api/*",
-  "rewrite": "https://<app-gateway-url>/api/*"
-}
-```
-- Frontend calls `/api/posts` 
-- SWA proxies to `https://<app-gateway-url>/api/posts`
-- Avoids CORS issues (same-origin from browser perspective)
+#### API Routing with Linked Backend
+With **SWA Linked Backend** configured in Bicep, `/api/*` requests are automatically routed to the linked App Service:
 
-**Note**: Replace `<app-gateway-url>` with actual Application Gateway URL after deployment.
+```
+Frontend calls /api/posts → SWA → Linked Backend → App Service /api/posts
+```
+
+**Benefits**:
+- No URL rewriting needed in staticwebapp.config.json
+- No CORS issues (requests appear same-origin)
+- No certificate management (Azure handles HTTPS)
+- Automatic routing without manual configuration
+
+**Note**: The Linked Backend is configured in Bicep (`Microsoft.Web/staticSites/linkedBackends`), not in this config file.
 
 #### Security Headers
 Built-in security headers equivalent to NGINX configuration:

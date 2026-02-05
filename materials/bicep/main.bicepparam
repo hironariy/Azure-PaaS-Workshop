@@ -81,7 +81,17 @@ param cosmosDbEnableHa = false
 // Free = $0, Standard = ~$9/month (custom domains, more bandwidth)
 param staticWebAppSku = 'Free'
 
-// Application Gateway autoscale capacity
-// 1-2 instances for workshop (saves cost when idle)
-param appGatewayMinCapacity = 1
-param appGatewayMaxCapacity = 2
+// Static Web Apps location (not available in all regions)
+// Available regions: westus2, centralus, eastus2, westeurope, eastasia
+param staticWebAppLocation = 'eastasia'  // Closest to Japan
+
+// =============================================================================
+// =============================================================================
+// Architecture Notes
+// =============================================================================
+// This architecture uses SWA Linked Backend instead of Application Gateway:
+// - Static Web Apps automatically routes /api/* to App Service
+// - No SSL certificate management required
+// - Simplified architecture with lower cost (~$250/month savings)
+// - App Service is publicly accessible but protected by Entra ID auth
+// =============================================================================

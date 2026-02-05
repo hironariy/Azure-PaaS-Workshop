@@ -2,9 +2,11 @@
 // Network Module - VNet, Subnets, NAT Gateway, Private DNS Zones
 // =============================================================================
 // This module creates the networking foundation for the PaaS Workshop:
-// - Virtual Network with three subnets
+// - Virtual Network with two subnets (App Service integration + Private Endpoints)
 // - NAT Gateway for App Service outbound internet access
-// - Private DNS Zones for Private Endpoints
+// - Private DNS Zones for Private Endpoints (Cosmos DB, Key Vault)
+//
+// Note: No Application Gateway subnet - SWA Linked Backend is used instead
 // =============================================================================
 
 @description('Environment name (dev, staging, prod)')
@@ -18,9 +20,6 @@ param baseName string
 
 @description('VNet address space')
 param vnetAddressPrefix string = '10.1.0.0/16'
-
-@description('Application Gateway subnet CIDR')
-param appGatewaySubnetPrefix string = '10.1.0.0/24'
 
 @description('App Service VNet Integration subnet CIDR')
 param appServiceSubnetPrefix string = '10.1.1.0/24'
@@ -94,14 +93,6 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
     }
     subnets: [
       {
-        name: 'snet-appgw'
-        properties: {
-          addressPrefix: appGatewaySubnetPrefix
-          privateEndpointNetworkPolicies: 'Enabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-      }
-      {
         name: 'snet-appservice'
         properties: {
           addressPrefix: appServiceSubnetPrefix
@@ -135,26 +126,9 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
 // =============================================================================
 // Private DNS Zones
 // =============================================================================
-
-// App Service Private DNS Zone
-resource appServicePrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: 'privatelink.azurewebsites.net'
-  location: 'global'
-  tags: tags
-}
-
-resource appServicePrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: appServicePrivateDnsZone
-  name: 'link-${vnetName}'
-  location: 'global'
-  tags: tags
-  properties: {
-    registrationEnabled: false
-    virtualNetwork: {
-      id: vnet.id
-    }
-  }
-}
+// Private DNS Zones for Cosmos DB and Key Vault Private Endpoints
+// Note: No App Service Private DNS Zone needed - App Service is public
+// =============================================================================
 
 // Cosmos DB Private DNS Zone (MongoDB vCore)
 resource cosmosPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
@@ -203,11 +177,9 @@ resource keyVaultPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNe
 output vnetId string = vnet.id
 output vnetName string = vnet.name
 
-output appGatewaySubnetId string = vnet.properties.subnets[0].id
-output appServiceSubnetId string = vnet.properties.subnets[1].id
-output privateEndpointSubnetId string = vnet.properties.subnets[2].id
+output appServiceSubnetId string = vnet.properties.subnets[0].id
+output privateEndpointSubnetId string = vnet.properties.subnets[1].id
 
-output appServicePrivateDnsZoneId string = appServicePrivateDnsZone.id
 output cosmosPrivateDnsZoneId string = cosmosPrivateDnsZone.id
 output keyVaultPrivateDnsZoneId string = keyVaultPrivateDnsZone.id
 

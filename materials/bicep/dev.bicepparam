@@ -25,7 +25,7 @@ using 'main.bicep'
 // Required Parameters
 // =============================================================================
 
-param location = 'japaneast'
+param location = 'japanwest'
 param environment = 'dev'
 param baseName = 'blogapp'
 
@@ -84,17 +84,21 @@ param cosmosDbTier = 'M25'  // ~$100/month (vs M30 ~$200/month)
 // Disable Cosmos DB HA (saves ~50%)
 param cosmosDbEnableHa = false
 
-// Free tier for Static Web Apps
-param staticWebAppSku = 'Free'
+// Standard tier for Static Web Apps (required for Linked Backend feature)
+// Note: Free tier does NOT support Linked Backend
+param staticWebAppSku = 'Standard'  // ~$9/month
+
+// Static Web Apps location (not available in japaneast)
+// Available regions: westus2, centralus, eastus2, westeurope, eastasia
+param staticWebAppLocation = 'eastasia'  // Closest to Japan
 
 // =============================================================================
-// Application Gateway - Skip to save ~$250/month
 // =============================================================================
-// For development, you can skip Application Gateway and access
-// App Service directly via its default hostname.
-// Set deployAppGateway = false to skip (requires code change in main.bicep)
+// Architecture Notes
 // =============================================================================
-
-// Minimum App Gateway capacity (if deployed)
-param appGatewayMinCapacity = 1
-param appGatewayMaxCapacity = 2
+// This architecture uses SWA Linked Backend instead of Application Gateway:
+// - Static Web Apps automatically routes /api/* to App Service
+// - No SSL certificate management required
+// - Simplified architecture with lower cost (~$250/month savings)
+// - App Service is publicly accessible but protected by Entra ID auth
+// =============================================================================

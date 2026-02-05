@@ -16,6 +16,9 @@ param location string = resourceGroup().location
 @description('Base name for resources')
 param baseName string
 
+@description('Unique suffix for globally unique resource names')
+param uniqueSuffix string
+
 @description('Subnet ID for Private Endpoint')
 param privateEndpointSubnetId string
 
@@ -35,8 +38,9 @@ param tags object = {}
 // Variables
 // =============================================================================
 
-var keyVaultName = 'kv-${baseName}-${environment}'
-var privateEndpointName = 'pe-keyvault-${baseName}'
+// Key Vault name must be globally unique (3-24 chars, alphanumeric and hyphens)
+var keyVaultName = 'kv-${baseName}-${uniqueSuffix}'
+var privateEndpointName = 'pe-keyvault-${baseName}-${uniqueSuffix}'
 
 // =============================================================================
 // Key Vault
@@ -61,7 +65,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     publicNetworkAccess: 'Disabled'
     networkAcls: {
       defaultAction: 'Deny'
-      bypass: 'None'
+      bypass: 'AzureServices'  // Required when enabledForTemplateDeployment is true
       ipRules: []
       virtualNetworkRules: []
     }

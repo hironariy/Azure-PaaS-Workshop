@@ -365,51 +365,539 @@ az deployment group create \
 - [ ] All resources created (check Azure Portal)
 - [ ] No deployment warnings related to deprecated features
 
-#### Step 2: Verify Resource Creation
+#### Step 3: Verify Resource Creation
 
 | Resource | Verification |
 |----------|--------------|
-| **Virtual Network** | Subnets created, NSGs attached |
+| **Virtual Network** | Subnets created (appservice, privateendpoint) |
 | **Cosmos DB** | Database exists, connection string accessible |
-| **App Service** | Running, VNet integration configured |
-| **Static Web Apps** | Deployed, custom domain ready |
+| **App Service** | Running, VNet integration configured, **public access enabled** |
+| **Static Web Apps** | Deployed, **Linked Backend configured** |
 | **Key Vault** | Secrets populated |
 | **Application Insights** | Connected, receiving telemetry |
-| **Application Gateway** | WAF enabled, backend healthy (if deployed) |
 
 ### 2.2 Application Deployment
 
-#### Step 1: Deploy Backend to App Service
+This workshop uses **GitHub Actions** as the primary deployment method for both backend and frontend. This approach is more reliable, provides better visibility, and teaches industry-standard CI/CD practices.
+
+#### Deployment Method Comparison
+
+| Method | Reliability | Setup Time | Learning Value | Recommended |
+|--------|-------------|------------|----------------|-------------|
+| **GitHub Actions** | ✅ Very High | +15-20 min | Industry standard | ✅ Primary |
+| `az webapp up` | Medium | Quick | Limited | Alternative |
+| ZIP Deploy | ❌ Low | Medium | Limited | Not recommended |
+
+---
+
+#### Step 1: Deploy Backend to App Service (GitHub Actions)
+
+**1a. Create GitHub Actions Workflow File:**
+
+Create `.github/workflows/backend-deploy.yml`:
+
+```yaml
+name: Deploy Backend to Azure App Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'materials/backend/**'
+      - '.github/workflows/backend-deploy.yml'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}  # Set in repo settings
+  NODE_VERSION: '20.x'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: materials/backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: materials/backend
+        run: npm ci
+
+      - name: Build TypeScript
+        working-directory: materials/backend
+        run: npm run build
+
+      - name: Create deployment package
+        working-directory: materials/backend
+        run: |
+          # Copy only production dependencies
+          cp package.json package-lock.json dist/
+          cd dist
+          npm ci --omit=dev
+          zip -r ../deploy.zip .
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: materials/backend/deploy.zip
+
+      - name: Verify deployment
+        run: |
+          sleep 30  # Wait for app to start
+          curl -sf "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health" || exit 1
+          echo "✅ Health check passed"
+```
+
+**1b. Configure GitHub Repository Secrets:**
+
+Go to your GitHub repository → Settings → Secrets and variables → Actions:
+
+**Secrets (sensitive values):**
+
+| Secret Name | Value | How to Get |
+|-------------|-------|------------|
+| `AZURE_CREDENTIALS` | Service principal JSON | See below |
+
+**Variables (non-sensitive):**
+
+| Variable Name | Value | Example |
+|---------------|-------|---------|
+| `AZURE_WEBAPP_NAME` | Your App Service name | `app-blogapp-u3qvwg` |
+
+**Create Service Principal for GitHub Actions:**
+
+```bash
+# Create service principal with Contributor role on resource group
+az ad sp create-for-rbac \
+  --name "github-actions-blogapp-<Team Name>" \
+  --role contributor \
+  --scopes /subscriptions/<subscription-id>/resourceGroups/rg-blogapp-dev \
+  --json-auth
+
+# Copy the entire JSON output to AZURE_CREDENTIALS secret
+```
+
+The output looks like:
+```json
+{
+  "clientId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "clientSecret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "subscriptionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "tenantId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+}
+```
+
+**1c. Configure App Service Startup Command:**
+
+Before first deployment, set the startup command (one-time):
+
+```bash
+az webapp config set --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --startup-file "node src/app.js"
+```
+
+> **Note:** With GitHub Actions deployment, the built files are in the root of the deployment package, so the path is `src/app.js` not `dist/src/app.js`.
+
+**1d. Verify Key Vault RBAC:**
+
+The App Service managed identity must have access to read secrets:
+
+```bash
+# Get App Service managed identity principal ID
+PRINCIPAL_ID=$(az webapp identity show \
+  --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --query principalId -o tsv)
+
+# Verify role assignment exists (should show "Key Vault Secrets User")
+az role assignment list \
+  --assignee $PRINCIPAL_ID \
+  --scope <key-vault-resource-id> \
+  --query "[].roleDefinitionName" -o tsv
+
+# If missing, assign the role:
+az role assignment create \
+  --role "Key Vault Secrets User" \
+  --assignee $PRINCIPAL_ID \
+  --scope <key-vault-resource-id>
+```
+
+**1e. Trigger Deployment:**
+
+```bash
+# Push to main branch (triggers automatically)
+git add .
+git commit -m "Deploy backend"
+git push origin main
+
+# Or trigger manually via GitHub UI:
+# Actions → Deploy Backend → Run workflow
+```
+
+**Verification Points:**
+- [ ] GitHub Actions workflow completes successfully (green check)
+- [ ] App Service shows "Running" state
+- [ ] Health endpoint responds: `curl https://<app-service-name>.azurewebsites.net/health`
+- [ ] Logs show "✅ Connected to Cosmos DB" and "🚀 Server started"
+
+---
+
+#### Step 2: Deploy Frontend to Static Web Apps (GitHub Actions)
+
+Static Web Apps automatically creates a GitHub Actions workflow when linked to a repository. If you deployed SWA via Bicep, you need to configure the workflow manually.
+
+**2a. Create GitHub Actions Workflow File:**
+
+Create `.github/workflows/frontend-deploy.yml`:
+
+```yaml
+name: Deploy Frontend to Azure Static Web Apps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'materials/frontend/**'
+      - '.github/workflows/frontend-deploy.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+    paths:
+      - 'materials/frontend/**'
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: materials/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: materials/frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: materials/frontend
+        env:
+          VITE_ENTRA_CLIENT_ID: ${{ vars.VITE_ENTRA_CLIENT_ID }}
+          VITE_ENTRA_TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
+          VITE_API_CLIENT_ID: ${{ vars.VITE_API_CLIENT_ID }}
+        run: npm run build
+
+      - name: Deploy to Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "materials/frontend/dist"
+          skip_app_build: true
+          skip_api_build: true
+
+  close_pull_request:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request
+    steps:
+      - name: Close Pull Request
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
+          action: "close"
+```
+
+**2b. Configure GitHub Repository Secrets:**
+
+**Secrets:**
+
+| Secret Name | Value | How to Get |
+|-------------|-------|------------|
+| `SWA_DEPLOYMENT_TOKEN` | SWA deployment token | Azure Portal → SWA → Manage deployment token |
+
+**Variables:**
+
+| Variable Name | Value | Description |
+|---------------|-------|-------------|
+| `VITE_ENTRA_CLIENT_ID` | Frontend SPA client ID | From Entra ID app registration |
+| `VITE_ENTRA_TENANT_ID` | Tenant ID | From Entra ID |
+| `VITE_API_CLIENT_ID` | Backend API client ID | From Entra ID app registration |
+
+**Get SWA Deployment Token:**
+
+```bash
+az staticwebapp secrets list \
+  --name <swa-name> \
+  --resource-group rg-blogapp-dev \
+  --query "properties.apiKey" -o tsv
+```
+
+**2c. Trigger Deployment:**
+
+```bash
+git add .
+git commit -m "Deploy frontend"
+git push origin main
+```
+
+**Verification Points:**
+- [ ] GitHub Actions workflow completes successfully
+- [ ] SWA URL accessible: `https://<swa-hostname>.azurestaticapps.net`
+- [ ] Frontend loads without console errors
+- [ ] API calls work via Linked Backend: `https://<swa-url>/api/health`
+
+---
+
+#### Alternative: Pre-built Package Deployment (Testing Only)
+
+For quick testing before setting up GitHub Actions, deploy a pre-built package directly.
+
+> **Important:** `az webapp up` attempts remote builds which often fail due to missing TypeScript compiler on the server. Use the pre-built package method below instead.
+
+**Step 1: Build and Package Locally**
 
 ```bash
 cd materials/backend
+
+# Install all dependencies and build TypeScript
+npm install
 npm run build
 
-# Deploy via Azure CLI or ZIP deploy
-az webapp deploy --resource-group rg-blogapp-dev \
-  --name <app-service-name> \
-  --src-path dist.zip
+# Create deployment package with production dependencies only
+cp package.json package-lock.json dist/
+cd dist
+npm ci --omit=dev
+
+# Create ZIP (includes compiled JS + node_modules)
+zip -r ../deploy.zip .
+cd ..
 ```
 
-**Verification Points:**
-- [ ] Deployment succeeds
-- [ ] App Service shows "Running"
-- [ ] Health endpoint responds via private endpoint
-
-#### Step 2: Deploy Frontend to Static Web Apps
+**Step 2: Configure App Service**
 
 ```bash
-cd materials/frontend
-npm run build
+# Disable remote build (CRITICAL - prevents "tsc not found" errors)
+az webapp config appsettings set \
+  --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false"
 
-# Via SWA CLI or GitHub Actions
-swa deploy ./dist --deployment-token <token>
+# Set startup command (src/app.js because built files are at root of package)
+az webapp config set \
+  --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --startup-file "node src/app.js"
 ```
 
-**Verification Points:**
-- [ ] Deployment succeeds
-- [ ] SWA URL accessible
-- [ ] Frontend loads without console errors
+**Step 3: Verify Key Vault RBAC**
+
+The App Service managed identity must have access to read secrets. This is a common cause of startup failures:
+
+```bash
+# Get App Service managed identity principal ID
+PRINCIPAL_ID=$(az webapp identity show \
+  --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --query principalId -o tsv)
+
+# Get Key Vault resource ID
+KV_ID=$(az keyvault show \
+  --name <keyvault-name> \
+  --resource-group rg-blogapp-dev \
+  --query id -o tsv)
+
+# Check existing role assignments
+az role assignment list --assignee $PRINCIPAL_ID --scope "$KV_ID" -o table
+
+# If "Key Vault Secrets User" is missing, assign it:
+az role assignment create \
+  --role "Key Vault Secrets User" \
+  --assignee $PRINCIPAL_ID \
+  --scope "$KV_ID"
+```
+
+**Step 4: Deploy**
+
+```bash
+# Deploy with clean flag (replaces all files, skips build)
+az webapp deploy \
+  --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --src-path deploy.zip \
+  --type zip \
+  --clean true \
+  --restart true
+```
+
+**Step 5: Verify Deployment**
+
+```bash
+# Wait for deployment and check health
+sleep 60
+curl -v https://<app-service-name>.azurewebsites.net/health
+
+# Check application logs
+az webapp log download \
+  --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --log-file /tmp/app-logs.zip
+
+unzip -p /tmp/app-logs.zip "LogFiles/*default_docker.log" | tail -30
+```
+
+Expected log output on successful startup:
+```
+✅ Connected to Cosmos DB for MongoDB vCore
+🚀 Server started on port 8080
+📝 Environment: production
+🏥 Health check: http://localhost:8080/health
+```
+
+> **Note:** This method is useful for quick validation but GitHub Actions is recommended for consistent, reproducible deployments.
+
+---
+
+#### Backend Deployment Troubleshooting
+
+**If you get a 502 error during deployment:**
+
+The SCM (Kudu) site may not be ready. Restart the App Service and retry:
+
+```bash
+# Restart App Service to reset SCM site
+az webapp restart --resource-group rg-blogapp-dev --name <app-service-name>
+
+# Wait for restart
+sleep 30
+
+# Retry deployment with extended timeout
+az webapp deploy \
+  --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --src-path deploy.zip \
+  --type zip \
+  --clean true \
+  --restart true \
+  --timeout 600
+```
+
+**If deployment times out but says "inprogress":**
+
+The deployment may have actually succeeded - startup can take 60-90 seconds. Check the logs:
+
+```bash
+# Download and check docker logs
+az webapp log download --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --log-file /tmp/app-logs.zip
+
+unzip -p /tmp/app-logs.zip "LogFiles/*docker.log" | tail -20
+
+# Look for: "Site started." or "Site startup probe succeeded"
+```
+
+**Understanding the 60-90 Second Startup Time:**
+
+The slow startup is **expected behavior** for App Service with VNet integration and Key Vault references. Here's the breakdown:
+
+| Phase | Time | Description |
+|-------|------|-------------|
+| Container spin-up | ~3 sec | Docker container initialization |
+| **Platform initialization** | **~60 sec** | Key Vault reference resolution, VNet integration, Private DNS setup |
+| Application startup | ~1-2 sec | Node.js app connects to Cosmos DB and starts server |
+
+The platform initialization phase includes:
+- **Key Vault Reference Resolution**: App Service resolves `@Microsoft.KeyVault(...)` app settings
+- **VNet Integration**: Establishing network connectivity to the virtual network
+- **Private DNS Resolution**: Setting up DNS for private endpoints (Cosmos DB, Key Vault)
+- **Cold Start**: Allocating a new worker instance (first request after idle)
+
+**Mitigation strategies:**
+1. **Always On** (already enabled) - Prevents cold starts from idle timeout
+2. **Health Check Path** (already configured) - Helps detect unhealthy instances faster
+3. **Local Cache** - Can speed up file access (not typically needed for Node.js)
+4. **Premium/Isolated SKU** - Faster cold starts but higher cost
+
+> **Note:** The slow startup is a trade-off for security (private endpoints, Key Vault secrets). This is normal for enterprise-grade configurations.
+
+**Enable Logging:**
+
+```bash
+az webapp log config --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --docker-container-logging filesystem \
+  --application-logging filesystem \
+  --level verbose
+```
+
+**Check Logs:**
+
+```bash
+# Stream live logs
+az webapp log tail --resource-group rg-blogapp-dev --name <app-service-name>
+
+# Download logs
+az webapp log download --resource-group rg-blogapp-dev \
+  --name <app-service-name> \
+  --log-file /tmp/app-logs.zip
+unzip -p /tmp/app-logs.zip "LogFiles/*default_docker.log"
+```
+
+**Common Issues:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| 502 error during deployment | SCM site not ready | Restart App Service, wait 30s, retry with `--timeout 600` |
+| Deployment never completes (600+ sec) | **EasyAuth blocks /health endpoint** | Add `/health` to `excludedPaths` in EasyAuth config |
+| Deployment timeout (inprogress) | Startup takes 60-90s | Check logs - may have actually succeeded |
+| 60-90 second startup time | VNet + Key Vault + Private DNS initialization | Expected behavior; Always On is already enabled |
+| `sh: 1: tsc: not found` | Remote build enabled | Set `SCM_DO_BUILD_DURING_DEPLOYMENT=false` |
+| `Cannot find module` | Wrong startup path | Use `node src/app.js` for pre-built package |
+| `Key Vault reference failed` | Missing RBAC role | Assign "Key Vault Secrets User" to managed identity |
+| Container exits with code 1 | Multiple possible causes | Check `*default_docker.log` for Node.js errors |
+| Container exits after 30s | Database connection timeout | Check VNet integration and private endpoint DNS |
+| 401 on /health endpoint | EasyAuth enabled without exclusion | Add `/health` to EasyAuth `excludedPaths` |
+| GitHub Actions fails at login | Invalid credentials | Regenerate service principal, update secret |
+| SWA deployment fails | Invalid token | Regenerate deployment token |
+
+**EasyAuth Health Check Exclusion (CRITICAL):**
+
+When EasyAuth is enabled with `requireAuthentication: true`, the health check endpoint must be excluded from authentication. Otherwise, Azure's deployment health checks will fail (401), and deployments will never complete.
+
+```bash
+# Verify EasyAuth configuration
+az rest --method GET \
+  --uri "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/<rg>/providers/Microsoft.Web/sites/<app-name>/config/authsettingsV2?api-version=2023-01-01" \
+  | jq '.properties.globalValidation.excludedPaths'
+
+# Expected output: ["/health", "/robots933456.txt"]
+```
+
+If missing, add the exclusion via Azure CLI or update the Bicep deployment.
 
 ### 2.3 Functional Test Cases - Azure
 
@@ -419,9 +907,10 @@ swa deploy ./dist --deployment-token <token>
 |----|-----------|-------|-----------------|
 | A-NET-01 | Private endpoint connectivity | App Service calls Cosmos DB | Connection succeeds via private endpoint |
 | A-NET-02 | VNet integration | Backend resolves private DNS | No public IP access to Cosmos DB |
-| A-NET-03 | WAF protection | Send malicious request | Blocked by Application Gateway WAF |
-| A-NET-04 | TLS enforcement | Access via HTTP | Redirected to HTTPS |
-| A-NET-05 | CORS validation | Frontend calls API | Requests succeed, CORS headers present |
+| A-NET-03 | Linked Backend routing | Call `https://<swa-url>/api/posts` | Routed to App Service correctly |
+| A-NET-04 | HTTPS on SWA | Access SWA URL | HTTPS with valid Azure certificate |
+| A-NET-05 | HTTPS on App Service | Access App Service directly | HTTPS with valid Azure certificate |
+| A-NET-06 | Entra ID protection | Call API without token | 401 Unauthorized |
 
 #### 2.3.2 Authentication (Real Entra ID)
 
@@ -501,11 +990,11 @@ swa deploy ./dist --deployment-token <token>
 | Component | Phase 1a (Vite) | Phase 1b (SWA CLI) | Phase 2 (Azure) |
 |-----------|-----------------|---------------------|-----------------|
 | Database | Docker MongoDB | Docker MongoDB | Cosmos DB |
-| Backend | Node.js :8080 | Node.js :8080 | App Service |
+| Backend | Node.js :8080 | Node.js :8080 | App Service (public) |
 | Frontend | Vite :5173 | SWA CLI :4280 | Static Web Apps |
 | Auth | Real Entra ID | Real Entra ID | Real Entra ID |
-| API Proxy | Vite proxy | SWA CLI proxy | SWA backend |
-| Network | localhost | localhost | VNet + Private Endpoints |
+| API Proxy | Vite proxy | SWA CLI proxy | **SWA Linked Backend** |
+| Network | localhost | localhost | VNet Integration + PE (DB/KV) |
 
 ---
 
@@ -554,7 +1043,7 @@ swa deploy ./dist --deployment-token <token>
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
 | No Cosmos DB Emulator on ARM64 | Cannot test Cosmos-specific behavior | Use Docker MongoDB; behavior is compatible |
-| No Application Gateway | Cannot test WAF locally | Must validate in Phase 2 |
+| No SWA Linked Backend locally | Cannot test exact production routing | SWA CLI proxy simulates similar behavior |
 | No Private Endpoints | Network topology differs | Must validate in Phase 2 |
 | Requires Entra ID setup | Cannot test without Azure tenant | One-time setup; same config works for prod |
 
@@ -620,15 +1109,23 @@ echo "Access: http://localhost:4280"
 
 ```bash
 # Replace with your actual URLs
-BACKEND_URL="https://app-blogapp-dev.azurewebsites.net"
-FRONTEND_URL="https://your-swa.azurestaticapps.net"
+SWA_URL="https://your-swa.azurestaticapps.net"
+APP_SERVICE_URL="https://your-app-service.azurewebsites.net"
 
-# Test endpoints
-curl -s "$BACKEND_URL/health" | jq .
-curl -s "$BACKEND_URL/api/posts" | jq .
-curl -s "$FRONTEND_URL" | head -20
+# Test App Service directly
+curl -s "$APP_SERVICE_URL/health" | jq .
+
+# Test API via SWA Linked Backend
+curl -s "$SWA_URL/api/health" | jq .
+curl -s "$SWA_URL/api/posts" | jq .
+
+# Test frontend
+curl -s "$SWA_URL" | head -20
 
 echo "✅ Azure smoke test complete"
+echo "Frontend: $SWA_URL"
+echo "API (via Linked Backend): $SWA_URL/api"
+echo "API (direct): $APP_SERVICE_URL"
 ```
 
 ---
@@ -637,4 +1134,8 @@ echo "✅ Azure smoke test complete"
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-04 | 0.5 | Updated alternative CLI deployment with validated pre-built package method, expanded troubleshooting |
+| 2026-02-04 | 0.4 | Added GitHub Actions as primary deployment method, moved ZIP deploy to not recommended |
+| 2026-02-04 | 0.3 | Removed Application Gateway, switched to SWA Linked Backend architecture |
+| 2026-02-04 | 0.2 | Added HTTPS/SSL support for Application Gateway, detailed backend deployment steps |
 | 2026-02-04 | 0.1 | Initial draft |

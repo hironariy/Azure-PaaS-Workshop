@@ -25,12 +25,12 @@
 
 | Tier | IaaS Workshop | PaaS Workshop |
 |------|---------------|---------------|
-| **WAF/Gateway** | Application Gateway with WAF v2 | Application Gateway with WAF v2 |
+| **WAF/Gateway** | Application Gateway with WAF v2 | **Not required** (Entra ID auth) |
 | **Web Tier** | NGINX on Ubuntu VMs (2 instances, AZ spread) | **Azure Static Web Apps** (globally distributed) |
 | **App Tier** | Express/Node.js on Ubuntu VMs (2 instances) | **Azure App Service** (Linux, Node.js) |
-| **Load Balancing** | Internal Load Balancer between Web→App | Built-in (App Service handles internally) |
+| **Load Balancing** | Internal Load Balancer between Web→App | Built-in (**SWA Linked Backend**) |
 | **DB Tier** | MongoDB Replica Set on VMs (2 nodes) | **Azure Cosmos DB for MongoDB vCore** |
-| **Networking** | VNet, Subnets, NSGs, NAT Gateway | VNet Integration, Private Endpoints |
+| **Networking** | VNet, Subnets, NSGs, NAT Gateway | VNet Integration, Private Endpoints (DB/KV only) |
 
 ### 2.2 Architecture Diagrams
 
@@ -49,19 +49,20 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 └─────────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│  API Flow (WAF required - protects writable endpoints and sensitive data)       │
+│  API Flow (SWA Linked Backend - routes to App Service automatically)            │
 │                                                                                 │
-│  Browser ──→ Internet ──→ App Gateway (WAF v2) ──→ App Service ──→ Cosmos DB    │
-│                           └── WAF: SQL injection, XSS, Bot protection           │
+│  Browser ──→ SWA (/api/*) ──→ Linked Backend ──→ App Service ──→ Cosmos DB      │
+│              └── HTTPS managed by Azure  └── Entra ID auth   └── Private EP     │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Why No App Gateway for Static Web Apps?**
+**Why No Application Gateway for PaaS?**
 - SWA serves **read-only static assets** (HTML, CSS, JS, images)
-- SWA includes **built-in DDoS protection**, **global CDN**, and **free SSL**
-- WAF rules (SQL injection, XSS) are irrelevant for static file serving
-- Adding App Gateway would increase **latency** (+10-50ms) and **cost** (~$250/month) with minimal security benefit
-- **Attack surface is the API**, not the static frontend
+- API is protected by **Entra ID authentication** at application level
+- **SWA Linked Backend** provides automatic routing to App Service
+- No SSL certificate management needed (Azure handles HTTPS)
+- **Cost savings**: ~$250/month (App Gateway WAF v2)
+- **Simplicity**: No self-signed certificate issues
 
 ---
 
@@ -112,10 +113,12 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 
 | Aspect | IaaS | PaaS |
 |--------|------|------|
-| **Network Isolation** | VNet + Subnets + NSGs | VNet Integration + Private Endpoints |
+| **Network Isolation** | VNet + Subnets + NSGs | VNet Integration + Private Endpoints (DB/KV) |
 | **Bastion Access** | Azure Bastion → SSH to VMs | N/A (no VMs to SSH into) |
-| **Firewall Rules** | NSG rules per subnet | App Service access restrictions |
-| **Private Connectivity** | Internal IPs within VNet | Private Endpoints for Cosmos DB |
+| **Firewall Rules** | NSG rules per subnet | Entra ID auth (app level) |
+| **API Protection** | Application Gateway WAF | **Entra ID + input validation** |
+| **Private Connectivity** | Internal IPs within VNet | Private Endpoints for Cosmos DB/Key Vault |
+| **API Routing** | NGINX proxy_pass | **SWA Linked Backend** |
 
 ---
 
@@ -136,7 +139,7 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 | Component | IaaS Implementation | PaaS Changes Required |
 |-----------|--------------------|-----------------------|
 | **Build Output** | Static files → NGINX | Static files → SWA |
-| **API Proxy** | NGINX proxy_pass | SWA `staticwebapp.config.json` routes |
+| **API Proxy** | NGINX proxy_pass | **SWA Linked Backend** (automatic) |
 | **Environment** | Build-time VITE_API_URL | SWA environment variables |
 
 ### 4.3 Infrastructure as Code
@@ -145,9 +148,10 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 |-----------|--------------|--------------|
 | **Compute** | VM resources, extensions, availability sets | App Service Plan + Web App |
 | **Database** | VM resources + Custom Script for MongoDB | Cosmos DB account + database (Microsoft.DocumentDB/mongoClusters) |
-| **Networking** | VNet, subnets, NSGs, LBs | VNet, Private Endpoints, VNet Integration |
-| **Gateway** | Application Gateway | Application Gateway (similar) |
+| **Networking** | VNet, subnets, NSGs, LBs | VNet, Private Endpoints (DB/KV), VNet Integration |
+| **Gateway** | Application Gateway | **Not required** (SWA Linked Backend) |
 | **Secrets** | Key Vault + VM MI | Key Vault + App Service MI |
+| **API Routing** | App Gateway backend pools | **SWA Linked Backend** resource |
 
 ---
 
@@ -166,8 +170,9 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 - ✅ Deploy App Service with deployment slots
 - ✅ Configure Cosmos DB for MongoDB vCore (data modeling, indexing)
 - ✅ Use Static Web Apps for frontend hosting
-- ✅ Implement VNet Integration and Private Endpoints
-- ✅ Use Application Gateway with WAF for PaaS backends
+- ✅ Configure **SWA Linked Backend** for API routing
+- ✅ Implement VNet Integration and Private Endpoints (DB/Key Vault)
+- ✅ Understand **Entra ID authentication** as security boundary
 - ✅ Understand auto-scaling and cost optimization
 - ✅ Learn Cosmos DB benefits (global distribution options, vector search)
 
@@ -200,10 +205,10 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 
 | Scenario | Recommendation |
 |----------|----------------|
-| **Full comparison with IaaS** | ✅ Keep App Gateway + WAF (shows same WAF works for PaaS) |
-| **Simplified PaaS demo** | Use App Service built-in WAF or Front Door |
+| **Full comparison with IaaS** | Optional - shows WAF concept |
+| **Simplified PaaS demo** | ✅ **SWA Linked Backend** - simpler, lower cost |
 
-**Decision**: ✅ Keep Application Gateway for comparison purposes
+**Decision**: ✅ Use SWA Linked Backend (no Application Gateway) for simplified architecture and cost savings
 
 ---
 
@@ -228,10 +233,11 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 
 | Component | IaaS Monthly Cost (Est.) | PaaS Monthly Cost (Est.) | Notes |
 |-----------|--------------------------|--------------------------|-------|
-| Web Tier | 2x Standard_B2s (~$60) | SWA Free tier ($0) | No App GW needed for SWA |
-| App Tier | 2x Standard_B2s (~$60) | App Service B1 (~$13) or S1 (~$73) | Protected by App GW |
+| Web Tier | 2x Standard_B2s (~$60) | SWA Free tier ($0) | SWA Linked Backend for API |
+| App Tier | 2x Standard_B2s (~$60) | App Service B1 (~$13) | Public access, Entra ID auth |
 | DB Tier | 2x Standard_B4ms (~$240) | Cosmos DB vCore M30 (~$200) | Managed MongoDB compatible |
-| App Gateway | WAF v2 (~$250) | WAF v2 (~$250) | API protection only |
-| **Total** | **~$610/month** | **~$465-525/month** | ~25% cost reduction |
+| App Gateway | WAF v2 (~$250) | **$0** (not used) | SWA Linked Backend instead |
+| NAT Gateway | N/A | ~$45 | Required for VNet Integration |
+| **Total** | **~$610/month** | **~$260/month** | **~57% cost reduction** |
 
 *Note: Estimates for Japan East region, actual costs vary by usage*

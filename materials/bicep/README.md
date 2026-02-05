@@ -92,9 +92,29 @@ param entraTenantId = '<your-tenant-id>'
 param entraBackendClientId = '<your-backend-app-id>'
 param entraFrontendClientId = '<your-frontend-app-id>'
 param cosmosDbAdminPassword = '<strong-password>'
+
+// Optional: SSL certificate for HTTPS (recommended)
+// param sslCertificateData = '<base64-encoded-pfx>'
+// param sslCertificatePassword = 'Workshop2024!'
 ```
 
-### 3. Deploy
+### 3. (Optional) Generate SSL Certificate for HTTPS
+
+For HTTPS support on Application Gateway, generate a self-signed certificate:
+
+```bash
+# Generate certificate
+./scripts/generate-ssl-cert.sh
+
+# Add to your .local.bicepparam file:
+param sslCertificateData = '<paste contents of cert-base64.txt>'
+param sslCertificatePassword = 'Workshop2024!'
+```
+
+**Note:** Self-signed certificates cause browser warnings. This is expected for workshop purposes.
+If you skip this step, Application Gateway will serve HTTP only (port 80).
+
+### 4. Deploy
 
 ```bash
 az deployment group create \
@@ -103,7 +123,7 @@ az deployment group create \
   --parameters main.local.bicepparam
 ```
 
-### 4. Get Outputs
+### 5. Get Outputs
 
 ```bash
 # Get all outputs
@@ -191,6 +211,37 @@ az group delete --name rg-paasworkshop-dev --yes --no-wait
 ```
 
 ## Troubleshooting
+
+### App Service Quota Error (InternalSubscriptionIsOverQuotaForSku)
+
+If you see an error like:
+```
+InternalSubscriptionIsOverQuotaForSku: Operation cannot be completed without additional quota.
+Current Limit (Basic VMs): 0
+```
+
+**Cause:** Your subscription has insufficient quota for the App Service tier (B1 uses Basic tier VMs).
+
+**Solutions:**
+
+1. **Request Quota Increase (Recommended for workshop):**
+   - Go to Azure Portal > Subscriptions > Your Subscription > Usage + quotas
+   - Filter by "App Service"
+   - Request increase for "Basic vCPUs" in your region
+   - Or visit: https://aka.ms/antquotahelp
+
+2. **Use Free Tier (Temporary workaround):**
+   - Edit `dev.local.bicepparam` and change:
+     ```bicep
+     param appServiceSku = 'F1'  // Free tier
+     ```
+   - **Note:** F1 has limitations (60 min/day CPU, no VNet integration, no custom domains)
+
+3. **Use Standard Tier (If you have S1 quota but not B1):**
+   - Edit `dev.local.bicepparam` and change:
+     ```bicep
+     param appServiceSku = 'S1'  // Standard tier (~$73/month)
+     ```
 
 ### Deployment Fails with "Key Vault not found"
 

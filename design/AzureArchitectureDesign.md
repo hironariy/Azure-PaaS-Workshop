@@ -14,8 +14,8 @@ This document defines the technical architecture requirements for the Azure PaaS
 - **Tiers**: Static Web Apps (Frontend) → App Service (API) → Cosmos DB (Database)
 - **Traffic Flow**: 
   - Static assets: Internet → Static Web Apps (global CDN)
-  - API calls: Internet → Application Gateway (WAF v2) → App Service → Cosmos DB
-- **SSL/TLS**: Managed certificates (SWA built-in, App Gateway for API)
+  - API calls: Static Web Apps → **Linked Backend** → App Service → Cosmos DB
+- **SSL/TLS**: Managed certificates (SWA built-in, App Service built-in)
 - **HA Strategy**: Built-in PaaS redundancy within region
 - **DR Strategy**: Geo-replication options (Cosmos DB, App Service slots)
 - **Authentication**: OAuth2.0 with Microsoft Entra ID (same as IaaS)
@@ -27,10 +27,27 @@ This document defines the technical architecture requirements for the Azure PaaS
 | Frontend | NGINX on 2 VMs | Azure Static Web Apps |
 | Backend | Express on 2 VMs | Azure App Service |
 | Database | MongoDB on 2 VMs | Cosmos DB for MongoDB vCore |
-| Load Balancer | Internal LB + App Gateway | App Gateway (API only) |
-| WAF | Application Gateway WAF v2 | Application Gateway WAF v2 |
+| Load Balancer | Internal LB + App Gateway | **SWA Linked Backend** |
+| WAF | Application Gateway WAF v2 | **Not required** (see below) |
 | OS Management | Manual patching required | Fully managed |
 | Scaling | Manual VM scaling | Auto-scale rules |
+
+### Why No Application Gateway / WAF?
+
+This PaaS architecture uses **SWA Linked Backend** instead of Application Gateway:
+
+| Consideration | Application Gateway | SWA Linked Backend |
+|---------------|--------------------|--------------------|
+| **Purpose** | WAF + Load balancing | API routing |
+| **Cost** | ~$250/month | Included with SWA |
+| **SSL/TLS** | Requires certificate management | Built-in (Azure-managed) |
+| **Complexity** | High (self-signed cert issues) | Low (automatic) |
+| **WAF Protection** | Yes | No (but Entra ID protects API) |
+
+**Security Model**:
+- **Frontend (SWA)**: Built-in DDoS protection, global CDN, free SSL
+- **Backend (App Service)**: Protected by **Entra ID authentication** at application level
+- **Database (Cosmos DB)**: Accessed via **Private Endpoint** (no public access)
 
 ---
 
@@ -125,11 +142,6 @@ Static Web Apps does **NOT** require Application Gateway because:
 5. **WAF irrelevant**: SQL injection, XSS attacks target APIs, not static files
 
 **Note**: For 118+ edge locations with advanced caching, consider enabling **Enterprise-grade edge** (Azure Front Door integration) as an optional enhancement.
-
-**Cost/Latency Impact of Adding App Gateway to SWA**:
-- Additional cost: ~$250/month
-- Added latency: +10-50ms per request
-- Security benefit: Minimal (static content has no attack surface)
 
 ---
 
@@ -341,63 +353,61 @@ resource cosmosPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
 
 ---
 
-### 4. Application Gateway with WAF v2 (API Protection)
+### 4. SWA Linked Backend (API Routing)
 
-#### Why Application Gateway for API Only?
+#### What is SWA Linked Backend?
 
-In this PaaS architecture, Application Gateway protects **only the App Service (API)**:
+SWA Linked Backend is a feature that allows Static Web Apps to route API requests directly to an Azure App Service (or Azure Functions). This replaces the need for Application Gateway for API routing.
 
-| Traffic Type | Protection | Why |
-|--------------|------------|-----|
-| Static assets (SWA) | SWA built-in | Read-only, no attack surface |
-| API calls (App Service) | ✅ App Gateway WAF | Writable endpoints, SQL injection, XSS |
+**Benefits over Application Gateway**:
 
-#### Application Gateway Configuration
+| Aspect | Application Gateway | SWA Linked Backend |
+|--------|--------------------|--------------------|
+| **Cost** | ~$250/month | Included with SWA |
+| **SSL/TLS** | Requires certificate (self-signed issues) | Automatic (Azure-managed) |
+| **Setup** | Complex (WAF policies, listeners) | Simple (one Bicep resource) |
+| **API Routing** | Manual URL rewriting | Automatic `/api/*` routing |
+| **CORS** | Must configure | Not needed (same origin) |
 
-**SKU**: WAF_v2
-- Zone redundant: Yes (zones 1, 2, 3)
-- Autoscale: 1-2 instances (workshop)
-- WAF Mode: Prevention
+#### Linked Backend Configuration
 
-**Backend Pool**:
+**Bicep Resource Definition**:
 ```bicep
-backendAddressPools: [
-  {
-    name: 'appServiceBackend'
-    properties: {
-      backendAddresses: [
-        {
-          fqdn: '${appServiceName}.azurewebsites.net'
-        }
-      ]
-    }
+resource linkedBackend 'Microsoft.Web/staticSites/linkedBackends@2023-01-01' = {
+  parent: staticWebApp
+  name: 'backend'
+  properties: {
+    backendResourceId: appService.id
+    region: location
   }
-]
+}
 ```
 
-**Health Probe**:
-```bicep
-probes: [
-  {
-    name: 'appServiceHealthProbe'
-    properties: {
-      protocol: 'Https'
-      host: '${appServiceName}.azurewebsites.net'
-      path: '/health'
-      interval: 30
-      timeout: 30
-      unhealthyThreshold: 3
-      pickHostNameFromBackendHttpSettings: true
-    }
-  }
-]
+**How It Works**:
+1. Frontend makes request to `https://<swa-url>/api/posts`
+2. SWA automatically routes to `https://<app-service>.azurewebsites.net/api/posts`
+3. No CORS issues (requests appear same-origin to browser)
+4. No certificate management required
+
+**Traffic Flow**:
+```
+Browser ──→ SWA (HTTPS) ──→ Linked Backend ──→ App Service ──→ Cosmos DB (Private Endpoint)
 ```
 
-**WAF Policy**:
-```bicep
-resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies@2023-05-01' = {
-  name: 'waf-policy-blogapp'
-  location: location
+#### Security Considerations
+
+Without Application Gateway WAF, security is handled at the application level:
+
+| Attack Type | Protection |
+|-------------|------------|
+| **Authentication bypass** | Microsoft Entra ID JWT validation in Express.js |
+| **SQL Injection** | Mongoose ODM parameterized queries |
+| **XSS** | Input validation + output encoding |
+| **CSRF** | SameSite cookies + CORS |
+| **DDoS** | Azure platform-level protection |
+| **Rate Limiting** | express-rate-limit middleware |
+
+**Key Point**: The API is protected by **Entra ID authentication** - unauthenticated requests are rejected before reaching business logic.
   properties: {
     policySettings: {
       mode: 'Prevention'
@@ -431,9 +441,10 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
 
 | Subnet | CIDR | Purpose | Delegation |
 |--------|------|---------|------------|
-| `snet-appgw` | `10.1.0.0/24` | Application Gateway | None |
 | `snet-appservice` | `10.1.1.0/24` | App Service VNet Integration (outbound) | Microsoft.Web/serverFarms |
-| `snet-privateendpoint` | `10.1.2.0/24` | Private Endpoints (App Service, Cosmos DB, Key Vault) | None |
+| `snet-privateendpoint` | `10.1.2.0/24` | Private Endpoints (Cosmos DB, Key Vault) | None |
+
+**Note**: No Application Gateway subnet needed - SWA Linked Backend handles API routing.
 
 #### NAT Gateway Configuration
 
@@ -507,25 +518,31 @@ App Service (VNet Integration)
 
 #### Private Endpoint Architecture
 
-**All PaaS services are accessed via Private Endpoints** (no public endpoints):
+**Cosmos DB and Key Vault are accessed via Private Endpoints** (no public endpoints):
 
 | Service | Private Endpoint | Private DNS Zone |
 |---------|-----------------|------------------|
-| App Service | `pe-appservice-*` | `privatelink.azurewebsites.net` |
 | Cosmos DB | `pe-cosmos-*` | `privatelink.mongocluster.cosmos.azure.com` |
 | Key Vault | `pe-keyvault-*` | `privatelink.vaultcore.azure.net` |
 
-**Traffic Flow (Fully Private)**:
+**Note**: App Service uses **public access** (protected by Entra ID) with SWA Linked Backend for routing.
+
+**Traffic Flow**:
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              Virtual Network                                 │
+│                              Internet                                        │
 │                                                                             │
-│  ┌─────────────┐     ┌─────────────────────────────────────────────────┐   │
-│  │ App Gateway │────→│ Private Endpoint (App Service)                  │   │
-│  │ (Public IP) │     │ snet-privateendpoint                            │   │
-│  └─────────────┘     └─────────────────────────────────────────────────┘   │
+│  ┌─────────────────┐          ┌─────────────────┐                          │
+│  │ Static Web Apps │  ──────→ │ App Service     │ (Public Access)          │
+│  │ (Frontend)      │  Linked  │ (Backend API)   │                          │
+│  │                 │  Backend │                 │                          │
+│  └─────────────────┘          └─────────────────┘                          │
 │                                      │                                      │
-│                                      ▼                                      │
+└──────────────────────────────────────│──────────────────────────────────────┘
+                                       │
+┌──────────────────────────────────────│──────────────────────────────────────┐
+│                              Virtual Network                                 │
+│                                      │                                      │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │ App Service (VNet Integration)                                       │   │
 │  │ snet-appservice                                                      │   │
@@ -539,65 +556,80 @@ App Service (VNet Integration)
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### App Service Private Endpoint
+#### App Service Public Access Configuration
 
-**Purpose**: Application Gateway connects to App Service via Private Endpoint (not public endpoint with firewall)
+**Configuration**: App Service is publicly accessible (both main site and SCM):
 
 ```bicep
-// App Service Private Endpoint
-resource appServicePrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
-  name: 'pe-appservice-${appServiceName}'
-  location: location
+resource appService 'Microsoft.Web/sites@2023-01-01' = {
   properties: {
-    subnet: {
-      id: privateEndpointSubnet.id
-    }
-    privateLinkServiceConnections: [
-      {
-        name: 'appservice-connection'
-        properties: {
-          privateLinkServiceId: appService.id
-          groupIds: ['sites']
-        }
-      }
-    ]
-  }
-}
-
-// Private DNS Zone for App Service
-resource appServicePrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: 'privatelink.azurewebsites.net'
-  location: 'global'
-}
-
-resource appServicePrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  parent: appServicePrivateDnsZone
-  name: 'link-to-vnet'
-  location: 'global'
-  properties: {
-    registrationEnabled: false
-    virtualNetwork: {
-      id: vnet.id
+    publicNetworkAccess: 'Enabled'  // Public access for SWA Linked Backend
+    siteConfig: {
+      ipSecurityRestrictionsDefaultAction: 'Allow'  // Public access
+      scmIpSecurityRestrictionsUseMain: true  // SCM also public for deployments
     }
   }
 }
+```
 
-resource appServicePrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-05-01' = {
-  parent: appServicePrivateEndpoint
-  name: 'default'
-  properties: {
-    privateDnsZoneConfigs: [
-      {
-        name: 'config'
-        properties: {
-          privateDnsZoneId: appServicePrivateDnsZone.id
-        }
-      }
-    ]
-  }
-}
+**Security**: API endpoints are protected by **Entra ID authentication** at the application level:
+- All `/api/*` endpoints require valid JWT token
+- Unauthenticated requests receive 401 Unauthorized
+- Token validation happens in Express.js middleware
 
-// Disable public access to App Service main site, but allow SCM for GitHub Actions
+#### GitHub Actions Deployment
+
+With public SCM access, GitHub Actions can deploy directly without VNet considerations:
+
+**GitHub Actions Workflow for App Service**:
+```yaml
+# .github/workflows/backend-deploy.yml
+name: Deploy Backend to App Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'materials/backend/**'
+
+permissions:
+  id-token: write  # Required for OIDC authentication
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ./materials/backend
+        
+      - name: Build
+        run: npm run build
+        working-directory: ./materials/backend
+        
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+      - name: Deploy to App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: ./materials/backend
+```
+
+**Authentication Method**: OIDC (Federated Identity) is recommended for security.
 resource appServicePublicAccess 'Microsoft.Web/sites/config@2023-01-01' = {
   parent: appService
   name: 'web'
@@ -963,11 +995,10 @@ materials/bicep/
 ├── main.bicepparam               # Student parameters
 ├── modules/
 │   ├── network.bicep             # VNet, subnets, NAT Gateway, Private DNS Zones
-│   ├── staticwebapp.bicep        # Static Web Apps
-│   ├── appservice.bicep          # App Service Plan + Web App + Private Endpoint
+│   ├── staticwebapp.bicep        # Static Web Apps + Linked Backend
+│   ├── appservice.bicep          # App Service Plan + Web App (public access)
 │   ├── cosmosdb.bicep            # Cosmos DB cluster + Private Endpoint
 │   ├── keyvault.bicep            # Key Vault + secrets + Private Endpoint
-│   ├── appgateway.bicep          # Application Gateway + WAF
 │   └── monitoring.bicep          # App Insights + Log Analytics
 └── README.md
 ```
@@ -977,10 +1008,10 @@ materials/bicep/
 1. **Network** (VNet, subnets, NAT Gateway, Private DNS Zones)
 2. **Key Vault** (with Private Endpoint)
 3. **Cosmos DB** (with Private Endpoint)
-4. **App Service** (with VNet Integration + Private Endpoint)
-5. **Application Gateway** (backend = App Service Private Endpoint)
-6. **Monitoring** (App Insights with public endpoint - accessed via NAT Gateway)
-7. **Static Web Apps** (via GitHub Actions, separate workflow)
+4. **Monitoring** (App Insights with public endpoint - accessed via NAT Gateway)
+5. **App Service** (with VNet Integration, public access)
+6. **Static Web Apps** (with Linked Backend to App Service)
+7. **Frontend deployment** (via GitHub Actions, separate workflow)
 
 ### Student Configuration (main.bicepparam)
 
@@ -1010,20 +1041,21 @@ param cosmosDbTier = 'M30'
 | Static Web Apps | Free | $0 |
 | App Service | B1 | ~$13 |
 | Cosmos DB vCore | M30 | ~$200 |
-| Application Gateway | WAF_v2 (1 instance) | ~$250 |
 | Key Vault | Standard | ~$1 |
 | VNet/Private Endpoint | - | ~$10 |
-| **Total** | | **~$475/month** |
+| NAT Gateway | Standard | ~$45 |
+| **Total** | | **~$270/month** |
 
-### Cost Comparison with IaaS
+### Cost Comparison with IaaS and Previous PaaS
 
-| Component | IaaS | PaaS | Savings |
-|-----------|------|------|---------|
-| Frontend | ~$60 (2 VMs) | $0 (SWA Free) | $60 |
-| Backend | ~$60 (2 VMs) | ~$13 (B1) | $47 |
-| Database | ~$240 (2 VMs) | ~$200 (M30) | $40 |
-| App Gateway | ~$250 | ~$250 | $0 |
-| **Total** | **~$610** | **~$475** | **~$135 (22%)** |
+| Component | IaaS | PaaS (with App GW) | PaaS (SWA Linked) |
+|-----------|------|--------------------|--------------------|
+| Frontend | ~$60 (2 VMs) | $0 (SWA Free) | $0 (SWA Free) |
+| Backend | ~$60 (2 VMs) | ~$13 (B1) | ~$13 (B1) |
+| Database | ~$240 (2 VMs) | ~$200 (M30) | ~$200 (M30) |
+| App Gateway | ~$250 | ~$250 | **$0 (not used)** |
+| **Total** | **~$610** | **~$475** | **~$270** |
+| **Savings vs IaaS** | - | ~22% | **~56%** |
 
 ---
 
@@ -1034,9 +1066,9 @@ By completing this workshop, participants will:
 1. **Understand PaaS benefits**: Reduced operational overhead, automatic scaling, managed security
 2. **Deploy App Service**: Configuration, deployment slots (S1+), health checks
 3. **Configure Cosmos DB vCore**: Connection strings, MongoDB compatibility
-4. **Use Static Web Apps**: GitHub Actions integration, routing configuration
-5. **Implement Private Endpoints**: Secure PaaS-to-PaaS connectivity
-6. **Configure Application Gateway**: WAF policies, backend pools for App Service
+4. **Use Static Web Apps**: GitHub Actions integration, routing configuration, **Linked Backend**
+5. **Implement Private Endpoints**: Secure database connectivity via VNet Integration
+6. **Understand SWA Linked Backend**: API routing without Application Gateway
 7. **Compare IaaS vs PaaS**: Cost, complexity, operational differences
 
 ---
@@ -1045,9 +1077,10 @@ By completing this workshop, participants will:
 
 | IaaS Component | PaaS Equivalent | Migration Notes |
 |----------------|-----------------|-----------------|
-| NGINX config | SWA staticwebapp.config.json | Convert proxy rules to route config |
+| NGINX config | SWA staticwebapp.config.json | Convert proxy rules to route config (or use Linked Backend) |
 | PM2/systemd | App Service always-on | No process manager needed |
 | MongoDB RS | Cosmos DB vCore | Update connection string format |
 | VM env files | App Service App Settings | Move to portal or Bicep |
-| NSG rules | Access restrictions + Private Endpoints | Different security model |
+| NSG rules | Entra ID authentication | Different security model (app-level vs network) |
+| App Gateway WAF | Entra ID + input validation | Security at application level |
 | Custom Script Extension | Deployment slots | CI/CD handles configuration |

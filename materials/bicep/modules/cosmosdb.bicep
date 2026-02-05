@@ -16,6 +16,9 @@ param location string = resourceGroup().location
 @description('Base name for resources')
 param baseName string
 
+@description('Unique suffix for globally unique resource names')
+param uniqueSuffix string
+
 @description('Subnet ID for Private Endpoint')
 param privateEndpointSubnetId string
 
@@ -56,8 +59,9 @@ param tags object = {}
 // Variables
 // =============================================================================
 
-var clusterName = 'cosmos-${baseName}-${environment}'
-var privateEndpointName = 'pe-cosmos-${baseName}'
+// Cosmos DB cluster name must be globally unique (3-44 chars, lowercase alphanumeric and hyphens)
+var clusterName = 'cosmos-${baseName}-${uniqueSuffix}'
+var privateEndpointName = 'pe-cosmos-${baseName}-${uniqueSuffix}'
 
 // =============================================================================
 // Cosmos DB for MongoDB vCore Cluster
