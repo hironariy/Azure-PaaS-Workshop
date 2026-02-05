@@ -354,7 +354,7 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
    - Click "+ New registration" button
 
 4. **Configure the App**
-   - **Name**: `BlogApp Frontend (PaaS)` (or any name you prefer)
+   - **Name**: `BlogApp Frontend <Team-Name> (PaaS)` (replace `<Team-Name>` with your team name/number)
    - **Supported account types**: Select "Accounts in this organizational directory only"
    - **Redirect URI**: 
      - Select **"Single-page application (SPA)"** from the dropdown
@@ -381,7 +381,7 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
    - Click "+ New registration"
 
 2. **Configure the App**
-   - **Name**: `BlogApp API (PaaS)`
+   - **Name**: `BlogApp API <Team-Name> (PaaS)` (replace `<Team-Name>` with your team name/number)
    - **Supported account types**: "Accounts in this organizational directory only"
    - **Redirect URI**: Leave empty (APIs don't need redirect URIs)
 
@@ -408,13 +408,13 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
 <summary>📝 Click to expand: Grant Frontend Permission to Call Backend API</summary>
 
 1. **Go to Frontend App Registration**
-   - Navigate to App registrations → `BlogApp Frontend (PaaS)`
+   - Navigate to App registrations → `BlogApp Frontend <Team-Name> (PaaS)`
 
 2. **Add API Permission**
    - In the left menu, click "API permissions"
    - Click "+ Add a permission"
    - Select "APIs my organization uses" tab (or "My APIs" tab if visible)
-   - Click on "BlogApp API (PaaS)"
+   - Click on "BlogApp API <Team-Name> (PaaS)"
    - Check the box next to `access_as_user`
    - Click "Add permissions"
 
@@ -646,7 +646,7 @@ After deployment, you need to add the Static Web App URL to your Frontend app re
    ```
 
 2. **Add Redirect URI in Azure Portal:**
-   - Go to Azure Portal → Microsoft Entra ID → App registrations → `BlogApp Frontend (PaaS)`
+   - Go to Azure Portal → Microsoft Entra ID → App registrations → `BlogApp Frontend <Team-Name> (PaaS)`
    - Click "Authentication" in the left menu
    - Under "Single-page application" Redirect URIs, click "Add URI"
    - Add: `https://<your-swa-hostname>.azurestaticapps.net`
