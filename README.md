@@ -13,7 +13,7 @@ A hands-on workshop for learning Azure PaaS patterns through building and deploy
 > | Day | Workshop | Focus |
 > |-----|----------|-------|
 > | **Day 1** | [Azure IaaS Workshop](https://github.com/hironariy/Azure-IaaS-Workshop) | Virtual Machines, Load Balancers, Availability Zones |
-> | **Day 2** | **Azure PaaS Workshop** (this repository) | App Service, Static Web Apps, Cosmos DB, Managed Services |
+> | **Day 2** | **Azure PaaS Workshop** (this repository) | App Service, Static Web Apps, Azure DocumentDB, Managed Services |
 > 
 > Complete both workshops to understand the architectural differences between IaaS and PaaS approaches!
 
@@ -61,7 +61,7 @@ By completing this workshop, you will gain hands-on experience with:
 | Topic | Azure Services |
 |-------|----------------|
 | **Managed Compute** | App Service, Static Web Apps |
-| **Managed Database** | Cosmos DB for MongoDB vCore |
+| **Managed Database** | Azure DocumentDB (formerly called as Cosmos DB for MongoDB vCore) |
 | **Security** | Private Endpoints, Key Vault, Managed Identities |
 | **Networking** | Virtual Networks, VNet Integration, NAT Gateway |
 | **Identity** | Microsoft Entra ID, EasyAuth |
@@ -97,14 +97,14 @@ The sample application is a **multi-user blog platform** with the following feat
 |-------|------------|
 | Frontend | React 18, TypeScript, TailwindCSS, Vite |
 | Backend | Node.js 20, Express.js, TypeScript |
-| Database | Cosmos DB for MongoDB vCore |
+| Database | Azure DocumentDB (formerly called as Cosmos DB for MongoDB vCore) |
 | Authentication | Microsoft Entra ID with MSAL.js |
 
 ### 1.4 Architecture Overview
 
 ![Architecture Diagram](assets/images/architecture.png)
 
-> 📝 **Note:** Architecture diagram will be added. The diagram shows the PaaS architecture with Static Web Apps, App Service, Cosmos DB, and private networking.
+> 📝 **Note:** Architecture diagram will be added. The diagram shows the PaaS architecture with Static Web Apps, App Service, Azure DocumentDB, and private networking.
 
 **Key Azure Services Used:**
 
@@ -112,10 +112,10 @@ The sample application is a **multi-user blog platform** with the following feat
 |---------|---------|
 | **Static Web Apps** | React frontend hosting with global CDN |
 | **App Service** | Node.js API backend with VNet integration |
-| **Cosmos DB for MongoDB vCore** | Managed MongoDB-compatible database |
+| **Azure DocumentDB** | Managed MongoDB-compatible database |
 | **Key Vault** | Secure storage of secrets and connection strings |
 | **Virtual Network** | Network isolation with subnets |
-| **Private Endpoints** | Secure access to Cosmos DB and Key Vault |
+| **Private Endpoints** | Secure access to Azure DocumentDB and Key Vault |
 | **NAT Gateway** | Outbound internet for VNet-integrated services |
 | **Application Insights** | Monitoring and observability |
 
@@ -984,7 +984,7 @@ This section highlights the key differences between the IaaS (Day 1) and PaaS (D
 |-----------|--------------|--------------|
 | **Frontend Hosting** | Nginx on VM | Static Web Apps |
 | **Backend Hosting** | Node.js on VM | App Service |
-| **Database** | MongoDB on VM | Cosmos DB for MongoDB vCore |
+| **Database** | MongoDB on VM | Azure DocumentDB |
 | **Load Balancer** | Application Gateway | SWA Linked Backend |
 | **SSL Certificate** | Manual (self-signed) | Automatic (managed) |
 | **OS Patching** | Your responsibility | Microsoft managed |
@@ -1001,16 +1001,16 @@ The backend code is largely identical, but there are key differences in database
 const uri = "mongodb://user:pass@10.0.3.4:27017,10.0.3.5:27017,10.0.3.6:27017/blogdb?replicaSet=rs0";
 ```
 
-**PaaS (Cosmos DB for MongoDB vCore):**
+**PaaS (Azure DocumentDB):**
 ```typescript
-// Connection string format for Cosmos DB (from Key Vault reference)
+// Connection string format for Azure DocumentDB (from Key Vault reference)
 const uri = process.env.COSMOSDB_CONNECTION_STRING;
 // Format: mongodb+srv://user:pass@cluster.mongocluster.cosmos.azure.com/?tls=true
 ```
 
 **Key Differences:**
-- Cosmos DB uses `mongodb+srv://` protocol
-- TLS is required for Cosmos DB
+- Azure DocumentDB uses `mongodb+srv://` protocol
+- TLS is required for Azure DocumentDB
 - Connection string is stored in Key Vault, accessed via managed identity
 
 ### 4.3 Frontend Code Differences
@@ -1076,7 +1076,7 @@ Estimated costs (Japan East region, dev configuration):
 |----------|-----|--------------|
 | Static Web Apps | Free | $0 |
 | App Service | B1 | ~$13 |
-| Cosmos DB vCore | M25 | ~$100 |
+| Azure DocumentDB | M25 | ~$100 |
 | Key Vault | Standard | ~$1 |
 | VNet / Private Endpoints | - | ~$10 |
 | NAT Gateway | Standard | ~$45 |
@@ -1176,7 +1176,7 @@ Backend Client ID:  ________________________________
 --- Azure Resources ---
 App Service:        ________________________________.azurewebsites.net
 Static Web App:     ________________________________.azurestaticapps.net
-Cosmos DB:          ________________________________.mongocluster.cosmos.azure.com
+Azure DocumentDB:          ________________________________.mongocluster.cosmos.azure.com
 Key Vault:          ________________________________.vault.azure.net
 
 --- URLs ---
