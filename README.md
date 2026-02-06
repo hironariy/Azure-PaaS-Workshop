@@ -653,6 +653,70 @@ After deployment, you need to add the Static Web App URL to your Frontend app re
    - Add: `https://<your-swa-hostname>.azurestaticapps.net`
    - Click "Save"
 
+**Alternative (Azure CLI): Update Redirect URIs via Command Line**
+
+If you prefer (or if you're automating workshop setup), you can update the Frontend app registration using Azure CLI.
+
+> ⚠️ Notes
+> - You must have permission to update app registrations (see "Required Permissions for Entra ID").
+> - These commands **merge** the new SWA URL into the existing `spa.redirectUris` list, then write the merged list back.
+> - This updates the **Frontend** app registration (the SPA), not the Backend API app.
+> - Azure CLI requires setting `spa={}` in the same update call before setting `spa.redirectUris`.
+
+**macOS/Linux (bash/zsh):**
+```bash
+# Set your Frontend App Registration (Application / Client ID)
+FRONTEND_APP_ID="<entraFrontendClientId>"
+
+# Get the SWA hostname (same as Step 4.1)
+SWA_HOSTNAME=$(az staticwebapp show \
+  --name $(az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv) \
+  --resource-group <Resource-Group-Name> \
+  --query "defaultHostname" -o tsv)
+
+# Merge redirect URIs and update the app registration
+export SWA_HOSTNAME
+NEW_REDIRECT_URIS=$(az ad app show \
+  --id "$FRONTEND_APP_ID" \
+  --query "spa.redirectUris" -o json \
+  | node -e '
+    const fs = require("fs");
+    const existing = JSON.parse(fs.readFileSync(0, "utf8") || "[]");
+    const host = process.env.SWA_HOSTNAME;
+    const toAdd = [`https://${host}`, `https://${host}/`];
+    const merged = [...new Set([...existing, ...toAdd])];
+    process.stdout.write(JSON.stringify(merged));
+  ')
+
+az ad app update \
+  --id "$FRONTEND_APP_ID" \
+  --set "spa={}" \
+  --set "spa.redirectUris=$NEW_REDIRECT_URIS"
+
+# Verify
+az ad app show --id "$FRONTEND_APP_ID" --query "spa.redirectUris" -o jsonc
+```
+
+**Windows (PowerShell):**
+```powershell
+# Set your Frontend App Registration (Application / Client ID)
+$frontendAppId = "<entraFrontendClientId>"
+
+# Get the SWA hostname (same as Step 4.1)
+$swaName = az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv
+$swaHostname = az staticwebapp show --name $swaName --resource-group <Resource-Group-Name> --query "defaultHostname" -o tsv
+
+# Merge redirect URIs and update the app registration
+$existing = az ad app show --id $frontendAppId --query "spa.redirectUris" -o json | ConvertFrom-Json
+$toAdd = @("https://$swaHostname", "https://$swaHostname/")
+$new = @($existing + $toAdd | Sort-Object -Unique)
+
+az ad app update --id $frontendAppId --set "spa={}" --set "spa.redirectUris=$($new | ConvertTo-Json -Compress)"
+
+# Verify
+az ad app show --id $frontendAppId --query "spa.redirectUris" -o jsonc
+```
+
 ✅ **Checkpoint:** SWA URL added to Frontend app registration redirect URIs.
 
 #### Step 5: Deploy Backend to App Service
