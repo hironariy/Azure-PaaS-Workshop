@@ -534,6 +534,15 @@ code dev.local.bicepparam
 | `entraFrontendClientId` | Frontend SPA app client ID | From Step 2.1.5 |
 | `cosmosDbAdminPassword` | Database admin password | Generate: `openssl rand -base64 16` |
 
+> **Windows note (if `openssl` is not installed):**
+> You can generate an equivalent strong random password in PowerShell and paste it into `dev.local.bicepparam`:
+> ```powershell
+> # Generates 16 random bytes and Base64-encodes them (similar to: openssl rand -base64 16)
+> $bytes = New-Object byte[] 16
+> [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+> [Convert]::ToBase64String($bytes)
+> ```
+
 Example `dev.local.bicepparam`:
 ```bicep
 using 'main.bicep'
@@ -709,9 +718,17 @@ $swaHostname = az staticwebapp show --name $swaName --resource-group <Resource-G
 # Merge redirect URIs and update the app registration
 $existing = az ad app show --id $frontendAppId --query "spa.redirectUris" -o json | ConvertFrom-Json
 $toAdd = @("https://$swaHostname", "https://$swaHostname/")
-$new = @($existing + $toAdd | Sort-Object -Unique)
 
-az ad app update --id $frontendAppId --set "spa={}" --set "spa.redirectUris=$($new | ConvertTo-Json -Compress)"
+# Ensure this stays an array (even if there's only one value)
+$new = @($existing + $toAdd)
+$new = @($new | Sort-Object -Unique)
+
+# IMPORTANT (Windows): passing JSON like ["..."] through --set can lose double-quotes,
+# which triggers: "PrimitiveValue ... StartArray expected".
+# Use a Python-style list literal with single quotes instead.
+$newPyList = '[' + (($new | ForEach-Object { "'$_'" }) -join ',') + ']'
+
+az ad app update --id $frontendAppId --set "spa={}" --set "spa.redirectUris=$newPyList"
 
 # Verify
 az ad app show --id $frontendAppId --query "spa.redirectUris" -o jsonc
@@ -863,34 +880,60 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 **Windows PowerShell (Alternative):**
 ```powershell
+# NOTE: This alternative uses PowerShell only (no Git Bash/WSL).
+# It expects you created scripts\deploy-frontend.local.env in the "Setup" section above.
+
 # Get SWA details
 $swaName = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>")[0].Name
 $swaHostname = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).DefaultHostname
-$deploymentToken = (Get-AzStaticWebAppSecret -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).Properties.ApiKey
+
+# Get deployment token (Azure PowerShell returns the secret JSON under .Property)
+$deploymentToken = ((Get-AzStaticWebAppSecret -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).Property | ConvertFrom-Json).apiKey
 
 # Build frontend
 cd materials\frontend
 npm install
 npm run build
 
+# Load Entra IDs from scripts\deploy-frontend.local.env (created in Setup)
+$envFile = Resolve-Path "..\..\scripts\deploy-frontend.local.env"
+Get-Content $envFile | ForEach-Object {
+  $line = $_.Trim()
+  if ($line -eq '' -or $line.StartsWith('#')) { return }
+  $parts = $line -split '=', 2
+  if ($parts.Length -ne 2) { return }
+  $name = $parts[0].Trim()
+  $value = $parts[1].Trim().Trim('"')
+  if ($name) { Set-Item -Path "Env:$name" -Value $value }
+}
+
+foreach ($name in 'ENTRA_TENANT_ID','ENTRA_FRONTEND_CLIENT_ID','ENTRA_BACKEND_CLIENT_ID') {
+  if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) {
+    throw "Required env var $name is empty. Check $envFile."
+  }
+}
+
 # Create config (inline injection into index.html)
-$config = @"
-window.__APP_CONFIG__={
-  "entraClientId": "$env:ENTRA_FRONTEND_CLIENT_ID",
-  "entraTenantId": "$env:ENTRA_TENANT_ID",
-  "entraRedirectUri": "https://$swaHostname",
-  "apiClientId": "$env:ENTRA_BACKEND_CLIENT_ID",
-  "apiBaseUrl": "https://$swaHostname/api"
-};
-"@
+# The frontend expects uppercase keys (see materials/frontend/src/config/appConfig.ts)
+# Use a hashtable -> ConvertTo-Json to avoid PowerShell string escaping/parser errors.
+$configObj = @{
+  ENTRA_TENANT_ID = $env:ENTRA_TENANT_ID
+  ENTRA_FRONTEND_CLIENT_ID = $env:ENTRA_FRONTEND_CLIENT_ID
+  ENTRA_BACKEND_CLIENT_ID = $env:ENTRA_BACKEND_CLIENT_ID
+  API_BASE_URL = '/api'
+}
+$configJson = ($configObj | ConvertTo-Json -Compress)
 
 # Inject config into index.html
 $indexHtml = Get-Content dist\index.html -Raw
-$indexHtml = $indexHtml -replace 'window.__APP_CONFIG__=null;', $config
+
+# Replace placeholder whether it's null, already injected, or accidentally empty (window.__APP_CONFIG__=;)
+$indexHtml = $indexHtml -replace 'window\.__APP_CONFIG__=(null|\{.*?\}|);', ("window.__APP_CONFIG__=$configJson;")
 Set-Content dist\index.html $indexHtml
 
 # Deploy with SWA CLI
-swa deploy dist --deployment-token $deploymentToken
+# NOTE: SWA CLI defaults to --env preview; use production for the workshop URL
+swa deploy dist --deployment-token $deploymentToken --env production
 
 cd ..\..
 ```
@@ -1209,6 +1252,7 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | Backend returns 502 | App not started yet | Wait 60-90 seconds; check logs |
 | Health check returns 401 | EasyAuth blocking `/health` | Verify `/health` is in `excludedPaths` |
 | Login redirect fails | Missing redirect URI | Add SWA URL to Entra ID app registration |
+| Login fails with `AADSTS900144` (missing `client_id`) | Frontend runtime config not injected (or injected as empty) | Re-run Step 6 PowerShell deploy: ensure `deploy-frontend.local.env` values are loaded and `index.html` contains `window.__APP_CONFIG__={...}` (not `null` or empty) |
 | API calls fail with 404 | Linked Backend not configured | Check SWA configuration in Azure Portal |
 | `tsc: not found` during deploy | Remote build enabled | Set `SCM_DO_BUILD_DURING_DEPLOYMENT=false` |
 

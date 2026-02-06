@@ -1,5 +1,6 @@
 iaas/
 localwork/
+.vscode/
 
 .ssh/*
 *.key
@@ -9,6 +10,7 @@ localwork/
 cert-base64.txt
 .DS_Store
 materials/backend/*.zip
+
 
 # =============================================================================
 # Bicep Parameter Files with Personal/Sensitive Values
