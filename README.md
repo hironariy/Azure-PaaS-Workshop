@@ -534,6 +534,18 @@ code dev.local.bicepparam
 | `entraFrontendClientId` | Frontend SPA app client ID | From Step 2.1.5 |
 | `cosmosDbAdminPassword` | Database admin password | Generate: `openssl rand -base64 16` |
 
+Generate `cosmosDbAdminPassword` with `openssl`:
+
+**macOS/Linux:**
+```bash
+openssl rand -base64 16
+```
+
+**Windows (Git Bash):**
+```bash
+openssl rand -base64 16
+```
+
 > **Windows note (if `openssl` is not installed):**
 > You can generate an equivalent strong random password in PowerShell and paste it into `dev.local.bicepparam`:
 > ```powershell
