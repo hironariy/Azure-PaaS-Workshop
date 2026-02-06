@@ -826,7 +826,10 @@ az webapp deploy `
   --name $appServiceName `
   --src-path deploy.zip `
   --type zip `
-  --async true
+  --async true `
+  --clean true `
+  --restart true `
+  --track-status false
 
 # Wait and verify health
 Start-Sleep -Seconds 90
