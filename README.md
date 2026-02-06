@@ -592,6 +592,7 @@ New-AzResourceGroup -Name "<Resource-Group-Name>" -Location "japaneast"
 
 # Deploy infrastructure
 New-AzResourceGroupDeployment `
+  -Name "main"
   -ResourceGroupName "<Resource-Group-Name>" `
   -TemplateFile "main.bicep" `
   -TemplateParameterFile "dev.local.bicepparam"
@@ -613,6 +614,7 @@ New-AzResourceGroupDeployment `
 > **Windows PowerShell:**
 > ```powershell
 > New-AzResourceGroupDeployment `
+>   -Name "main" `
 >   -ResourceGroupName "rg-blogapp-team-A" `
 >   -TemplateFile "main.bicep" `
 >   -TemplateParameterFile "dev.local.bicepparam" `
