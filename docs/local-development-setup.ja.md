@@ -53,7 +53,7 @@ swa --version     # SWA CLI のバージョンが表示される
 
 ---
 
-## Step 1: SWA CLI をインストール（グローバル）
+## 手順 1: SWA CLI をインストール（グローバル）
 
 ```bash
 npm install -g @azure/static-web-apps-cli
@@ -64,7 +64,7 @@ swa --version
 
 ---
 
-## Step 2: MongoDB を起動（Docker）
+## 手順 2: MongoDB を起動（Docker）
 
 ```bash
 # dev-environment フォルダへ移動
@@ -92,7 +92,7 @@ http://localhost:8081 をブラウザで開くと、Web UI から DB を確認�
 
 ---
 
-## Step 3: バックエンド設定
+## 手順 3: バックエンド設定
 
 ### 3.1 環境ファイルを作成
 
@@ -156,7 +156,7 @@ curl http://localhost:8080/health
 
 ---
 
-## Step 4: フロントエンド設定
+## 手順 4: フロントエンド設定
 
 ### 4.1 環境ファイルを作成
 
@@ -202,7 +202,7 @@ npm run dev
 
 ---
 
-## Step 5: SWA CLI を起動（エントリーポイント）
+## 手順 5: SWA CLI を起動（エントリーポイント）
 
 **別のターミナル**を開いて実行します。
 
@@ -227,7 +227,7 @@ Azure Static Web Apps emulator started.
 
 ---
 
-## Step 6: アプリをテスト
+## 手順 6: アプリをテスト
 
 ### 6.1 ブラウザで開く
 

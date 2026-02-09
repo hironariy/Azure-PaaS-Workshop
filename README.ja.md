@@ -1,4 +1,4 @@
-# Azure PaaS Workshop - Multi-User Blog Application
+# Azure PaaS ワークショップ - マルチユーザー ブログアプリケーション
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -19,29 +19,29 @@ English version: [README.md](./README.md)
 
 ---
 
-## Table of Contents
+## 目次
 
-- [1. Introduction](#1-introduction)
-  - [1.1 About This Workshop](#11-about-this-workshop)
-  - [1.2 What You Will Learn](#12-what-you-will-learn)
-  - [1.3 Application Overview](#13-application-overview)
-  - [1.4 Architecture Overview](#14-architecture-overview)
-- [2. How to Deploy](#2-how-to-deploy)
-  - [2.1 Prerequisites](#21-prerequisites)
-  - [2.2 Local Development Environment (Optional)](#22-local-development-environment-optional)
-  - [2.3 Azure Deployment](#23-azure-deployment)
-- [3. Testing the Application](#3-testing-the-application)
-- [4. IaaS vs PaaS Comparison](#4-iaas-vs-paas-comparison)
-- [5. Cost Estimate](#5-cost-estimate)
-- [6. Cleanup](#6-cleanup)
-- [7. Troubleshooting](#7-troubleshooting)
-- [8. Quick Reference Card](#8-quick-reference-card)
+- [1. はじめに](#1-introduction)
+  - [1.1 ワークショップについて](#11-about-this-workshop)
+  - [1.2 学べること](#12-what-you-will-learn)
+  - [1.3 アプリ概要](#13-application-overview)
+  - [1.4 アーキテクチャ概要](#14-architecture-overview)
+- [2. デプロイ手順](#2-how-to-deploy)
+  - [2.1 事前準備](#21-prerequisites)
+  - [2.2 ローカル開発環境（任意）](#22-local-development-environment-optional)
+  - [2.3 Azure へのデプロイ](#23-azure-deployment)
+- [3. アプリケーションのテスト](#3-testing-the-application)
+- [4. IaaS と PaaS の比較](#4-iaas-vs-paas-comparison)
+- [5. 費用見積もり（概算）](#5-cost-estimate)
+- [6. クリーンアップ](#6-cleanup)
+- [7. トラブルシューティング](#7-troubleshooting)
+- [8. クイックリファレンス](#8-quick-reference-card)
 
 ---
 
-## 1. Introduction
+## 1. はじめに <a id="1-introduction"></a>
 
-### 1.1 About This Workshop
+### 1.1 ワークショップについて <a id="11-about-this-workshop"></a>
 
 このワークショップは、**Azure Platform as a Service (PaaS)** の設計・デプロイ・運用の要点を、実践的に学ぶことを目的としています。
 
@@ -54,7 +54,7 @@ English version: [README.md](./README.md)
 
 > 🎓 **For Instructors:** 教えどころ・よくある詰まりポイントは [Instructor Guide](docs/instructor-guide.ja.md) を参照してください。
 
-### 1.2 What You Will Learn
+### 1.2 学べること <a id="12-what-you-will-learn"></a>
 
 このワークショップでは、次のトピックを体験します。
 
@@ -78,7 +78,7 @@ English version: [README.md](./README.md)
 
 </details>
 
-### 1.3 Application Overview
+### 1.3 アプリ概要 <a id="13-application-overview"></a>
 
 サンプルアプリは **マルチユーザー対応のブログプラットフォーム**です。
 
@@ -100,7 +100,7 @@ English version: [README.md](./README.md)
 | Database | Azure DocumentDB (formerly called as Cosmos DB for MongoDB vCore) |
 | Authentication | Microsoft Entra ID with MSAL.js |
 
-### 1.4 Architecture Overview
+### 1.4 アーキテクチャ概要 <a id="14-architecture-overview"></a>
 
 ![Architecture Diagram](assets/images/architecture.png)
 
@@ -121,18 +121,18 @@ English version: [README.md](./README.md)
 
 ---
 
-## 2. How to Deploy
+## 2. デプロイ手順 <a id="2-how-to-deploy"></a>
 
 このセクションでは、Azure にアプリをデプロイする手順を説明します。
 
 > **📝 ローカル開発を探している場合**
 > [Section 2.2](#22-local-development-environment-optional) または [Local Development Guide](docs/local-development-setup.ja.md) を参照してください。
 
-### 2.1 Prerequisites
+### 2.1 事前準備 <a id="21-prerequisites"></a>
 
 開始前に、必要なツールとアカウントを準備します。
 
-#### 2.1.1 Required Tools
+#### 2.1.1 必要なツール
 
 以下のツールをインストールしてください。
 
@@ -247,7 +247,7 @@ az --version
 
 ✅ **Checkpoint:** 必要ツールがインストールできた。
 
-#### 2.1.2 Required Accounts
+#### 2.1.2 必要なアカウント
 
 必要なアカウントは以下です。
 
@@ -259,7 +259,7 @@ az --version
 
 > **💡 Tip:** 新規 Azure アカウントは $200 クレジットが付与されます（条件は変わる可能性があります）。
 
-#### 2.1.3 Required Permissions for Entra ID
+#### 2.1.3 Entra ID の必要権限
 
 > ⚠️ **IMPORTANT: Check Your Permissions Before Starting**
 >
@@ -286,7 +286,7 @@ az --version
 > **個人/無料 Azure アカウントの場合:**
 > 多くの場合、自分がテナント管理者になり追加設定なしで作成できます。
 
-#### 2.1.4 Clone the Repository
+#### 2.1.4 リポジトリのクローン <a id="214-clone-the-repository"></a>
 
 リポジトリをローカルにクローンします。
 
@@ -317,7 +317,7 @@ cd Azure-PaaS-Workshop
 
 ✅ **Checkpoint:** リポジトリをクローンできた。
 
-#### 2.1.5 Microsoft Entra ID App Registrations
+#### 2.1.5 Microsoft Entra ID のアプリ登録
 
 Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デプロイでもローカル開発でも必要です）。
 
@@ -421,7 +421,7 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
 
 ---
 
-### 2.2 Local Development Environment (Optional)
+### 2.2 ローカル開発環境（任意） <a id="22-local-development-environment-optional"></a>
 
 > **📖 Full Guide:** ローカル開発の詳細は [Local Development Guide](docs/local-development-setup.ja.md) を参照してください。
 
@@ -434,11 +434,11 @@ Azure へデプロイするだけなら、次へ進んでください。
 
 ---
 
-### 2.3 Azure Deployment
+### 2.3 Azure へのデプロイ <a id="23-azure-deployment"></a>
 
 以下の手順で Azure へデプロイします。
 
-#### Step 1: Login to Azure
+#### 手順 1: Azure にログイン
 
 **macOS/Linux (bash/zsh):**
 ```bash
@@ -480,7 +480,7 @@ Set-AzContext -Subscription "Your Subscription Name"
 
 ✅ **Checkpoint:** Azure にログインできた。
 
-#### Step 2: Configure Bicep Parameters
+#### 手順 2: Bicep パラメータを設定
 
 **macOS/Linux:**
 ```bash
@@ -549,7 +549,7 @@ param cosmosDbAdminPassword = 'your-secure-password-here'
 
 ✅ **Checkpoint:** `dev.local.bicepparam` を作成できた。
 
-#### Step 3: Deploy Infrastructure with Bicep
+#### 手順 3: Bicep でインフラをデプロイ
 
 **macOS/Linux:**
 ```bash
@@ -593,7 +593,7 @@ Get-AzResource -ResourceGroupName "<Resource-Group-Name>" | Format-Table Name, R
 
 ✅ **Checkpoint:** Bicep デプロイが完了し、リソースが見える。
 
-#### Step 4: Update Entra ID Redirect URIs
+#### 手順 4: Entra ID の Redirect URI を更新
 
 デプロイ後、Frontend アプリ登録に Static Web Apps の URL を追加します。
 
@@ -681,7 +681,7 @@ az ad app show --id $frontendAppId --query "spa.redirectUris" -o jsonc
 
 > **🚀 Prefer CI/CD?** 手動デプロイではなく GitHub Actions を使いたい場合は、[Advanced: GitHub Actions Deployment](#-advanced-github-actions-deployment-alternative---not-verified) へ進んでください。
 
-#### Step 5: Deploy Backend to App Service
+#### 手順 5: バックエンドを App Service にデプロイ
 
 > 📖 **Script Details:** 詳細は [Deployment Scripts Guide](docs/deployment-scripts-guide.ja.md#backend-deployment-script) を参照してください。
 
@@ -711,7 +711,7 @@ APP_SERVICE_NAME=$(az deployment group show \
 
 ✅ **Checkpoint:** `/health` が `{"status":"healthy"}` を返す。
 
-#### Step 6: Deploy Frontend to Static Web Apps
+#### 手順 6: フロントエンドを Static Web Apps にデプロイ
 
 > 📖 **Script Details:** 詳細は [Deployment Scripts Guide](docs/deployment-scripts-guide.ja.md#frontend-deployment-script) を参照してください。
 
@@ -750,7 +750,7 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 ✅ **Checkpoint:** SWA の URL でアプリが表示できる。
 
-#### Step 7: Verify Deployment
+#### 手順 7: デプロイ結果を確認
 
 **macOS/Linux:**
 ```bash
@@ -779,8 +779,9 @@ curl -s "https://$SWA_HOSTNAME/api/health" | jq .
 
 ---
 
+<a id="-advanced-github-actions-deployment-alternative---not-verified"></a>
 <details>
-<summary>🚀 <strong>[Advanced] GitHub Actions Deployment (Alternative - Not Verified)</strong></summary>
+<summary>🚀 <strong>[上級] GitHub Actions によるデプロイ（代替・未検証）</strong></summary>
 
 > ⚠️ **Note:** このセクションは GitHub Actions による CI/CD の代替手順です。完全な検証はしていないため、必要に応じて読み替えてください。
 
@@ -802,7 +803,7 @@ cp .github/workflow-templates/deploy-backend.yml .github/workflows/
 cp .github/workflow-templates/deploy-frontend.yml .github/workflows/
 ```
 
-### Trigger behavior
+### トリガーの挙動
 
 - `materials/backend/**` に変更があるとバックエンドだけが動きます。
 - `materials/frontend/**` に変更があるとフロントエンドだけが動きます。
@@ -812,11 +813,11 @@ cp .github/workflow-templates/deploy-frontend.yml .github/workflows/
 
 ---
 
-## Step 1 (Default): Configure Azure login via OIDC (Federated Credentials)
+## 手順 1（既定）: OIDC（フェデレーション資格情報）で Azure ログインを設定
 
 OIDC は長期シークレットを GitHub に保存しないため推奨です。
 
-### 1.1 Create an Entra app for GitHub Actions
+### 1.1 GitHub Actions 用の Entra アプリを作成
 
 ```bash
 SUBSCRIPTION_ID="<subscription-id>"
@@ -832,7 +833,7 @@ az ad sp create --id "$AZURE_CLIENT_ID" 1>/dev/null
 echo "AZURE_CLIENT_ID=$AZURE_CLIENT_ID"
 ```
 
-### 1.2 Add a federated credential for GitHub Actions
+### 1.2 GitHub Actions 用のフェデレーション資格情報を追加
 
 ```bash
 cat > federated-credential.json <<JSON
@@ -850,7 +851,7 @@ az ad app federated-credential create \
   --parameters federated-credential.json
 ```
 
-### 1.3 Grant RBAC to the resource group
+### 1.3 リソースグループに RBAC を付与
 
 ```bash
 SP_OBJECT_ID=$(az ad sp show --id "$AZURE_CLIENT_ID" --query id -o tsv)
@@ -864,14 +865,14 @@ az role assignment create \
 
 ---
 
-## Step 2: Configure GitHub Actions Variables/Secrets
+## 手順 2: GitHub Actions の Variables/Secrets を設定
 
 GitHub リポジトリ → **Settings** → **Secrets and variables** → **Actions**。
 
 > **💡 Use Repository-level, not Environment-level.**
 > workflow templates は GitHub Environment を使わないため、Repository レベル（既定）の Variables/Secrets で十分です。
 
-### Variables
+### Variables（変数）
 
 | Variable | Value |
 |----------|-------|
@@ -884,7 +885,7 @@ GitHub リポジトリ → **Settings** → **Secrets and variables** → **Acti
 | `ENTRA_FRONTEND_CLIENT_ID` | frontend SPA client ID |
 | `ENTRA_BACKEND_CLIENT_ID` | backend API app client ID |
 
-### Secrets
+### Secrets（シークレット）
 
 | Secret | Value |
 |--------|-------|
@@ -902,7 +903,7 @@ az staticwebapp secrets list \
 
 ---
 
-## Step 3: Trigger Deployment
+## 手順 3: デプロイをトリガー
 
 各 workflow は監視パス配下の変更があった場合にのみ自動実行されます。
 
@@ -938,7 +939,7 @@ gh workflow run deploy-frontend.yml --ref main
 
 ---
 
-## (Optional Fallback): Service Principal Secret (`AZURE_CREDENTIALS`)
+## （任意のフォールバック）: Service Principal のシークレット（`AZURE_CREDENTIALS`）
 
 OIDC が使えない場合のフォールバックとして、サービスプリンシパルのシークレット（JSON）を使えます。
 
@@ -964,9 +965,9 @@ az ad sp create-for-rbac \
 
 ---
 
-## 3. Testing the Application
+## 3. アプリケーションのテスト <a id="3-testing-the-application"></a>
 
-### 3.1 Health Check
+### 3.1 ヘルスチェック
 
 **macOS/Linux:**
 ```bash
@@ -982,7 +983,7 @@ Invoke-RestMethod -Uri "https://<swa-hostname>.azurestaticapps.net/api/health"
 
 ✅ **Checkpoint:** 200 OK。
 
-### 3.2 Authentication Test
+### 3.2 認証のテスト
 
 1. `https://<swa-hostname>.azurestaticapps.net` を開く
 2. "Sign In" をクリック
@@ -991,7 +992,7 @@ Invoke-RestMethod -Uri "https://<swa-hostname>.azurestaticapps.net/api/health"
 
 ✅ **Checkpoint:** ログインできる。
 
-### 3.3 CRUD Operations Test
+### 3.3 CRUD 操作のテスト
 
 ログイン後:
 
@@ -1004,11 +1005,11 @@ Invoke-RestMethod -Uri "https://<swa-hostname>.azurestaticapps.net/api/health"
 
 ---
 
-## 4. IaaS vs PaaS Comparison
+## 4. IaaS と PaaS の比較 <a id="4-iaas-vs-paas-comparison"></a>
 
 （内容は英語版 README と同じ構成です。必要に応じて比較しながら読み進めてください。）
 
-### 4.1 Architecture Differences
+### 4.1 アーキテクチャの違い
 
 | Component | IaaS (Day 1) | PaaS (Day 2) |
 |-----------|--------------|--------------|
@@ -1021,7 +1022,7 @@ Invoke-RestMethod -Uri "https://<swa-hostname>.azurestaticapps.net/api/health"
 | **Auto-scaling** | Manual VM Scale Set | Built-in |
 | **High Availability** | Availability Zones + VMs | Built-in to services |
 
-### 4.2 Backend Code Differences
+### 4.2 バックエンドコードの違い
 
 **IaaS (MongoDB Replica Set):**
 ```typescript
@@ -1033,7 +1034,7 @@ const uri = "mongodb://user:pass@10.0.3.4:27017,10.0.3.5:27017,10.0.3.6:27017/bl
 const uri = process.env.COSMOSDB_CONNECTION_STRING;
 ```
 
-### 4.3 Frontend Code Differences
+### 4.3 フロントエンドコードの違い
 
 **IaaS:**
 ```typescript
@@ -1048,7 +1049,7 @@ const config = window.__APP_CONFIG__ || await fetchConfig();
 
 ---
 
-## 5. Cost Estimate
+## 5. 費用見積もり（概算） <a id="5-cost-estimate"></a>
 
 （概算。リージョンや価格は変更される可能性があります。）
 
@@ -1067,7 +1068,7 @@ const config = window.__APP_CONFIG__ || await fetchConfig();
 
 ---
 
-## 6. Cleanup
+## 6. クリーンアップ <a id="6-cleanup"></a>
 
 **macOS/Linux:**
 ```bash
@@ -1087,9 +1088,9 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 
 ---
 
-## 7. Troubleshooting
+## 7. トラブルシューティング <a id="7-troubleshooting"></a>
 
-### Common Issues
+### よくある問題
 
 | Symptom | Cause | Solution |
 |---------|-------|----------|
@@ -1101,7 +1102,7 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | API calls fail with 404 | Linked Backend 未設定 | SWA の Linked Backend を確認 |
 | `tsc: not found` during deploy | リモートビルド有効 | `SCM_DO_BUILD_DURING_DEPLOYMENT=false` を設定 |
 
-### Viewing Logs
+### ログの確認
 
 **macOS/Linux:**
 ```bash
@@ -1125,7 +1126,7 @@ az webapp log download `
 
 ---
 
-## 8. Quick Reference Card
+## 8. クイックリファレンス <a id="8-quick-reference-card"></a>
 
 （英語版と同じ。値を埋めてメモとして使ってください。）
 
@@ -1164,13 +1165,13 @@ az group delete --name <Resource-Group-Name> --yes --no-wait
 
 ---
 
-## 📝 License
+## 📝 ライセンス
 
 このワークショップは [MIT License](LICENSE) で提供されています。
 
 ---
 
-## 🙏 Acknowledgments
+## 🙏 謝辞
 
 本ワークショップは Azure PaaS をハンズオンで学ぶために作成されました。
 

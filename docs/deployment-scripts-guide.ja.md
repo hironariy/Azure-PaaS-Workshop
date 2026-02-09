@@ -33,7 +33,7 @@ Node.js/Express のバックエンド API を Azure App Service にデプロイ�
 
 スクリプトは以下の手順で処理します。
 
-#### Step 1: アプリをビルド
+#### 手順 1: アプリをビルド
 ```
 📦 npm install
 📦 npm run build
@@ -41,7 +41,7 @@ Node.js/Express のバックエンド API を Azure App Service にデプロイ�
 - 依存関係をすべてインストール（TypeScript コンパイルのため devDependencies を含む）
 - TypeScript を `dist/` に JavaScript としてコンパイル
 
-#### Step 2: デプロイパッケージを作成
+#### 手順 2: デプロイパッケージを作成
 ```
 📁 Copy package.json and package-lock.json to dist/
 📁 Run npm ci --omit=dev (production dependencies only)
@@ -51,7 +51,7 @@ Node.js/Express のバックエンド API を Azure App Service にデプロイ�
 - 本番依存のみをインストール（devDependencies なし）
 - ZIP パッケージ（deploy.zip）を作成
 
-#### Step 3: App Service を設定
+#### 手順 3: App Service を設定
 ```
 ⚙️ SCM_DO_BUILD_DURING_DEPLOYMENT=false
 ⚙️ Startup command: node src/app.js
@@ -59,7 +59,7 @@ Node.js/Express のバックエンド API を Azure App Service にデプロイ�
 - **リモートビルドを無効化**: Azure 側で `npm install` / `tsc` を走らせない（TypeScript が devDependencies のため失敗しがち）
 - **起動コマンドを設定**: 事前コンパイル済みアプリの起動方法を指定
 
-#### Step 4: App Service へデプロイ
+#### 手順 4: App Service へデプロイ
 ```
 🚀 az webapp deploy --async true
 ```
@@ -67,7 +67,7 @@ Node.js/Express のバックエンド API を Azure App Service にデプロイ�
 - `--async true` でタイムアウトを避ける
 - `--clean true` で旧ファイルを削除してから反映
 
-#### Step 5: ヘルスチェックで起動完了を確認
+#### 手順 5: ヘルスチェックで起動完了を確認
 ```
 🏥 Wait 20 seconds (initial delay)
 🏥 Poll /health endpoint every 15 seconds
@@ -170,7 +170,7 @@ React フロントエンドをビルドし、runtime 設定（Entra ID の値な
 
 ### スクリプトが行うこと
 
-#### Step 0: Entra ID 設定を読み込む
+#### 手順 0: Entra ID 設定を読み込む
 ```
 📄 Source deploy-frontend.local.env
 ✅ Validate required values are set
@@ -178,7 +178,7 @@ React フロントエンドをビルドし、runtime 設定（Entra ID の値な
 - gitignore されているローカルファイルから設定を読み込み
 - 必須値が空でないか検証
 
-#### Step 1: Azure リソースを取得
+#### 手順 1: Azure リソースを取得
 ```
 🔍 Get SWA hostname
 🔍 Get SWA deployment token
@@ -186,7 +186,7 @@ React フロントエンドをビルドし、runtime 設定（Entra ID の値な
 - リソースグループから Static Web App を特定
 - デプロイトークンを取得
 
-#### Step 2: アプリをビルド
+#### 手順 2: アプリをビルド
 ```
 📦 npm install
 📦 npm run build
@@ -194,7 +194,7 @@ React フロントエンドをビルドし、runtime 設定（Entra ID の値な
 - 依存関係をインストール
 - `dist/` に本番ビルド
 
-#### Step 3: 設定を注入
+#### 手順 3: 設定を注入
 ```
 🔧 Create config JSON with Entra ID values
 🔧 Replace placeholder in index.html
@@ -210,7 +210,7 @@ React フロントエンドをビルドし、runtime 設定（Entra ID の値な
 - `/config.json` を公開するより安全
 - デプロイ時に HTML に焼き込み、追加の HTTP リクエストが不要
 
-#### Step 4: Static Web Apps にデプロイ
+#### 手順 4: Static Web Apps にデプロイ
 ```
 🚀 swa deploy ./dist --deployment-token $TOKEN
 ```
