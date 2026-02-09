@@ -1092,6 +1092,9 @@ az role assignment create \
 
 Go to your repository → **Settings** → **Secrets and variables** → **Actions**.
 
+> **💡 Use Repository-level, not Environment-level.**
+> Add all variables under the **"Variables"** tab and secrets under the **"Secrets"** tab at the **Repository** level (the default view). Do **not** create a GitHub Environment — the workflow templates don't use one, and repository-level is sufficient for this single-environment workshop.
+
 ### Variables
 
 | Variable | Value |
