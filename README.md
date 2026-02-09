@@ -1017,12 +1017,126 @@ GitHub Actions can automate deployments on every push to the main branch.
 
 **Prerequisites:**
 - Repository forked to your GitHub account
-- GitHub CLI installed (`gh`)
+- GitHub Actions enabled for your repository
 
-**Step 1: Create Service Principal**
+This repository includes two workflow templates:
+- `.github/workflows/deploy-backend.yml` (App Service)
+- `.github/workflows/deploy-frontend.yml` (Static Web Apps)
+
+The backend workflow supports **OIDC (default)** and **Service Principal secret (optional)**.
+
+---
+
+## Step 1 (Default): Configure Azure login via OIDC (Federated Credentials)
+
+OIDC is the modern and recommended approach because it avoids storing a long-lived Azure client secret in GitHub.
+
+### 1.1 Create an Entra app for GitHub Actions
 
 ```bash
-# Create service principal with Contributor role
+# Set values
+SUBSCRIPTION_ID="<subscription-id>"
+RESOURCE_GROUP="<Resource-Group-Name>"
+
+# Your GitHub repo, e.g. "hironariy/Azure-PaaS-Workshop"
+GITHUB_REPO="<owner>/<repo>"
+
+# Create an app registration and service principal
+AZURE_CLIENT_ID=$(az ad app create \
+  --display-name "github-actions-blogapp-<TeamName>" \
+  --query appId -o tsv)
+
+az ad sp create --id "$AZURE_CLIENT_ID" 1>/dev/null
+echo "AZURE_CLIENT_ID=$AZURE_CLIENT_ID"
+```
+
+### 1.2 Add a federated credential for GitHub Actions
+
+This binds token exchange to your repository and `main` branch.
+
+```bash
+cat > federated-credential.json <<JSON
+{
+  "name": "github-main",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:${GITHUB_REPO}:ref:refs/heads/main",
+  "description": "GitHub Actions (main branch)",
+  "audiences": ["api://AzureADTokenExchange"]
+}
+JSON
+
+az ad app federated-credential create \
+  --id "$AZURE_CLIENT_ID" \
+  --parameters federated-credential.json
+```
+
+### 1.3 Grant RBAC to the resource group
+
+```bash
+SP_OBJECT_ID=$(az ad sp show --id "$AZURE_CLIENT_ID" --query id -o tsv)
+
+az role assignment create \
+  --assignee-object-id "$SP_OBJECT_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Contributor" \
+  --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
+```
+
+---
+
+## Step 2: Configure GitHub Actions Variables/Secrets
+
+Go to your repository → **Settings** → **Secrets and variables** → **Actions**.
+
+### Variables
+
+| Variable | Value |
+|----------|-------|
+| `AZURE_CLIENT_ID` | The value printed in Step 1.1 |
+| `AZURE_TENANT_ID` | Your Entra tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Your Azure subscription ID |
+| `AZURE_RESOURCE_GROUP` | Your resource group name |
+| `AZURE_WEBAPP_NAME` | Your App Service name |
+| `ENTRA_TENANT_ID` | Tenant ID (used by frontend runtime config injection) |
+| `ENTRA_FRONTEND_CLIENT_ID` | Frontend SPA app client ID |
+| `ENTRA_BACKEND_CLIENT_ID` | Backend API app client ID |
+
+### Secrets
+
+| Secret | Value |
+|--------|-------|
+| `SWA_DEPLOYMENT_TOKEN` | SWA deployment token |
+
+Get `SWA_DEPLOYMENT_TOKEN` from Azure:
+
+```bash
+SWA_NAME=$(az staticwebapp list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
+az staticwebapp secrets list \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$SWA_NAME" \
+  --query "properties.apiKey" -o tsv
+```
+
+---
+
+## Step 3: Trigger Deployment
+
+Push a commit to trigger the workflows:
+
+```bash
+git commit --allow-empty -m "Trigger CI/CD"
+git push
+```
+
+---
+
+## (Optional Fallback): Service Principal Secret (`AZURE_CREDENTIALS`)
+
+If you can’t use OIDC in your tenant/policy, you can use a classic service principal secret instead.
+
+1. Create a service principal scoped to your resource group:
+
+```bash
 az ad sp create-for-rbac \
   --name "github-actions-blogapp-<TeamName>" \
   --role contributor \
@@ -1030,31 +1144,13 @@ az ad sp create-for-rbac \
   --json-auth
 ```
 
-**Step 2: Configure GitHub Secrets**
-
-Go to your repository → Settings → Secrets and variables → Actions:
+2. Add a GitHub Actions secret:
 
 | Secret | Value |
 |--------|-------|
-| `AZURE_CREDENTIALS` | JSON output from service principal creation |
-| `SWA_DEPLOYMENT_TOKEN` | Get from: `az staticwebapp secrets list --name <swa-name> --query "properties.apiKey" -o tsv` |
+| `AZURE_CREDENTIALS` | JSON output from the command above |
 
-| Variable | Value |
-|----------|-------|
-| `AZURE_WEBAPP_NAME` | Your App Service name |
-| `VITE_ENTRA_CLIENT_ID` | Frontend app client ID |
-| `VITE_ENTRA_TENANT_ID` | Tenant ID |
-| `VITE_API_CLIENT_ID` | Backend API client ID |
-
-**Step 3: Trigger Deployment**
-
-Push a commit to trigger the workflows:
-```bash
-git commit --allow-empty -m "Trigger CI/CD"
-git push
-```
-
-See `.github/workflows/` for the workflow files.
+The backend workflow will automatically use `AZURE_CREDENTIALS` only if OIDC variables are not set.
 
 </details>
 

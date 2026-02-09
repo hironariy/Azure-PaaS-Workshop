@@ -1,0 +1,136 @@
+name: Deploy Backend to Azure App Service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'materials/backend/**'
+      - 'scripts/deploy-backend.sh'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  BACKEND_DIR: materials/backend
+
+jobs:
+  deploy:
+    name: Build and Deploy Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: '${{ env.BACKEND_DIR }}/package-lock.json'
+
+      - name: Fail if Azure auth not configured
+        if: ${{ vars.AZURE_CLIENT_ID == '' && secrets.AZURE_CREDENTIALS == '' }}
+        run: |
+          echo "Missing Azure authentication configuration."
+          echo "OIDC (default): set repo Variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID"
+          echo "Fallback: set repo Secret: AZURE_CREDENTIALS"
+          exit 1
+
+      - name: Azure login (OIDC)
+        if: ${{ vars.AZURE_CLIENT_ID != '' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Azure login (Service Principal secret - optional)
+        if: ${{ vars.AZURE_CLIENT_ID == '' && secrets.AZURE_CREDENTIALS != '' }}
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Fail if deployment target not configured
+        run: |
+          if [ -z "${{ vars.AZURE_RESOURCE_GROUP }}" ] || [ -z "${{ vars.AZURE_WEBAPP_NAME }}" ]; then
+            echo "Missing deployment target configuration."
+            echo "Set repo Variables: AZURE_RESOURCE_GROUP, AZURE_WEBAPP_NAME"
+            exit 1
+          fi
+
+          az account show 1>/dev/null
+          echo "Azure login OK"
+
+      - name: Install dependencies
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: npm ci
+
+      - name: Build
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: npm run build
+
+      - name: Package for ZIP deploy
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: |
+          cp package.json package-lock.json dist/
+          pushd dist
+          npm ci --omit=dev
+          zip -r ../deploy.zip .
+          popd
+
+      - name: Configure App Service
+        run: |
+          az webapp config appsettings set \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+            --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false" \
+            1>/dev/null
+
+          az webapp config set \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+            --startup-file "node src/app.js" \
+            1>/dev/null
+
+      - name: Deploy to App Service
+        run: |
+          TRACK_STATUS_FLAG=""
+          if az webapp deploy -h 2>/dev/null | grep -q "track-status"; then
+            TRACK_STATUS_FLAG="--track-status false"
+          fi
+
+          az webapp deploy \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+            --src-path "${{ env.BACKEND_DIR }}/deploy.zip" \
+            --type zip \
+            --clean true \
+            --restart true \
+            --async true \
+            $TRACK_STATUS_FLAG
+
+      - name: Wait for health endpoint
+        run: |
+          HEALTH_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/health"
+          echo "Health endpoint: $HEALTH_URL"
+
+          sleep 20
+
+          for i in $(seq 1 30); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Healthy (HTTP 200)"
+              curl -s "$HEALTH_URL"
+              exit 0
+            fi
+            echo "Attempt $i/30: HTTP $HTTP_CODE (waiting 15s...)"
+            sleep 15
+          done
+
+          echo "Backend failed to become healthy in time"
+          exit 1

@@ -6,7 +6,12 @@ on:
       - main
     paths:
       - 'materials/frontend/**'
+      - 'scripts/deploy-frontend.sh'
+      - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   FRONTEND_DIR: materials/frontend
@@ -35,23 +40,32 @@ jobs:
         working-directory: ${{ env.FRONTEND_DIR }}
         run: npm run build
 
+      - name: Fail if runtime config not configured
+        run: |
+          if [ -z "${{ vars.ENTRA_TENANT_ID }}" ] || [ -z "${{ vars.ENTRA_FRONTEND_CLIENT_ID }}" ] || [ -z "${{ vars.ENTRA_BACKEND_CLIENT_ID }}" ]; then
+            echo "Missing frontend runtime config."
+            echo "Set repo Variables: ENTRA_TENANT_ID, ENTRA_FRONTEND_CLIENT_ID, ENTRA_BACKEND_CLIENT_ID"
+            exit 1
+          fi
+
       - name: Inject config into index.html
         working-directory: ${{ env.FRONTEND_DIR }}
         run: |
-          # Create config JSON (single line)
-          CONFIG_JSON='{"ENTRA_TENANT_ID":"${{ secrets.ENTRA_TENANT_ID }}","ENTRA_FRONTEND_CLIENT_ID":"${{ secrets.ENTRA_FRONTEND_CLIENT_ID }}","ENTRA_BACKEND_CLIENT_ID":"${{ secrets.ENTRA_BACKEND_CLIENT_ID }}","API_BASE_URL":"/api"}'
-          
-          # Replace placeholder in index.html
+          CONFIG_JSON=$(jq -c -n \
+            --arg tenant "${{ vars.ENTRA_TENANT_ID }}" \
+            --arg frontendClientId "${{ vars.ENTRA_FRONTEND_CLIENT_ID }}" \
+            --arg backendClientId "${{ vars.ENTRA_BACKEND_CLIENT_ID }}" \
+            '{ENTRA_TENANT_ID:$tenant,ENTRA_FRONTEND_CLIENT_ID:$frontendClientId,ENTRA_BACKEND_CLIENT_ID:$backendClientId,API_BASE_URL:"/api"}')
+
           sed -i "s|window.__APP_CONFIG__=null;|window.__APP_CONFIG__=$CONFIG_JSON;|g" dist/index.html
-          
-          echo "Config injected into index.html (no separate config.json for security)"
+          echo "Config injected into index.html (no separate config.json)"
 
       - name: Deploy to Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          action: 'upload'
+          action: upload
           app_location: '${{ env.FRONTEND_DIR }}/dist'
           skip_app_build: true
           skip_api_build: true
