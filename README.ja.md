@@ -104,8 +104,6 @@ English version: [README.md](./README.md)
 
 ![Architecture Diagram](assets/images/architecture.png)
 
-> 📝 **Note:** アーキテクチャ図は追記予定です。Static Web Apps、App Service、Azure DocumentDB、プライベートネットワークで構成されます。
-
 **使用する主要 Azure サービス:**
 
 | Service | Purpose |

@@ -104,8 +104,6 @@ The sample application is a **multi-user blog platform** with the following feat
 
 ![Architecture Diagram](assets/images/architecture.png)
 
-> 📝 **Note:** Architecture diagram will be added. The diagram shows the PaaS architecture with Static Web Apps, App Service, Azure DocumentDB, and private networking.
-
 **Key Azure Services Used:**
 
 | Service | Purpose |
