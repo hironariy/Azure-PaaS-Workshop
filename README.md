@@ -286,31 +286,14 @@ You need access to the following:
 > **For Personal/Free Azure Accounts:**
 > If you created your own Azure account, you are automatically the Global Administrator and can create app registrations without any additional setup.
 
-#### 2.1.4 Create Your Repository
+#### 2.1.4 Clone the Repository
 
-Since this is a **template repository**, you need to create your own copy first.
-
-**Step 1: Create from Template**
-
-1. Go to [https://github.com/hironariy/Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop)
-2. Click the green **"Use this template"** button
-3. Select **"Create a new repository"**
-
-| Setting | Recommendation |
-|---------|----------------|
-| **Owner** | Your GitHub username or organization |
-| **Repository name** | `Azure-PaaS-Workshop` (or any name) |
-| **Visibility** | Public (required for free GitHub Actions) |
-| **Include all branches** | ☐ Unchecked |
-
-4. Click **"Create repository"**
-
-**Step 2: Clone Your Repository**
+Clone the workshop repository to your local machine.
 
 **macOS/Linux:**
 ```bash
-# Clone YOUR repository (not the template)
-git clone https://github.com/YOUR_USERNAME/Azure-PaaS-Workshop.git
+# Clone the repository
+git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
 
 # Navigate to the project folder
 cd Azure-PaaS-Workshop
@@ -318,16 +301,21 @@ cd Azure-PaaS-Workshop
 
 **Windows PowerShell:**
 ```powershell
-# Clone YOUR repository (not the template)
-git clone https://github.com/YOUR_USERNAME/Azure-PaaS-Workshop.git
+# Clone the repository
+git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
 
 # Navigate to the project folder
 cd Azure-PaaS-Workshop
 ```
 
-> **⚠️ Important:** Replace `YOUR_USERNAME` with your actual GitHub username.
+> **💡 Planning to use GitHub Actions?**
+> If you want to set up CI/CD later (see [Advanced: GitHub Actions Deployment](#-advanced-github-actions-deployment-alternative---not-verified)), you should create your own repository from the template instead of cloning directly:
+> 1. Go to [https://github.com/hironariy/Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop)
+> 2. Click the green **"Use this template"** → **"Create a new repository"**
+> 3. Set visibility to **Public** (required for free GitHub Actions)
+> 4. Clone **your** repository: `git clone https://github.com/YOUR_USERNAME/Azure-PaaS-Workshop.git`
 
-✅ **Checkpoint:** Repository created from template and cloned to your local machine.
+✅ **Checkpoint:** Repository cloned to your local machine.
 
 #### 2.1.5 Microsoft Entra ID App Registrations
 
@@ -1016,7 +1004,7 @@ Invoke-RestMethod -Uri "https://$swaHostname/api/health"
 GitHub Actions can automate deployments on every push to the main branch.
 
 **Prerequisites:**
-- Repository forked to your GitHub account
+- Your own repository created from this template (see [Section 2.1.4](#214-clone-the-repository) tip)
 - GitHub Actions enabled for your repository
 
 This repository includes workflow **templates** (not enabled by default):
