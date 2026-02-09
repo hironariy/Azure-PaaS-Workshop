@@ -1128,11 +1128,36 @@ az staticwebapp secrets list \
 
 ## Step 3: Trigger Deployment
 
-Push a commit to trigger the workflows:
+Each workflow only runs when files under its watched path change:
+
+| Workflow | Trigger path |
+|----------|-------------|
+| `deploy-backend.yml` | `materials/backend/**` |
+| `deploy-frontend.yml` | `materials/frontend/**` |
+
+**Option A — Push a change to the watched path:**
 
 ```bash
-git commit --allow-empty -m "Trigger CI/CD"
+# Example: trigger the backend workflow
+# Make any small change inside materials/backend/ (e.g., add a comment)
+git add materials/backend/
+git commit -m "Trigger backend deployment"
 git push
+```
+
+**Option B — Manual trigger (no code change required):**
+
+Both workflows include `workflow_dispatch`, so you can run them from the GitHub UI:
+
+1. Go to your repository → **Actions** tab
+2. Select the workflow (e.g., **Deploy Backend**)
+3. Click **"Run workflow"** → choose the `main` branch → **"Run workflow"**
+
+Or use the GitHub CLI:
+
+```bash
+gh workflow run deploy-backend.yml --ref main
+gh workflow run deploy-frontend.yml --ref main
 ```
 
 ---
