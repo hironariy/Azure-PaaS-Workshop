@@ -738,6 +738,8 @@ az ad app show --id $frontendAppId --query "spa.redirectUris" -o jsonc
 
 ✅ **Checkpoint:** SWA URL added to Frontend app registration redirect URIs.
 
+> **🚀 Prefer CI/CD?** If you'd rather deploy via GitHub Actions instead of the manual steps below, skip to the [Advanced: GitHub Actions Deployment](#-advanced-github-actions-deployment-alternative---not-verified) section.
+
 #### Step 5: Deploy Backend to App Service
 
 Use the deployment script to deploy the backend API.
