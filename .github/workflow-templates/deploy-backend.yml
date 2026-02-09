@@ -31,8 +31,19 @@ jobs:
           cache: 'npm'
           cache-dependency-path: '${{ env.BACKEND_DIR }}/package-lock.json'
 
+      - name: Check Azure credentials secret
+        id: check-creds
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          if [ -n "$AZURE_CREDENTIALS" ]; then
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Fail if Azure auth not configured
-        if: ${{ vars.AZURE_CLIENT_ID == '' && secrets.AZURE_CREDENTIALS == '' }}
+        if: ${{ vars.AZURE_CLIENT_ID == '' && steps.check-creds.outputs.has_creds == 'false' }}
         run: |
           echo "Missing Azure authentication configuration."
           echo "OIDC (default): set repo Variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID"
@@ -48,7 +59,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Azure login (Service Principal secret - optional)
-        if: ${{ vars.AZURE_CLIENT_ID == '' && secrets.AZURE_CREDENTIALS != '' }}
+        if: ${{ vars.AZURE_CLIENT_ID == '' && steps.check-creds.outputs.has_creds == 'true' }}
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
