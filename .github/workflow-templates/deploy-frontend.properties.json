@@ -1,0 +1,6 @@
+{
+  "name": "Deploy Frontend (Static Web Apps)",
+  "description": "Build and deploy the frontend (materials/frontend) to Azure Static Web Apps.",
+  "categories": ["Deployment"],
+  "filePatterns": ["materials/frontend/**"]
+}

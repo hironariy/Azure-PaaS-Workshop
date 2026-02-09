@@ -1019,9 +1019,23 @@ GitHub Actions can automate deployments on every push to the main branch.
 - Repository forked to your GitHub account
 - GitHub Actions enabled for your repository
 
-This repository includes two workflow templates:
-- `.github/workflows/deploy-backend.yml` (App Service)
-- `.github/workflows/deploy-frontend.yml` (Static Web Apps)
+This repository includes workflow **templates** (not enabled by default):
+- `.github/workflow-templates/deploy-backend.yml` (App Service)
+- `.github/workflow-templates/deploy-frontend.yml` (Static Web Apps)
+
+To enable CI/CD in *your* repository, copy the templates into `.github/workflows/`.
+
+```bash
+mkdir -p .github/workflows
+cp .github/workflow-templates/deploy-backend.yml .github/workflows/
+cp .github/workflow-templates/deploy-frontend.yml .github/workflows/
+```
+
+### Trigger behavior
+
+- If a commit changes `materials/backend/**`, **only** the backend workflow runs.
+- If a commit changes `materials/frontend/**`, **only** the frontend workflow runs.
+- If a commit changes other paths only, **no workflows run**.
 
 The backend workflow supports **OIDC (default)** and **Service Principal secret (optional)**.
 

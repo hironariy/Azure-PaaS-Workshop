@@ -1,0 +1,6 @@
+{
+  "name": "Deploy Backend (App Service)",
+  "description": "Build and deploy the backend (materials/backend) to Azure App Service using OIDC by default.",
+  "categories": ["Deployment"],
+  "filePatterns": ["materials/backend/**"]
+}

@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - 'materials/backend/**'
-      - 'scripts/deploy-backend.sh'
-      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
 permissions:

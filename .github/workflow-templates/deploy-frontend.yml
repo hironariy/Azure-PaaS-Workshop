@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - 'materials/frontend/**'
-      - 'scripts/deploy-frontend.sh'
-      - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
 
 permissions:
