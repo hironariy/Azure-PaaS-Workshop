@@ -66,7 +66,21 @@ echo -e "${YELLOW}Step 2: Creating deployment package...${NC}"
 cp package.json package-lock.json dist/
 cd dist
 npm ci --omit=dev
-zip -r ../deploy.zip .
+
+# Create zip: use 'zip' if available, otherwise fall back to PowerShell
+# (Git Bash on Windows does not include zip by default)
+if command -v zip >/dev/null 2>&1; then
+    zip -r ../deploy.zip .
+elif command -v powershell.exe >/dev/null 2>&1; then
+    echo "  (zip not found — using PowerShell Compress-Archive)"
+    powershell.exe -NoProfile -Command \
+        "Compress-Archive -Path '.\*' -DestinationPath '..\deploy.zip' -Force"
+else
+    echo -e "${RED}Error: Neither 'zip' nor 'powershell.exe' found.${NC}"
+    echo "Please install zip (e.g., apt install zip) or run from Git Bash on Windows."
+    exit 1
+fi
+
 cd ..
 echo -e "${GREEN}✅ Deployment package created (deploy.zip)${NC}"
 
