@@ -172,30 +172,10 @@ Install these tools on your computer:
 > This toolset is intended for organizations where WSL2 is restricted by security policy.
 
 <details>
-<summary>🪟 Windows policy: use WSL for all commands</summary>
-
-For this workshop, Windows users should run **all build/deploy/test commands in WSL (Ubuntu)**.
-
-Recommended first-time setup:
-
-```powershell
-wsl --install -d Ubuntu
-```
-
-After installation:
-1. Reboot Windows.
-2. Open **Ubuntu** terminal.
-3. Run all commands from this README in that Ubuntu terminal.
-
-Do not run deployment steps in Windows PowerShell or Git Bash.
-
-</details>
-
-<details>
 <summary>⚠️ Azure CLI: required for deployment scripts</summary>
 
 The deployment scripts (`deploy-backend.sh`, `deploy-frontend.sh`) use Azure CLI and are designed to run in Linux shell.
-On Windows, run them in **WSL Ubuntu**.
+On Windows, run them in **WSL2 Ubuntu**.
 
 </details>
 
@@ -210,7 +190,7 @@ When using WSL, Linux-compatible ZIPs are created correctly.
 <details>
 <summary>💡 Tips: Using Azure CLI / az bicep in WSL2</summary>
 
-Use this quick checklist when you work from Windows + WSL Ubuntu.
+Use this quick checklist when you work from Windows + WSL2 Ubuntu.
 
 1. **Use Linux Azure CLI inside WSL (not Windows Azure CLI).**
   ```bash
@@ -279,7 +259,7 @@ swa --version
 # Expected: 2.x.x
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Check Git
 git --version
@@ -306,10 +286,28 @@ jq --version
 # Expected: jq-1.6 or newer
 ```
 
-> ⚠️ **WSL note (`az bicep version` / WinError 193):**
-> If you see `[WinError 193] %1 is not a valid Win32 application`, your WSL shell is likely calling Windows `az` from `/mnt/c/...`.
-> Run `which az` and confirm it points to Linux `az` (for example `/usr/bin/az`), not a Windows path.
-> If needed, reinstall Azure CLI inside WSL Ubuntu and then run `az bicep install`.
+**Windows (with GitHub Actions, no WSL2):**
+```powershell
+# Check Git
+git --version
+# Expected: git version 2.x.x
+
+# Check Azure CLI
+az --version
+# Expected: azure-cli 2.60.x or newer
+
+# Check Node.js
+node --version
+# Expected: v22.x.x
+
+# Check GitHub CLI
+gh --version
+# Expected: gh version 2.x.x
+
+# Check PowerShell
+pwsh --version
+# Expected: PowerShell 7.x.x
+```
 
 > **📝 Need Docker?** Docker is only required for [local development](#22-local-development-environment-optional), not for Azure deployment.
 
@@ -367,7 +365,7 @@ git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
 cd Azure-PaaS-Workshop
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Clone the repository
 git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
@@ -511,7 +509,7 @@ If you just want to deploy to Azure, skip to the next section.
 Follow these steps to deploy the application to Azure.
 
 > **Windows users:**
-> - If you can use WSL2, run the WSL Ubuntu commands in this section.
+> - If you can use WSL2, run the WSL2 Ubuntu commands in this section.
 > - If your company policy blocks WSL2, use the **Windows (no WSL2, PowerShell)** blocks and GitHub Actions commands below.
 
 #### Step 1: Login to Azure
@@ -528,7 +526,7 @@ az account show
 az account set --subscription "Your Subscription Name"
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Same commands as macOS/Linux
 az login
@@ -576,7 +574,7 @@ cp dev.bicepparam dev.local.bicepparam
 code dev.local.bicepparam
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Same commands as macOS/Linux
 cd materials/bicep
@@ -612,7 +610,7 @@ Generate `cosmosDbAdminPassword` with `openssl`:
 openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
 ```
@@ -644,6 +642,34 @@ param cosmosDbAdminPassword = 'your-secure-password-here'
 
 #### Step 3: Deploy Infrastructure with Bicep
 
+<details>
+<summary>⚠️ Resource Provider registration (recommended before deployment)</summary>
+
+Some subscriptions do not have all required Resource Providers registered by default.
+For this workshop, pre-check these namespaces before deployment:
+- `Microsoft.Web`
+- `Microsoft.Network`
+- `Microsoft.DocumentDB`
+- `Microsoft.KeyVault`
+- `Microsoft.OperationalInsights`
+- `Microsoft.Insights`
+- `Microsoft.Authorization`
+- `Microsoft.AlertManagement` (recommended pre-registration for alert-related dependencies)
+
+You can check/register them in one shot:
+```bash
+for ns in Microsoft.Web Microsoft.Network Microsoft.DocumentDB Microsoft.KeyVault Microsoft.OperationalInsights Microsoft.Insights Microsoft.Authorization Microsoft.AlertManagement; do
+  state=$(az provider show --namespace "$ns" --query registrationState -o tsv 2>/dev/null || echo NotRegistered)
+  echo "$ns: $state"
+  if [ "$state" != "Registered" ]; then
+    az provider register --namespace "$ns"
+  fi
+done
+```
+Registration can take a few minutes. Rerun `az provider show --namespace <namespace> --query registrationState -o tsv` until each provider returns `Registered`.
+
+</details>
+
 **macOS/Linux:**
 ```bash
 # Create resource group (use your own name)
@@ -658,7 +684,7 @@ az deployment group create \
 # Note: Deployment takes approximately 10-15 minutes
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Same commands as macOS/Linux
 az group create --name <Resource-Group-Name> --location japaneast
@@ -691,7 +717,7 @@ az deployment group create `
 >   --parameters groupId='A'
 > ```
 > 
-> **Windows (WSL Ubuntu):** use the Azure CLI command above with `--parameters groupId='A'`.
+> **Windows (WSL2 Ubuntu):** use the Azure CLI command above with `--parameters groupId='A'`.
 
 **Verify Deployment:**
 
@@ -701,7 +727,7 @@ az deployment group create `
 az resource list --resource-group <Resource-Group-Name> --output table
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Same command as macOS/Linux
 az resource list --resource-group <Resource-Group-Name> --output table
@@ -739,7 +765,7 @@ After deployment, you need to add the Static Web App URL to your Frontend app re
      --query "defaultHostname" -o tsv
    ```
 
-   **Windows (WSL Ubuntu):**
+   **Windows (WSL2 Ubuntu):**
    ```bash
    # Same command as macOS/Linux
    az staticwebapp show \
@@ -836,10 +862,10 @@ echo "App Service Name: $APP_SERVICE_NAME"
 ./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
-# Run in WSL Ubuntu
-cd /path/to/Azure-PaaS-Workshop
+# Run in WSL2 Ubuntu
+cd <repository-root>
 
 # Get the App Service name
 APP_SERVICE_NAME=$(az deployment group show \
@@ -852,13 +878,7 @@ APP_SERVICE_NAME=$(az deployment group show \
 ```
 
 **Windows (no WSL2, GitHub Actions):**
-```powershell
-# Trigger backend deployment workflow manually
-gh workflow run deploy-backend.yml --ref main
-
-# Check latest workflow runs
-gh run list --workflow deploy-backend.yml --limit 5
-```
+See [Advanced: GitHub Actions Deployment (Alternative - Not Verified)](#-advanced-github-actions-deployment-alternative---not-verified).
 
 The script will:
 1. Build the TypeScript backend
@@ -885,7 +905,7 @@ cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
 code scripts/deploy-frontend.local.env
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Same commands as macOS/Linux
 cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
@@ -907,20 +927,14 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
-# Run in WSL Ubuntu
+# Run in WSL2 Ubuntu
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
 **Windows (no WSL2, GitHub Actions):**
-```powershell
-# Trigger frontend deployment workflow manually
-gh workflow run deploy-frontend.yml --ref main
-
-# Check latest workflow runs
-gh run list --workflow deploy-frontend.yml --limit 5
-```
+See [Advanced: GitHub Actions Deployment (Alternative - Not Verified)](#-advanced-github-actions-deployment-alternative---not-verified).
 
 ✅ **Checkpoint:** Frontend deployed. SWA URL loads the blog application.
 
@@ -951,7 +965,7 @@ curl -s "https://$APP_SERVICE_NAME.azurewebsites.net/health" | jq .
 curl -s "https://$SWA_HOSTNAME/api/health" | jq .
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Same commands as macOS/Linux
 APP_SERVICE_NAME=$(az deployment group show \
@@ -1201,7 +1215,7 @@ curl -s "https://<app-service-name>.azurewebsites.net/health" | jq .
 curl -s "https://<swa-hostname>.azurestaticapps.net/api/health" | jq .
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Backend health (direct)
 curl -s "https://<app-service-name>.azurewebsites.net/health" | jq .
@@ -1371,7 +1385,7 @@ az ad app delete --id <frontend-app-id>
 az ad app delete --id <backend-app-id>
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Same commands as macOS/Linux
 az group delete --name <Resource-Group-Name> --yes --no-wait
@@ -1412,7 +1426,7 @@ az webapp log download \
   --log-file /tmp/app-logs.zip
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Same commands as macOS/Linux
 az webapp log tail --resource-group <Resource-Group-Name> --name <app-service-name>

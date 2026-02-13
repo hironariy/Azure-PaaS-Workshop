@@ -172,30 +172,10 @@ English version: [README.md](./README.md)
 > このツールセットは、企業のセキュリティポリシーで WSL2 を利用できない環境を想定しています。
 
 <details>
-<summary>🪟 Windows 方針: すべて WSL で実行</summary>
-
-このワークショップでは、Windows ユーザーは **WSL (Ubuntu)** で全手順を実行してください。
-
-初回セットアップ:
-
-```powershell
-wsl --install -d Ubuntu
-```
-
-セットアップ後:
-1. Windows を再起動
-2. Ubuntu ターミナルを開く
-3. README のコマンドは Ubuntu ターミナルで実行
-
-Windows PowerShell / Git Bash でのデプロイ実行は非推奨です。
-
-</details>
-
-<details>
 <summary>⚠️ Azure CLI: デプロイスクリプトで必須</summary>
 
 `deploy-backend.sh` / `deploy-frontend.sh` は Linux シェル前提です。
-Windows では **WSL Ubuntu** で実行してください。
+Windows では **WSL2 Ubuntu** で実行してください。
 
 </details>
 
@@ -210,7 +190,7 @@ WSL 実行で Linux 互換の ZIP が作成されます。
 <details>
 <summary>💡 WSL2 で Azure CLI / az bicep を使うときのヒント</summary>
 
-Windows + WSL Ubuntu で作業するときのチェックリストです。
+Windows + WSL2 Ubuntu で作業するときのチェックリストです。
 
 1. **WSL 内では Linux 版 Azure CLI を使う（Windows 版を使わない）。**
   ```bash
@@ -279,7 +259,7 @@ swa --version
 # Expected: 2.x.x
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Check Git
 git --version
@@ -306,10 +286,28 @@ jq --version
 # Expected: jq-1.6 or newer
 ```
 
-> ⚠️ **WSL メモ（`az bicep version` / WinError 193）:**
-> `[WinError 193] %1 は有効な Win32 アプリケーションではありません。` が出る場合、WSL から `/mnt/c/...` の Windows 版 `az` を呼んでいる可能性があります。
-> `which az` で Linux 版 `az`（例: `/usr/bin/az`）を使っていることを確認してください（Windows パスは不可）。
-> 必要なら WSL Ubuntu 内で Azure CLI を再インストールし、`az bicep install` を実行してください。
+**Windows（GitHub Actions を使う場合 / WSL2 不要）:**
+```powershell
+# Check Git
+git --version
+# Expected: git version 2.x.x
+
+# Check Azure CLI
+az --version
+# Expected: azure-cli 2.60.x or newer
+
+# Check Node.js
+node --version
+# Expected: v22.x.x
+
+# Check GitHub CLI
+gh --version
+# Expected: gh version 2.x.x
+
+# Check PowerShell
+pwsh --version
+# Expected: PowerShell 7.x.x
+```
 
 > **📝 Need Docker?** Docker は [local development](#22-local-development-environment-optional) のみで必要です。Azure へのデプロイだけなら不要です。
 
@@ -367,7 +365,7 @@ git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
 cd Azure-PaaS-Workshop
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # Clone the repository
 git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
@@ -507,7 +505,7 @@ Azure へデプロイするだけなら、次へ進んでください。
 以下の手順で Azure へデプロイします。
 
 > **Windows ユーザー:**
-> - WSL2 を使える場合は、このセクションの **WSL Ubuntu** コマンドを実行してください。
+> - WSL2 を使える場合は、このセクションの **WSL2 Ubuntu** コマンドを実行してください。
 > - 企業ポリシーで WSL2 が使えない場合は、下記の **Windows（WSL2 なし / PowerShell）** と GitHub Actions コマンドを使ってください。
 
 #### 手順 1: Azure にログイン
@@ -524,7 +522,7 @@ az account show
 az account set --subscription "Your Subscription Name"
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # macOS/Linux と同じ
 az login
@@ -570,7 +568,7 @@ cp dev.bicepparam dev.local.bicepparam
 code dev.local.bicepparam
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # macOS/Linux と同じ
 cd materials/bicep
@@ -606,7 +604,7 @@ Generate `cosmosDbAdminPassword` with `openssl`:
 openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
 ```
@@ -638,6 +636,34 @@ param cosmosDbAdminPassword = 'your-secure-password-here'
 
 #### 手順 3: Bicep でインフラをデプロイ
 
+<details>
+<summary>⚠️ Resource Provider の登録（デプロイ前の確認推奨）</summary>
+
+サブスクリプションによっては、必要な Resource Provider が未登録のことがあります。
+このワークショップでは、デプロイ前に次の名前空間を確認してください。
+- `Microsoft.Web`
+- `Microsoft.Network`
+- `Microsoft.DocumentDB`
+- `Microsoft.KeyVault`
+- `Microsoft.OperationalInsights`
+- `Microsoft.Insights`
+- `Microsoft.Authorization`
+- `Microsoft.AlertManagement`（アラート関連依存のため事前登録推奨）
+
+まとめて確認・登録する場合:
+```bash
+for ns in Microsoft.Web Microsoft.Network Microsoft.DocumentDB Microsoft.KeyVault Microsoft.OperationalInsights Microsoft.Insights Microsoft.Authorization Microsoft.AlertManagement; do
+  state=$(az provider show --namespace "$ns" --query registrationState -o tsv 2>/dev/null || echo NotRegistered)
+  echo "$ns: $state"
+  if [ "$state" != "Registered" ]; then
+    az provider register --namespace "$ns"
+  fi
+done
+```
+登録完了まで数分かかることがあります。`az provider show --namespace <namespace> --query registrationState -o tsv` を再実行して、各 Provider が `Registered` になったことを確認してください。
+
+</details>
+
 **macOS/Linux:**
 ```bash
 # Create resource group (use your own name)
@@ -652,7 +678,7 @@ az deployment group create \
 # Note: Deployment takes approximately 10-15 minutes
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # macOS/Linux と同じ
 az group create --name <Resource-Group-Name> --location japaneast
@@ -684,7 +710,7 @@ az deployment group create `
 az resource list --resource-group <Resource-Group-Name> --output table
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 # macOS/Linux と同じ
 az resource list --resource-group <Resource-Group-Name> --output table
@@ -711,7 +737,7 @@ az resource list --resource-group <Resource-Group-Name> --output table
      --query "defaultHostname" -o tsv
    ```
 
-   **Windows (WSL Ubuntu):**
+   **Windows (WSL2 Ubuntu):**
    ```bash
    az staticwebapp show \
      --name $(az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv) \
@@ -795,8 +821,12 @@ echo "App Service Name: $APP_SERVICE_NAME"
 ./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
+# プロジェクトのルートから実行
+cd <repository-root>
+
+# Get the App Service name
 APP_SERVICE_NAME=$(az deployment group show \
   --resource-group <Resource-Group-Name> \
   --name main \
@@ -806,13 +836,7 @@ APP_SERVICE_NAME=$(az deployment group show \
 ```
 
 **Windows（WSL2 なし / GitHub Actions）:**
-```powershell
-# Trigger backend deployment workflow manually
-gh workflow run deploy-backend.yml --ref main
-
-# Check latest workflow runs
-gh run list --workflow deploy-backend.yml --limit 5
-```
+[上級: GitHub Actions によるデプロイ（代替・未検証）](#-advanced-github-actions-deployment-alternative---not-verified) を参照してください。
 
 ✅ **Checkpoint:** `/health` が `{"status":"healthy"}` を返す。
 
@@ -828,7 +852,7 @@ cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
 code scripts/deploy-frontend.local.env
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
 code scripts/deploy-frontend.local.env
@@ -848,19 +872,13 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
 **Windows（WSL2 なし / GitHub Actions）:**
-```powershell
-# Trigger frontend deployment workflow manually
-gh workflow run deploy-frontend.yml --ref main
-
-# Check latest workflow runs
-gh run list --workflow deploy-frontend.yml --limit 5
-```
+[上級: GitHub Actions によるデプロイ（代替・未検証）](#-advanced-github-actions-deployment-alternative---not-verified) を参照してください。
 
 ✅ **Checkpoint:** SWA の URL でアプリが表示できる。
 
@@ -1106,7 +1124,7 @@ curl -s "https://<app-service-name>.azurewebsites.net/health" | jq .
 curl -s "https://<swa-hostname>.azurestaticapps.net/api/health" | jq .
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 curl -s "https://<app-service-name>.azurewebsites.net/health" | jq .
 curl -s "https://<swa-hostname>.azurestaticapps.net/api/health" | jq .
@@ -1208,7 +1226,7 @@ az ad app delete --id <frontend-app-id>
 az ad app delete --id <backend-app-id>
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 az group delete --name <Resource-Group-Name> --yes --no-wait
 az ad app delete --id <frontend-app-id>
@@ -1246,7 +1264,7 @@ az webapp log download \
   --log-file /tmp/app-logs.zip
 ```
 
-**Windows (WSL Ubuntu):**
+**Windows (WSL2 Ubuntu):**
 ```bash
 az webapp log tail --resource-group <Resource-Group-Name> --name <app-service-name>
 
