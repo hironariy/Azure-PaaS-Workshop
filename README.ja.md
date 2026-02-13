@@ -506,7 +506,9 @@ Azure へデプロイするだけなら、次へ進んでください。
 
 以下の手順で Azure へデプロイします。
 
-> **Windows ユーザー:** このセクションのコマンドは **WSL (Ubuntu)** で実行してください。
+> **Windows ユーザー:**
+> - WSL2 を使える場合は、このセクションの **WSL Ubuntu** コマンドを実行してください。
+> - 企業ポリシーで WSL2 が使えない場合は、下記の **Windows（WSL2 なし / PowerShell）** と GitHub Actions コマンドを使ってください。
 
 #### 手順 1: Azure にログイン
 
@@ -527,6 +529,18 @@ az account set --subscription "Your Subscription Name"
 # macOS/Linux と同じ
 az login
 az account show
+az account set --subscription "Your Subscription Name"
+```
+
+**Windows（WSL2 なし / PowerShell）:**
+```powershell
+# Login to Azure
+az login
+
+# Verify you're logged in
+az account show
+
+# (Optional) Set specific subscription if you have multiple
 az account set --subscription "Your Subscription Name"
 ```
 
@@ -564,6 +578,18 @@ cp dev.bicepparam dev.local.bicepparam
 code dev.local.bicepparam
 ```
 
+**Windows（WSL2 なし / PowerShell）:**
+```powershell
+# Navigate to bicep folder
+Set-Location materials/bicep
+
+# Copy template to local file (gitignored)
+Copy-Item .\dev.bicepparam .\dev.local.bicepparam
+
+# Edit with your values
+code .\dev.local.bicepparam
+```
+
 **Required Parameters:**
 
 | Parameter | Description | How to Get |
@@ -583,6 +609,12 @@ openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
 **Windows (WSL Ubuntu):**
 ```bash
 openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
+```
+
+**Windows（WSL2 なし / PowerShell）:**
+```powershell
+# URL-safe random password（openssl コマンドと同様の意図）
+[Convert]::ToBase64String((1..24 | ForEach-Object { Get-Random -Maximum 256 })) -replace '\+','-' -replace '/','_' -replace '='
 ```
 
 > 補足: `openssl rand -base64 16` では `/` や `+` が含まれる場合があり、MongoDB 接続文字列では URI エンコードが必要になることがあります。
@@ -630,6 +662,18 @@ az deployment group create \
   --parameters dev.local.bicepparam
 ```
 
+**Windows（WSL2 なし / PowerShell）:**
+```powershell
+# Create resource group (use your own name)
+az group create --name <Resource-Group-Name> --location japaneast
+
+# Deploy infrastructure
+az deployment group create `
+  --resource-group <Resource-Group-Name> `
+  --template-file main.bicep `
+  --parameters dev.local.bicepparam
+```
+
 > **💡 Multi-Group Workshops:**
 > 共有サブスクリプションで衝突する場合は `groupId` を使って回避できます。
 
@@ -643,6 +687,11 @@ az resource list --resource-group <Resource-Group-Name> --output table
 **Windows (WSL Ubuntu):**
 ```bash
 # macOS/Linux と同じ
+az resource list --resource-group <Resource-Group-Name> --output table
+```
+
+**Windows（WSL2 なし / PowerShell）:**
+```powershell
 az resource list --resource-group <Resource-Group-Name> --output table
 ```
 
@@ -668,6 +717,12 @@ az resource list --resource-group <Resource-Group-Name> --output table
      --name $(az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv) \
      --resource-group <Resource-Group-Name> \
      --query "defaultHostname" -o tsv
+   ```
+
+   **Windows（WSL2 なし / PowerShell）:**
+   ```powershell
+   $swaName = az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv
+   az staticwebapp show --name $swaName --resource-group <Resource-Group-Name> --query "defaultHostname" -o tsv
    ```
 
 2. **Add Redirect URI in Azure Portal:**
@@ -716,6 +771,8 @@ az ad app show --id "$FRONTEND_APP_ID" --query "spa.redirectUris" -o jsonc
 
 Windows ユーザーは、上記 **macOS/Linux の Azure CLI 手順** を WSL で実行してください。
 
+WSL2 なしの Windows 環境では、PowerShell で等価な Azure CLI コマンド（`$env:VAR` 形式の環境変数）を使うか、Azure Portal で Redirect URI を更新してください。
+
 ✅ **Checkpoint:** Redirect URI に SWA URL を追加できた。
 
 > **🚀 Prefer CI/CD?** 手動デプロイではなく GitHub Actions を使いたい場合は、[Advanced: GitHub Actions Deployment](#-advanced-github-actions-deployment-alternative---not-verified) へ進んでください。
@@ -746,6 +803,15 @@ APP_SERVICE_NAME=$(az deployment group show \
   --query "properties.outputs.appServiceName.value" -o tsv)
 
 ./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
+```
+
+**Windows（WSL2 なし / GitHub Actions）:**
+```powershell
+# Trigger backend deployment workflow manually
+gh workflow run deploy-backend.yml --ref main
+
+# Check latest workflow runs
+gh run list --workflow deploy-backend.yml --limit 5
 ```
 
 ✅ **Checkpoint:** `/health` が `{"status":"healthy"}` を返す。
@@ -787,6 +853,15 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
+**Windows（WSL2 なし / GitHub Actions）:**
+```powershell
+# Trigger frontend deployment workflow manually
+gh workflow run deploy-frontend.yml --ref main
+
+# Check latest workflow runs
+gh run list --workflow deploy-frontend.yml --limit 5
+```
+
 ✅ **Checkpoint:** SWA の URL でアプリが表示できる。
 
 #### 手順 7: デプロイ結果を確認
@@ -815,6 +890,23 @@ curl -s "https://$SWA_HOSTNAME/api/health" | jq .
 ```
 
 ✅ **Checkpoint:** 2つの health endpoint が healthy。
+
+**Windows（WSL2 なし / PowerShell）:**
+```powershell
+$appServiceName = az deployment group show --resource-group <Resource-Group-Name> --name main --query "properties.outputs.appServiceName.value" -o tsv
+$swaName = az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv
+$swaHostname = az staticwebapp show --name $swaName --resource-group <Resource-Group-Name> --query "defaultHostname" -o tsv
+
+Write-Host "=== Deployment URLs ==="
+Write-Host "Frontend: https://$swaHostname"
+Write-Host "API (via SWA): https://$swaHostname/api/health"
+Write-Host "API (direct): https://$appServiceName.azurewebsites.net/health"
+
+Write-Host ""
+Write-Host "=== Testing Health Endpoints ==="
+Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
+Invoke-RestMethod "https://$swaHostname/api/health" | ConvertTo-Json
+```
 
 ---
 

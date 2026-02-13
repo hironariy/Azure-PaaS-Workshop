@@ -510,7 +510,9 @@ If you just want to deploy to Azure, skip to the next section.
 
 Follow these steps to deploy the application to Azure.
 
-> **Windows users:** Use **WSL (Ubuntu)** for all commands in this section.
+> **Windows users:**
+> - If you can use WSL2, run the WSL Ubuntu commands in this section.
+> - If your company policy blocks WSL2, use the **Windows (no WSL2, PowerShell)** blocks and GitHub Actions commands below.
 
 #### Step 1: Login to Azure
 
@@ -531,6 +533,18 @@ az account set --subscription "Your Subscription Name"
 # Same commands as macOS/Linux
 az login
 az account show
+az account set --subscription "Your Subscription Name"
+```
+
+**Windows (no WSL2, PowerShell):**
+```powershell
+# Login to Azure
+az login
+
+# Verify you're logged in
+az account show
+
+# (Optional) Set specific subscription if you have multiple
 az account set --subscription "Your Subscription Name"
 ```
 
@@ -570,6 +584,18 @@ cp dev.bicepparam dev.local.bicepparam
 code dev.local.bicepparam
 ```
 
+**Windows (no WSL2, PowerShell):**
+```powershell
+# Navigate to bicep folder
+Set-Location materials/bicep
+
+# Copy template to local file (gitignored)
+Copy-Item .\dev.bicepparam .\dev.local.bicepparam
+
+# Edit with your values
+code .\dev.local.bicepparam
+```
+
 **Required Parameters:**
 
 | Parameter | Description | How to Get |
@@ -589,6 +615,12 @@ openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
 **Windows (WSL Ubuntu):**
 ```bash
 openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
+```
+
+**Windows (no WSL2, PowerShell):**
+```powershell
+# URL-safe random password (similar intent as openssl command)
+[Convert]::ToBase64String((1..24 | ForEach-Object { Get-Random -Maximum 256 })) -replace '\+','-' -replace '/','_' -replace '='
 ```
 
 > Note: `openssl rand -base64 16` can include `/` or `+`. These can require URI encoding in MongoDB connection strings.
@@ -636,6 +668,18 @@ az deployment group create \
   --parameters dev.local.bicepparam
 ```
 
+**Windows (no WSL2, PowerShell):**
+```powershell
+# Create resource group (use your own name)
+az group create --name <Resource-Group-Name> --location japaneast
+
+# Deploy infrastructure
+az deployment group create `
+  --resource-group <Resource-Group-Name> `
+  --template-file main.bicep `
+  --parameters dev.local.bicepparam
+```
+
 > **💡 Multi-Group Workshops:** If multiple groups are deploying to the same subscription, use the `groupId` parameter to avoid naming conflicts:
 > 
 > **macOS/Linux:**
@@ -660,6 +704,11 @@ az resource list --resource-group <Resource-Group-Name> --output table
 **Windows (WSL Ubuntu):**
 ```bash
 # Same command as macOS/Linux
+az resource list --resource-group <Resource-Group-Name> --output table
+```
+
+**Windows (no WSL2, PowerShell):**
+```powershell
 az resource list --resource-group <Resource-Group-Name> --output table
 ```
 
@@ -697,6 +746,12 @@ After deployment, you need to add the Static Web App URL to your Frontend app re
      --name $(az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv) \
      --resource-group <Resource-Group-Name> \
      --query "defaultHostname" -o tsv
+   ```
+
+   **Windows (no WSL2, PowerShell):**
+   ```powershell
+   $swaName = az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv
+   az staticwebapp show --name $swaName --resource-group <Resource-Group-Name> --query "defaultHostname" -o tsv
    ```
 
 2. **Add Redirect URI in Azure Portal:**
@@ -752,6 +807,8 @@ az ad app show --id "$FRONTEND_APP_ID" --query "spa.redirectUris" -o jsonc
 
 Windows users should run the **macOS/Linux Azure CLI** block above in WSL.
 
+If you are on Windows without WSL2, use PowerShell with equivalent Azure CLI commands (`$env:VAR` style environment variables) or update Redirect URI from Azure Portal.
+
 ✅ **Checkpoint:** SWA URL added to Frontend app registration redirect URIs.
 
 > **🚀 Prefer CI/CD?** If you'd rather deploy via GitHub Actions instead of the manual steps below, skip to the [Advanced: GitHub Actions Deployment](#-advanced-github-actions-deployment-alternative---not-verified) section.
@@ -792,6 +849,15 @@ APP_SERVICE_NAME=$(az deployment group show \
 
 # Deploy backend
 ./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
+```
+
+**Windows (no WSL2, GitHub Actions):**
+```powershell
+# Trigger backend deployment workflow manually
+gh workflow run deploy-backend.yml --ref main
+
+# Check latest workflow runs
+gh run list --workflow deploy-backend.yml --limit 5
 ```
 
 The script will:
@@ -847,6 +913,15 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
+**Windows (no WSL2, GitHub Actions):**
+```powershell
+# Trigger frontend deployment workflow manually
+gh workflow run deploy-frontend.yml --ref main
+
+# Check latest workflow runs
+gh run list --workflow deploy-frontend.yml --limit 5
+```
+
 ✅ **Checkpoint:** Frontend deployed. SWA URL loads the blog application.
 
 #### Step 7: Verify Deployment
@@ -898,6 +973,23 @@ echo ""
 echo "=== Testing Health Endpoints ==="
 curl -s "https://$APP_SERVICE_NAME.azurewebsites.net/health" | jq .
 curl -s "https://$SWA_HOSTNAME/api/health" | jq .
+```
+
+**Windows (no WSL2, PowerShell):**
+```powershell
+$appServiceName = az deployment group show --resource-group <Resource-Group-Name> --name main --query "properties.outputs.appServiceName.value" -o tsv
+$swaName = az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv
+$swaHostname = az staticwebapp show --name $swaName --resource-group <Resource-Group-Name> --query "defaultHostname" -o tsv
+
+Write-Host "=== Deployment URLs ==="
+Write-Host "Frontend: https://$swaHostname"
+Write-Host "API (via SWA): https://$swaHostname/api/health"
+Write-Host "API (direct): https://$appServiceName.azurewebsites.net/health"
+
+Write-Host ""
+Write-Host "=== Testing Health Endpoints ==="
+Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
+Invoke-RestMethod "https://$swaHostname/api/health" | ConvertTo-Json
 ```
 
 ✅ **Checkpoint:** Both health endpoints return `{"status":"healthy"}`. Frontend loads in browser.
