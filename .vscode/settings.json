@@ -3,6 +3,7 @@
         "az": true,
         "npm install": true,
         "npm run dev": true,
-        "unzip": true
+        "unzip": true,
+        "zipinfo": true
     }
 }

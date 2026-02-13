@@ -26,7 +26,7 @@ using 'main.bicep'
 param environment = 'prod'
 
 // Azure region (japaneast recommended for this workshop)
-param location = 'japanwest'
+param location = 'japaneast'
 
 // Base name for resources (3-15 chars, alphanumeric)
 // Example: 'blogapp' → creates 'app-blogapp-prod', 'kv-blogapp-prod', etc.
