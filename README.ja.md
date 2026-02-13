@@ -156,7 +156,7 @@ English version: [README.md](./README.md)
 | **WSL 2** | Latest | すべてのコマンドを Linux で実行するため | [Install Guide](https://learn.microsoft.com/windows/wsl/install) |
 | **Ubuntu (on WSL)** | 22.04+ | 推奨ディストリビューション | [Get Ubuntu](https://apps.microsoft.com/detail/9PN20MSR04DW) |
 | **Azure CLI** | 2.60+ | Azure 管理（WSL 内） | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-linux) |
-| **Node.js** | 22.x LTS | ビルド（WSL 内） | [NodeSource Guide](https://github.com/nodesource/distributions) |
+| **Node.js** | 22.x LTS | ビルド（WSL 内） | [NodeSource Guide](https://learn.microsoft.com/ja-jp/windows/dev-environment/javascript/nodejs-on-wsl) |
 | **SWA CLI** | Latest | SWA デプロイ（WSL 内） | `npm install -g @azure/static-web-apps-cli` |
 | **jq** | Latest | JSON 出力確認 | `sudo apt-get install -y jq` |
 
@@ -247,6 +247,11 @@ swa --version
 jq --version
 # Expected: jq-1.6 or newer
 ```
+
+> ⚠️ **WSL メモ（`az bicep version` / WinError 193）:**
+> `[WinError 193] %1 は有効な Win32 アプリケーションではありません。` が出る場合、WSL から `/mnt/c/...` の Windows 版 `az` を呼んでいる可能性があります。
+> `which az` で Linux 版 `az`（例: `/usr/bin/az`）を使っていることを確認してください（Windows パスは不可）。
+> 必要なら WSL Ubuntu 内で Azure CLI を再インストールし、`az bicep install` を実行してください。
 
 > **📝 Need Docker?** Docker は [local development](#22-local-development-environment-optional) のみで必要です。Azure へのデプロイだけなら不要です。
 

@@ -156,7 +156,7 @@ Install these tools on your computer:
 | **WSL 2** | Latest | Linux runtime for all workshop commands | [Install Guide](https://learn.microsoft.com/windows/wsl/install) |
 | **Ubuntu (on WSL)** | 22.04+ | Recommended distro for workshop | [Get Ubuntu](https://apps.microsoft.com/detail/9PN20MSR04DW) |
 | **Azure CLI** | 2.60+ | Azure management (inside WSL) | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-linux) |
-| **Node.js** | 22.x LTS | Build frontend/backend (inside WSL) | [NodeSource Guide](https://github.com/nodesource/distributions) |
+| **Node.js** | 22.x LTS | Build frontend/backend (inside WSL) | [NodeSource Guide](https://learn.microsoft.com/en-us/windows/dev-environment/javascript/nodejs-on-wsl) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps (inside WSL) | `npm install -g @azure/static-web-apps-cli` |
 | **jq** | Latest | Parse JSON in script outputs | `sudo apt-get install -y jq` |
 
@@ -247,6 +247,11 @@ swa --version
 jq --version
 # Expected: jq-1.6 or newer
 ```
+
+> ⚠️ **WSL note (`az bicep version` / WinError 193):**
+> If you see `[WinError 193] %1 is not a valid Win32 application`, your WSL shell is likely calling Windows `az` from `/mnt/c/...`.
+> Run `which az` and confirm it points to Linux `az` (for example `/usr/bin/az`), not a Windows path.
+> If needed, reinstall Azure CLI inside WSL Ubuntu and then run `az bicep install`.
 
 > **📝 Need Docker?** Docker is only required for [local development](#22-local-development-environment-optional), not for Azure deployment.
 
