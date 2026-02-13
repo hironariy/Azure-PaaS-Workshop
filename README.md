@@ -207,6 +207,53 @@ When using WSL, Linux-compatible ZIPs are created correctly.
 
 </details>
 
+<details>
+<summary>💡 Tips: Using Azure CLI / az bicep in WSL2</summary>
+
+Use this quick checklist when you work from Windows + WSL Ubuntu.
+
+1. **Use Linux Azure CLI inside WSL (not Windows Azure CLI).**
+  ```bash
+  which az
+  type -a az
+  ```
+  Expected path example: `/usr/bin/az`.
+  If you see `/mnt/c/...`, your shell is using Windows Azure CLI.
+
+2. **If `az bicep version` fails with WinError 193, reinstall Bicep in WSL.**
+  ```bash
+  rm -f ~/.azure/bin/bicep ~/.azure/bin/bicep.exe
+  az bicep install
+  az bicep version
+  ```
+
+3. **Keep Bicep updated in WSL.**
+  ```bash
+  az bicep upgrade
+  ```
+
+4. **If login browser flow is blocked, use device code.**
+  ```bash
+  az login --use-device-code
+  ```
+
+5. **If `which az` still points to `/mnt/c/...`, prioritize Linux paths.**
+  ```bash
+  echo 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH' >> ~/.bashrc
+  source ~/.bashrc
+  hash -r
+  which az
+  ```
+
+6. **Recommended sanity check before deployment scripts:**
+  ```bash
+  az version
+  az bicep version
+  az account show --output table
+  ```
+
+</details>
+
 **Verify your installation:**
 
 **macOS/Linux:**

@@ -207,6 +207,53 @@ WSL 実行で Linux 互換の ZIP が作成されます。
 
 </details>
 
+<details>
+<summary>💡 WSL2 で Azure CLI / az bicep を使うときのヒント</summary>
+
+Windows + WSL Ubuntu で作業するときのチェックリストです。
+
+1. **WSL 内では Linux 版 Azure CLI を使う（Windows 版を使わない）。**
+  ```bash
+  which az
+  type -a az
+  ```
+  期待値の例: `/usr/bin/az`
+  `/mnt/c/...` が出る場合は Windows 版 Azure CLI を参照しています。
+
+2. **`az bicep version` で WinError 193 が出る場合は、WSL 側で Bicep を再インストール。**
+  ```bash
+  rm -f ~/.azure/bin/bicep ~/.azure/bin/bicep.exe
+  az bicep install
+  az bicep version
+  ```
+
+3. **Bicep を最新版に更新。**
+  ```bash
+  az bicep upgrade
+  ```
+
+4. **ブラウザログインが使えない環境では device code ログインを使う。**
+  ```bash
+  az login --use-device-code
+  ```
+
+5. **`which az` が `/mnt/c/...` のままなら、Linux パスを優先。**
+  ```bash
+  echo 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH' >> ~/.bashrc
+  source ~/.bashrc
+  hash -r
+  which az
+  ```
+
+6. **デプロイスクリプト実行前の推奨確認コマンド:**
+  ```bash
+  az version
+  az bicep version
+  az account show --output table
+  ```
+
+</details>
+
 **Verify your installation:**
 
 **macOS/Linux:**
