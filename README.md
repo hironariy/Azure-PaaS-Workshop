@@ -149,7 +149,7 @@ Install these tools on your computer:
 | **Node.js** | 22.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps | `npm install -g @azure/static-web-apps-cli` |
 
-**Windows:**
+**Windows (without GitHub Actions):**
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
@@ -159,6 +159,17 @@ Install these tools on your computer:
 | **Node.js** | 22.x LTS | Build frontend/backend (inside WSL) | [NodeSource Guide](https://learn.microsoft.com/en-us/windows/dev-environment/javascript/nodejs-on-wsl) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps (inside WSL) | `npm install -g @azure/static-web-apps-cli` |
 | **jq** | Latest | Parse JSON in script outputs | `sudo apt-get install -y jq` |
+
+**Windows (with GitHub Actions, no WSL2 required):**
+
+| Tool | Version | Purpose | Installation |
+|------|---------|---------|--------------|
+| **Azure CLI (Windows)** | 2.60+ | Azure management and setup validation (native Windows) | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
+| **Node.js (Windows)** | 22.x LTS | Local build/test before pushing changes (native Windows) | [Download](https://nodejs.org/) |
+| **GitHub CLI (`gh`)** | Latest | Run/monitor workflows and manual workflow dispatch | [Install Guide](https://cli.github.com/) |
+| **PowerShell** | 7.x+ | Run workshop setup commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
+
+> This toolset is intended for organizations where WSL2 is restricted by security policy.
 
 <details>
 <summary>🪟 Windows policy: use WSL for all commands</summary>
@@ -519,19 +530,22 @@ code dev.local.bicepparam
 | `entraTenantId` | Your Entra ID tenant ID | Azure Portal → Entra ID → Overview |
 | `entraBackendClientId` | Backend API app client ID | From Step 2.1.5 |
 | `entraFrontendClientId` | Frontend SPA app client ID | From Step 2.1.5 |
-| `cosmosDbAdminPassword` | Database admin password | Generate: `openssl rand -base64 16` |
+| `cosmosDbAdminPassword` | Database admin password | Generate: `openssl rand -base64 24 | tr '+/' '-_' | tr -d '='` |
 
 Generate `cosmosDbAdminPassword` with `openssl`:
 
 **macOS/Linux:**
 ```bash
-openssl rand -base64 16
+openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
 ```
 
 **Windows (WSL Ubuntu):**
 ```bash
-openssl rand -base64 16
+openssl rand -base64 24 | tr '+/' '-_' | tr -d '='
 ```
+
+> Note: `openssl rand -base64 16` can include `/` or `+`. These can require URI encoding in MongoDB connection strings.
+> To avoid connection string parsing issues in this workshop, use the command above (URL-safe output).
 
 > If `openssl` is missing in WSL, install it with `sudo apt-get install -y openssl`.
 
