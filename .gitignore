@@ -10,7 +10,7 @@ localwork/
 cert-base64.txt
 .DS_Store
 materials/backend/*.zip
-*.zip
+backend/*.zip
 
 
 # =============================================================================
