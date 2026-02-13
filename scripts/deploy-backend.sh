@@ -67,17 +67,22 @@ cp package.json package-lock.json dist/
 cd dist
 npm ci --omit=dev
 
-# Create zip: use 'zip' if available, otherwise fall back to PowerShell
-# (Git Bash on Windows does not include zip by default)
+# Create zip:
+# - Prefer 'zip' when available
+# - On Windows, use tar.exe to produce Linux-safe ZIP entry paths
+#   (Compress-Archive can produce backslash paths like src\app.js)
 if command -v zip >/dev/null 2>&1; then
     zip -r ../deploy.zip .
+elif command -v tar.exe >/dev/null 2>&1; then
+    echo "  (zip not found — using tar.exe for ZIP creation)"
+    tar.exe -a -c -f ..\\deploy.zip *
 elif command -v powershell.exe >/dev/null 2>&1; then
-    echo "  (zip not found — using PowerShell Compress-Archive)"
+    echo "  (zip/tar.exe not found — using PowerShell tar.exe for ZIP creation)"
     powershell.exe -NoProfile -Command \
-        "Compress-Archive -Path '.\*' -DestinationPath '..\deploy.zip' -Force"
+        "tar.exe -a -c -f '..\\deploy.zip' *"
 else
-    echo -e "${RED}Error: Neither 'zip' nor 'powershell.exe' found.${NC}"
-    echo "Please install zip (e.g., apt install zip) or run from Git Bash on Windows."
+    echo -e "${RED}Error: No ZIP tool found (zip/tar.exe/powershell.exe).${NC}"
+    echo "Please install zip (e.g., apt install zip) or ensure tar.exe is available on Windows."
     exit 1
 fi
 

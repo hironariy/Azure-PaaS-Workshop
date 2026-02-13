@@ -707,6 +707,65 @@ APP_SERVICE_NAME=$(az deployment group show \
 ./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
 ```
 
+**Windows PowerShell（代替手順）:**
+```powershell
+# App Service 名の取得
+$deployment = Get-AzResourceGroupDeployment -ResourceGroupName "<Resource-Group-Name>" -Name "main"
+$appServiceName = $deployment.Outputs.appServiceName.Value
+Write-Host "App Service Name: $appServiceName"
+
+# バックエンドへ移動
+cd materials\backend
+
+# 依存関係インストールとビルド
+npm install
+npm run build
+
+# デプロイ ZIP の作成
+Copy-Item package.json, package-lock.json dist\
+Push-Location dist
+npm ci --omit=dev
+
+# 重要: Linux App Service 向け ZIP は Compress-Archive を避ける
+# Compress-Archive は ZIP 内パスが src\app.js のようにバックスラッシュになる場合があり、
+# Linux 側で展開/起動に失敗することがあります。tar.exe で ZIP を作成してください。
+tar.exe -a -c -f ..\deploy.zip *
+
+# 任意: 先頭20件を確認（src/app.js のように / 区切りであること）
+tar.exe -tf ..\deploy.zip | Select-Object -First 20
+Pop-Location
+
+# App Service の設定
+az webapp config appsettings set `
+  --resource-group "<Resource-Group-Name>" `
+  --name $appServiceName `
+  --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false"
+
+az webapp config set `
+  --resource-group "<Resource-Group-Name>" `
+  --name $appServiceName `
+  --startup-file "node src/app.js"
+
+# デプロイ
+az webapp deploy `
+  --resource-group "<Resource-Group-Name>" `
+  --name $appServiceName `
+  --src-path deploy.zip `
+  --type zip `
+  --async true `
+  --clean true `
+  --restart true `
+  --track-status false
+
+# 待機してヘルスチェック
+Start-Sleep -Seconds 90
+Invoke-RestMethod -Uri "https://$appServiceName.azurewebsites.net/health"
+
+# クリーンアップ
+Remove-Item deploy.zip
+cd ..\..
+```
+
 ✅ **Checkpoint:** `/health` が `{"status":"healthy"}` を返す。
 
 #### 手順 6: フロントエンドを Static Web Apps にデプロイ
@@ -1099,6 +1158,7 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | Login fails with `AADSTS900144` | フロント runtime config が空 | `index.html` に `window.__APP_CONFIG__={...}` が注入されているか確認 |
 | API calls fail with 404 | Linked Backend 未設定 | SWA の Linked Backend を確認 |
 | `tsc: not found` during deploy | リモートビルド有効 | `SCM_DO_BUILD_DURING_DEPLOYMENT=false` を設定 |
+| Windows PowerShell で作成した ZIP デプロイ後に Backend が起動しない | `Compress-Archive` で作った ZIP に `src\app.js` のような Windows 区切りパスが入り、Linux App Service 側で問題になる | `materials\backend\dist` 配下で `tar.exe -a -c -f ..\deploy.zip *` で ZIP を再作成して再デプロイ |
 
 ### ログの確認
 

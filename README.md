@@ -794,7 +794,13 @@ npm run build
 Copy-Item package.json, package-lock.json dist\
 Push-Location dist
 npm ci --omit=dev
-Compress-Archive -Path * -DestinationPath ..\deploy.zip -Force
+# IMPORTANT (Windows): avoid Compress-Archive for Linux App Service deployments.
+# Compress-Archive can produce ZIP entries with backslashes (e.g., src\app.js),
+# which causes extraction/startup issues on Linux. Use tar.exe to create ZIP.
+tar.exe -a -c -f ..\deploy.zip *
+
+# Optional: quick sanity check (should print paths like src/app.js, not src\app.js)
+tar.exe -tf ..\deploy.zip | Select-Object -First 20
 Pop-Location
 
 # Configure App Service
@@ -1398,6 +1404,7 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | Login fails with `AADSTS900144` (missing `client_id`) | Frontend runtime config not injected (or injected as empty) | Re-run Step 6 PowerShell deploy: ensure `deploy-frontend.local.env` values are loaded and `index.html` contains `window.__APP_CONFIG__={...}` (not `null` or empty) |
 | API calls fail with 404 | Linked Backend not configured | Check SWA configuration in Azure Portal |
 | `tsc: not found` during deploy | Remote build enabled | Set `SCM_DO_BUILD_DURING_DEPLOYMENT=false` |
+| Backend fails after ZIP deploy from Windows PowerShell | ZIP contains Windows-style paths (e.g., `src\app.js`) due to `Compress-Archive` | Recreate ZIP with `tar.exe -a -c -f ..\deploy.zip *` from `materials\backend\dist`, then redeploy |
 
 ### Viewing Logs
 

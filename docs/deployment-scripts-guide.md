@@ -51,6 +51,11 @@ The script performs the following steps:
 - Installs only production dependencies (no devDependencies)
 - Creates a ZIP package for deployment
 
+**Windows PowerShell note (if creating ZIP manually):**
+- For Linux App Service, avoid `Compress-Archive` because ZIP entries may use backslashes (e.g., `src\app.js`).
+- From `materials\backend\dist`, create ZIP with `tar.exe -a -c -f ..\deploy.zip *`.
+- Optionally verify with `tar.exe -tf ..\deploy.zip | Select-Object -First 20` and confirm paths use `/`.
+
 #### Step 3: Configure App Service
 ```
 ⚙️ SCM_DO_BUILD_DURING_DEPLOYMENT=false
@@ -292,6 +297,7 @@ Next steps:
 | Health check timeout | App taking too long to start | Check logs: `az webapp log tail --resource-group <rg> --name <app>` |
 | HTTP 502 after deploy | App crashed on startup | Check logs for Key Vault or database connection errors |
 | Permission denied | Script not executable | Run: `chmod +x scripts/deploy-backend.sh` |
+| Backend fails after ZIP deploy from Windows PowerShell | ZIP was created with Windows-style separators (e.g., `src\app.js`) | Recreate ZIP with `tar.exe -a -c -f ..\deploy.zip *` from `materials\backend\dist`, then redeploy |
 
 ### Frontend Deployment Issues
 

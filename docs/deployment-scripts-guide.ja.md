@@ -51,6 +51,11 @@ Node.js/Express のバックエンド API を Azure App Service にデプロイ�
 - 本番依存のみをインストール（devDependencies なし）
 - ZIP パッケージ（deploy.zip）を作成
 
+**Windows PowerShell で手動 ZIP 作成する場合の注意:**
+- Linux App Service 向けの ZIP では `Compress-Archive` を避けてください。ZIP 内パスが `src\app.js` のようなバックスラッシュ区切りになる場合があります。
+- `materials\backend\dist` で `tar.exe -a -c -f ..\deploy.zip *` を実行して ZIP を作成してください。
+- 必要に応じて `tar.exe -tf ..\deploy.zip | Select-Object -First 20` で先頭を確認し、`/` 区切りになっていることを確認してください。
+
 #### 手順 3: App Service を設定
 ```
 ⚙️ SCM_DO_BUILD_DURING_DEPLOYMENT=false
@@ -241,3 +246,4 @@ const config = window.__APP_CONFIG__;
 
 - `tsc: not found` などのエラーが出る場合は、バックエンド側のリモートビルドが有効になっている可能性があります。`SCM_DO_BUILD_DURING_DEPLOYMENT=false` が設定されているか確認してください。
 - フロントエンドで `AADSTS900144`（`client_id` 不足）が出る場合、`index.html` への注入が `null` や空になっていないかを確認してください。
+- Windows PowerShell で作成した ZIP を使ってバックエンド起動に失敗する場合、`Compress-Archive` で作成した ZIP に `src\app.js` のような Windows 区切りパスが含まれている可能性があります。`materials\backend\dist` で `tar.exe -a -c -f ..\deploy.zip *` を実行して再作成し、再デプロイしてください。
