@@ -67,7 +67,7 @@ cp package.json package-lock.json dist/
 cd dist
 npm ci --omit=dev
 
-# Create zip: prefer 'zip', then 7-Zip, then PowerShell fallback
+# Create zip: prefer 'zip', then 7-Zip
 # (Git Bash on Windows often does not include zip)
 rm -f ../deploy.zip
 
@@ -85,15 +85,9 @@ else
         echo "  (zip not found — using $ZIP_TOOL)"
         "$ZIP_TOOL" a -tzip ../deploy.zip ./* >/dev/null
     else
-        if command -v powershell.exe >/dev/null 2>&1; then
-            echo "  (zip/7-Zip not found — using PowerShell Compress-Archive fallback)"
-            powershell.exe -NoProfile -Command \
-                "Compress-Archive -Path '.\\*' -DestinationPath '..\\deploy.zip' -Force"
-        else
-            echo -e "${RED}Error: No ZIP tool found (zip/7z/powershell.exe).${NC}"
-            echo "Install one of: zip, 7-Zip, or PowerShell (Compress-Archive)."
-            exit 1
-        fi
+        echo -e "${RED}Error: No ZIP tool found (zip/7z).${NC}"
+        echo "Install zip or 7-Zip, then retry deployment."
+        exit 1
     fi
 fi
 

@@ -161,33 +161,76 @@ English version: [README.md](./README.md)
 | **Azure CLI** | 2.60+ | デプロイスクリプト用 | [Install Guide](https://docs.microsoft.com/cli/azure/install-azure-cli) |
 | **7-Zip (7z)** | Latest | バックエンド ZIP 作成（Linux App Service 向け） | [Download](https://www.7-zip.org/download.html) |
 
-> **⏱️ Note: Azure PowerShell Installation Time**
-> Azure PowerShell のインストールは **5-15 分**かかることがあります。完了まで待ってから進めてください。
-> - 管理者権限がない場合は `-Scope CurrentUser` を使ってください:
->   ```powershell
->   Install-Module -Name Az -Repository PSGallery -Force -Scope CurrentUser
->   ```
+<details>
+<summary>🗜️ 7-Zip: PATH 登録（PowerShell + Git Bash）</summary>
 
-> **⚠️ Important: Bicep CLI Required for Windows**
-> Azure CLI には Bicep が同梱/自動導入されますが、Azure PowerShell では別途 Bicep CLI のインストールが必要です。
->
-> **Recommended installation method (winget):**
-> ```powershell
-> winget install -e --id Microsoft.Bicep
-> ```
->
-> **Alternative methods:**
-> - **Chocolatey:** `choco install bicep`
-> - **Windows Installer:** [Download bicep-setup-win-x64.exe](https://github.com/Azure/bicep/releases/latest/download/bicep-setup-win-x64.exe)
->
-> インストール後、ターミナルを開き直して確認:
-> ```powershell
-> bicep --version
-> # Expected: Bicep CLI version 0.x.x
-> ```
+`7z` が認識されない場合は、`C:\Program Files\7-Zip` を **ユーザー PATH** に追加してください。
 
-> **⚠️ Windows Users: Azure CLI Required for Deployment Scripts**
-> `deploy-backend.sh` / `deploy-frontend.sh` は Azure CLI を使用します。Windows は **Git Bash** または **WSL** で実行するか、記載の PowerShell 代替手順を使ってください。
+```powershell
+# 7-Zip をユーザー PATH に追加（PowerShell）
+$sevenZipPath = 'C:\Program Files\7-Zip'
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if (-not ($userPath -split ';' | Where-Object { $_ -eq $sevenZipPath })) {
+  [Environment]::SetEnvironmentVariable('Path', "$userPath;$sevenZipPath", 'User')
+  Write-Host '7-Zip のパスをユーザー PATH に追加しました。ターミナルを開き直してください。'
+} else {
+  Write-Host '7-Zip のパスは既にユーザー PATH にあります。'
+}
+```
+
+Git Bash は PATH 追加後にターミナルを再起動してください。まだ `7z` が見つからない場合は、`~/.bashrc` に以下を追加します。
+
+```bash
+export PATH="$PATH:/c/Program Files/7-Zip"
+```
+
+その後 `source ~/.bashrc` を実行し、`command -v 7z` で確認してください。
+
+</details>
+
+<details>
+<summary>⏱️ Azure PowerShell: インストール時間の注意</summary>
+
+Azure PowerShell のインストールは **5-15 分**かかることがあります。完了まで待ってから進めてください。
+
+管理者権限がない場合は `-Scope CurrentUser` を使ってください:
+
+```powershell
+Install-Module -Name Az -Repository PSGallery -Force -Scope CurrentUser
+```
+
+</details>
+
+<details>
+<summary>⚠️ Bicep CLI: Windows で必須</summary>
+
+Azure CLI には Bicep が同梱/自動導入されますが、Azure PowerShell では別途 Bicep CLI のインストールが必要です。
+
+**Recommended installation method (winget):**
+
+```powershell
+winget install -e --id Microsoft.Bicep
+```
+
+**Alternative methods:**
+- **Chocolatey:** `choco install bicep`
+- **Windows Installer:** [Download bicep-setup-win-x64.exe](https://github.com/Azure/bicep/releases/latest/download/bicep-setup-win-x64.exe)
+
+インストール後、ターミナルを開き直して確認:
+
+```powershell
+bicep --version
+# Expected: Bicep CLI version 0.x.x
+```
+
+</details>
+
+<details>
+<summary>⚠️ Azure CLI: デプロイスクリプトで必須</summary>
+
+`deploy-backend.sh` / `deploy-frontend.sh` は Azure CLI を使用します。Windows は **Git Bash** または **WSL** で実行するか、記載の PowerShell 代替手順を使ってください。
+
+</details>
 
 **Verify your installation:**
 
@@ -733,9 +776,6 @@ npm ci --omit=dev
 
 # Windows では Linux App Service 向け ZIP 作成に 7-Zip を推奨
 7z a -tzip ..\deploy.zip .\*
-
-# フォールバック（Windows 区切りパスになる場合あり）
-# Compress-Archive -Path * -DestinationPath ..\deploy.zip -Force
 
 # 任意: 先頭20件を確認
 tar.exe -tf ..\deploy.zip | Select-Object -First 20

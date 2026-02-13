@@ -161,33 +161,76 @@ Install these tools on your computer:
 | **Azure CLI** | 2.60+ | For deployment scripts | [Install Guide](https://docs.microsoft.com/cli/azure/install-azure-cli) |
 | **7-Zip (7z)** | Latest | Create Linux-safe ZIP packages for backend deploy | [Download](https://www.7-zip.org/download.html) |
 
-> **⏱️ Note: Azure PowerShell Installation Time**  
-> Installing Azure PowerShell modules may take **5-15 minutes**. The progress indicator appears at the **top of the VS Code terminal window** or PowerShell window. Please wait for the installation to complete before proceeding.
-> - Use `-Scope CurrentUser` if you don't have administrator privileges:
->   ```powershell
->   Install-Module -Name Az -Repository PSGallery -Force -Scope CurrentUser
->   ```
+<details>
+<summary>🗜️ 7-Zip: PATH setup (PowerShell + Git Bash)</summary>
 
-> **⚠️ Important: Bicep CLI Required for Windows**  
-> Unlike Azure CLI (which auto-installs Bicep), Azure PowerShell requires manual Bicep CLI installation.
-> 
-> **Recommended installation method (winget):**
-> ```powershell
-> winget install -e --id Microsoft.Bicep
-> ```
-> 
-> **Alternative methods:**
-> - **Chocolatey:** `choco install bicep`
-> - **Windows Installer:** [Download bicep-setup-win-x64.exe](https://github.com/Azure/bicep/releases/latest/download/bicep-setup-win-x64.exe)
-> 
-> After installation, close and reopen your terminal, then verify:
-> ```powershell
-> bicep --version
-> # Expected: Bicep CLI version 0.x.x
-> ```
+If `7z` is not recognized, add `C:\Program Files\7-Zip` to your **User PATH**.
 
-> **⚠️ Windows Users: Azure CLI Required for Deployment Scripts**  
-> The deployment scripts (`deploy-backend.sh`, `deploy-frontend.sh`) use Azure CLI. Windows users should run these scripts in **Git Bash** or **WSL**, or use the equivalent PowerShell commands provided in each step.
+```powershell
+# Add 7-Zip to User PATH (PowerShell)
+$sevenZipPath = 'C:\Program Files\7-Zip'
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if (-not ($userPath -split ';' | Where-Object { $_ -eq $sevenZipPath })) {
+  [Environment]::SetEnvironmentVariable('Path', "$userPath;$sevenZipPath", 'User')
+  Write-Host 'Added 7-Zip path to User PATH. Reopen terminals.'
+} else {
+  Write-Host '7-Zip path already exists in User PATH.'
+}
+```
+
+For Git Bash, reopen the terminal after PATH update. If `7z` is still not found, add this to `~/.bashrc`:
+
+```bash
+export PATH="$PATH:/c/Program Files/7-Zip"
+```
+
+Then run `source ~/.bashrc` and verify with `command -v 7z`.
+
+</details>
+
+<details>
+<summary>⏱️ Azure PowerShell: installation time note</summary>
+
+Installing Azure PowerShell modules may take **5-15 minutes**. The progress indicator appears at the **top of the VS Code terminal window** or PowerShell window. Please wait for the installation to complete before proceeding.
+
+Use `-Scope CurrentUser` if you don't have administrator privileges:
+
+```powershell
+Install-Module -Name Az -Repository PSGallery -Force -Scope CurrentUser
+```
+
+</details>
+
+<details>
+<summary>⚠️ Bicep CLI: required on Windows</summary>
+
+Unlike Azure CLI (which auto-installs Bicep), Azure PowerShell requires manual Bicep CLI installation.
+
+**Recommended installation method (winget):**
+
+```powershell
+winget install -e --id Microsoft.Bicep
+```
+
+**Alternative methods:**
+- **Chocolatey:** `choco install bicep`
+- **Windows Installer:** [Download bicep-setup-win-x64.exe](https://github.com/Azure/bicep/releases/latest/download/bicep-setup-win-x64.exe)
+
+After installation, close and reopen your terminal, then verify:
+
+```powershell
+bicep --version
+# Expected: Bicep CLI version 0.x.x
+```
+
+</details>
+
+<details>
+<summary>⚠️ Azure CLI: required for deployment scripts</summary>
+
+The deployment scripts (`deploy-backend.sh`, `deploy-frontend.sh`) use Azure CLI. Windows users should run these scripts in **Git Bash** or **WSL**, or use the equivalent PowerShell commands provided in each step.
+
+</details>
 
 **Verify your installation:**
 
@@ -802,9 +845,6 @@ npm ci --omit=dev
 
 # Preferred on Windows for Linux App Service ZIP deploys: 7-Zip
 7z a -tzip ..\deploy.zip .\*
-
-# Fallback only (may create Windows-style path separators):
-# Compress-Archive -Path * -DestinationPath ..\deploy.zip -Force
 
 # Optional: quick sanity check
 tar.exe -tf ..\deploy.zip | Select-Object -First 20
