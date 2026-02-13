@@ -153,82 +153,46 @@ English version: [README.md](./README.md)
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
-| **Git Bash** | Latest | デプロイスクリプト実行 | [Git for Windows](https://git-scm.com/download/win) に同梱 |
-| **Azure PowerShell** | 12.0+ | Azure 管理 | [Install Guide](https://docs.microsoft.com/powershell/azure/install-azure-powershell) |
-| **Bicep CLI** | Latest | IaC | [Install Guide](https://learn.microsoft.com/azure/azure-resource-manager/bicep/install#windows) |
-| **Node.js** | 22.x LTS | ビルド | [Download](https://nodejs.org/) |
-| **SWA CLI** | Latest | SWA デプロイ | `npm install -g @azure/static-web-apps-cli` |
-| **Azure CLI** | 2.60+ | デプロイスクリプト用 | [Install Guide](https://docs.microsoft.com/cli/azure/install-azure-cli) |
-| **7-Zip (7z)** | Latest | バックエンド ZIP 作成（Linux App Service 向け） | [Download](https://www.7-zip.org/download.html) |
+| **WSL 2** | Latest | すべてのコマンドを Linux で実行するため | [Install Guide](https://learn.microsoft.com/windows/wsl/install) |
+| **Ubuntu (on WSL)** | 22.04+ | 推奨ディストリビューション | [Get Ubuntu](https://apps.microsoft.com/detail/9PN20MSR04DW) |
+| **Azure CLI** | 2.60+ | Azure 管理（WSL 内） | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-linux) |
+| **Node.js** | 22.x LTS | ビルド（WSL 内） | [NodeSource Guide](https://github.com/nodesource/distributions) |
+| **SWA CLI** | Latest | SWA デプロイ（WSL 内） | `npm install -g @azure/static-web-apps-cli` |
+| **jq** | Latest | JSON 出力確認 | `sudo apt-get install -y jq` |
 
 <details>
-<summary>🗜️ 7-Zip: PATH 登録（PowerShell + Git Bash）</summary>
+<summary>🪟 Windows 方針: すべて WSL で実行</summary>
 
-`7z` が認識されない場合は、`C:\Program Files\7-Zip` を **ユーザー PATH** に追加してください。
+このワークショップでは、Windows ユーザーは **WSL (Ubuntu)** で全手順を実行してください。
 
-```powershell
-# 7-Zip をユーザー PATH に追加（PowerShell）
-$sevenZipPath = 'C:\Program Files\7-Zip'
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if (-not ($userPath -split ';' | Where-Object { $_ -eq $sevenZipPath })) {
-  [Environment]::SetEnvironmentVariable('Path', "$userPath;$sevenZipPath", 'User')
-  Write-Host '7-Zip のパスをユーザー PATH に追加しました。ターミナルを開き直してください。'
-} else {
-  Write-Host '7-Zip のパスは既にユーザー PATH にあります。'
-}
-```
-
-Git Bash は PATH 追加後にターミナルを再起動してください。まだ `7z` が見つからない場合は、`~/.bashrc` に以下を追加します。
-
-```bash
-export PATH="$PATH:/c/Program Files/7-Zip"
-```
-
-その後 `source ~/.bashrc` を実行し、`command -v 7z` で確認してください。
-
-</details>
-
-<details>
-<summary>⏱️ Azure PowerShell: インストール時間の注意</summary>
-
-Azure PowerShell のインストールは **5-15 分**かかることがあります。完了まで待ってから進めてください。
-
-管理者権限がない場合は `-Scope CurrentUser` を使ってください:
+初回セットアップ:
 
 ```powershell
-Install-Module -Name Az -Repository PSGallery -Force -Scope CurrentUser
+wsl --install -d Ubuntu
 ```
 
-</details>
+セットアップ後:
+1. Windows を再起動
+2. Ubuntu ターミナルを開く
+3. README のコマンドは Ubuntu ターミナルで実行
 
-<details>
-<summary>⚠️ Bicep CLI: Windows で必須</summary>
-
-Azure CLI には Bicep が同梱/自動導入されますが、Azure PowerShell では別途 Bicep CLI のインストールが必要です。
-
-**Recommended installation method (winget):**
-
-```powershell
-winget install -e --id Microsoft.Bicep
-```
-
-**Alternative methods:**
-- **Chocolatey:** `choco install bicep`
-- **Windows Installer:** [Download bicep-setup-win-x64.exe](https://github.com/Azure/bicep/releases/latest/download/bicep-setup-win-x64.exe)
-
-インストール後、ターミナルを開き直して確認:
-
-```powershell
-bicep --version
-# Expected: Bicep CLI version 0.x.x
-```
+Windows PowerShell / Git Bash でのデプロイ実行は非推奨です。
 
 </details>
 
 <details>
 <summary>⚠️ Azure CLI: デプロイスクリプトで必須</summary>
 
-`deploy-backend.sh` / `deploy-frontend.sh` は Azure CLI を使用します。Windows は **Git Bash** または **WSL** で実行するか、記載の PowerShell 代替手順を使ってください。
+`deploy-backend.sh` / `deploy-frontend.sh` は Linux シェル前提です。
+Windows では **WSL Ubuntu** で実行してください。
+
+</details>
+
+<details>
+<summary>📦 ZIP 作成について</summary>
+
+バックエンド ZIP はスクリプト側で作成されます。
+WSL 実行で Linux 互換の ZIP が作成されます。
 
 </details>
 
@@ -257,19 +221,18 @@ swa --version
 # Expected: 2.x.x
 ```
 
-**Windows PowerShell:**
-```powershell
+**Windows (WSL Ubuntu):**
+```bash
 # Check Git
 git --version
 # Expected: git version 2.x.x
 
-# Check Azure PowerShell
-Get-InstalledModule -Name Az | Select-Object Name, Version
-# Expected: Az 12.x.x or newer
-# 💡 Alternative if above fails: Get-Module -Name Az.* -ListAvailable | Select-Object Name, Version
+# Check Azure CLI
+az --version
+# Expected: azure-cli 2.60.x or newer
 
-# Check Bicep CLI
-bicep --version
+# Check Bicep
+az bicep version
 # Expected: Bicep CLI version 0.x.x
 
 # Check Node.js
@@ -280,13 +243,9 @@ node --version
 swa --version
 # Expected: 2.x.x
 
-# Check Azure CLI (for deployment scripts)
-az --version
-# Expected: azure-cli 2.60.x or newer
-
-# Check 7-Zip (for backend ZIP packaging)
-7z | Select-Object -First 1
-# Expected: 7-Zip <version>
+# Check jq
+jq --version
+# Expected: jq-1.6 or newer
 ```
 
 > **📝 Need Docker?** Docker は [local development](#22-local-development-environment-optional) のみで必要です。Azure へのデプロイだけなら不要です。
@@ -345,8 +304,8 @@ git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
 cd Azure-PaaS-Workshop
 ```
 
-**Windows PowerShell:**
-```powershell
+**Windows (WSL Ubuntu):**
+```bash
 # Clone the repository
 git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
 
@@ -484,6 +443,8 @@ Azure へデプロイするだけなら、次へ進んでください。
 
 以下の手順で Azure へデプロイします。
 
+> **Windows ユーザー:** このセクションのコマンドは **WSL (Ubuntu)** で実行してください。
+
 #### 手順 1: Azure にログイン
 
 **macOS/Linux (bash/zsh):**
@@ -498,16 +459,12 @@ az account show
 az account set --subscription "Your Subscription Name"
 ```
 
-**Windows PowerShell:**
-```powershell
-# Login to Azure
-Connect-AzAccount
-
-# Verify you're logged in
-Get-AzContext
-
-# (Optional) Set specific subscription if you have multiple
-Set-AzContext -Subscription "Your Subscription Name"
+**Windows (WSL Ubuntu):**
+```bash
+# macOS/Linux と同じ
+az login
+az account show
+az account set --subscription "Your Subscription Name"
 ```
 
 > **💡 Multiple Tenants?**
@@ -518,11 +475,7 @@ Set-AzContext -Subscription "Your Subscription Name"
 > az login --tenant "your-tenant-id-or-domain.onmicrosoft.com"
 > ```
 >
-> **Azure PowerShell:**
-> ```powershell
-> Connect-AzAccount -Tenant "your-tenant-id"
-> Set-AzContext -Tenant "your-tenant-id" -Subscription "Your Subscription Name"
-> ```
+> Windows (WSL) では上記の Azure CLI を使用してください。
 
 ✅ **Checkpoint:** Azure にログインできた。
 
@@ -540,15 +493,11 @@ cp dev.bicepparam dev.local.bicepparam
 code dev.local.bicepparam
 ```
 
-**Windows PowerShell:**
-```powershell
-# Navigate to bicep folder
-cd materials\bicep
-
-# Copy template to local file (gitignored)
-Copy-Item dev.bicepparam dev.local.bicepparam
-
-# Edit with your values
+**Windows (WSL Ubuntu):**
+```bash
+# macOS/Linux と同じ
+cd materials/bicep
+cp dev.bicepparam dev.local.bicepparam
 code dev.local.bicepparam
 ```
 
@@ -568,18 +517,12 @@ Generate `cosmosDbAdminPassword` with `openssl`:
 openssl rand -base64 16
 ```
 
-**Windows (Git Bash):**
+**Windows (WSL Ubuntu):**
 ```bash
 openssl rand -base64 16
 ```
 
-> **Windows note (if `openssl` is not installed):**
-> PowerShell でも同等の強度で生成できます:
-> ```powershell
-> $bytes = New-Object byte[] 16
-> [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-> [Convert]::ToBase64String($bytes)
-> ```
+> `openssl` がない場合は、WSL で `sudo apt-get install -y openssl` を実行してください。
 
 Example `dev.local.bicepparam`:
 ```bicep
@@ -611,15 +554,14 @@ az deployment group create \
 # Note: Deployment takes approximately 10-15 minutes
 ```
 
-**Windows PowerShell:**
-```powershell
-New-AzResourceGroup -Name "<Resource-Group-Name>" -Location "japaneast"
-
-New-AzResourceGroupDeployment `
-  -Name "main" `
-  -ResourceGroupName "<Resource-Group-Name>" `
-  -TemplateFile "main.bicep" `
-  -TemplateParameterFile "dev.local.bicepparam"
+**Windows (WSL Ubuntu):**
+```bash
+# macOS/Linux と同じ
+az group create --name <Resource-Group-Name> --location japaneast
+az deployment group create \
+  --resource-group <Resource-Group-Name> \
+  --template-file main.bicep \
+  --parameters dev.local.bicepparam
 ```
 
 > **💡 Multi-Group Workshops:**
@@ -632,9 +574,10 @@ New-AzResourceGroupDeployment `
 az resource list --resource-group <Resource-Group-Name> --output table
 ```
 
-**Windows PowerShell:**
-```powershell
-Get-AzResource -ResourceGroupName "<Resource-Group-Name>" | Format-Table Name, ResourceType
+**Windows (WSL Ubuntu):**
+```bash
+# macOS/Linux と同じ
+az resource list --resource-group <Resource-Group-Name> --output table
 ```
 
 ✅ **Checkpoint:** Bicep デプロイが完了し、リソースが見える。
@@ -653,10 +596,12 @@ Get-AzResource -ResourceGroupName "<Resource-Group-Name>" | Format-Table Name, R
      --query "defaultHostname" -o tsv
    ```
 
-   **Windows PowerShell:**
-   ```powershell
-   $swaName = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>")[0].Name
-   (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).DefaultHostname
+   **Windows (WSL Ubuntu):**
+   ```bash
+   az staticwebapp show \
+     --name $(az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv) \
+     --resource-group <Resource-Group-Name> \
+     --query "defaultHostname" -o tsv
    ```
 
 2. **Add Redirect URI in Azure Portal:**
@@ -703,25 +648,7 @@ az ad app update \
 az ad app show --id "$FRONTEND_APP_ID" --query "spa.redirectUris" -o jsonc
 ```
 
-**Windows (PowerShell):**
-```powershell
-$frontendAppId = "<entraFrontendClientId>"
-
-$swaName = az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv
-$swaHostname = az staticwebapp show --name $swaName --resource-group <Resource-Group-Name> --query "defaultHostname" -o tsv
-
-$existing = az ad app show --id $frontendAppId --query "spa.redirectUris" -o json | ConvertFrom-Json
-$toAdd = @("https://$swaHostname", "https://$swaHostname/")
-
-$new = @($existing + $toAdd)
-$new = @($new | Sort-Object -Unique)
-
-$newPyList = '[' + (($new | ForEach-Object { "'$_'" }) -join ',') + ']'
-
-az ad app update --id $frontendAppId --set "spa={}" --set "spa.redirectUris=$newPyList"
-
-az ad app show --id $frontendAppId --query "spa.redirectUris" -o jsonc
-```
+Windows ユーザーは、上記 **macOS/Linux の Azure CLI 手順** を WSL で実行してください。
 
 ✅ **Checkpoint:** Redirect URI に SWA URL を追加できた。
 
@@ -745,7 +672,7 @@ echo "App Service Name: $APP_SERVICE_NAME"
 ./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
 ```
 
-**Windows (Git Bash or WSL):**
+**Windows (WSL Ubuntu):**
 ```bash
 APP_SERVICE_NAME=$(az deployment group show \
   --resource-group <Resource-Group-Name> \
@@ -753,63 +680,6 @@ APP_SERVICE_NAME=$(az deployment group show \
   --query "properties.outputs.appServiceName.value" -o tsv)
 
 ./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
-```
-
-**Windows PowerShell（代替手順）:**
-```powershell
-# App Service 名の取得
-$deployment = Get-AzResourceGroupDeployment -ResourceGroupName "<Resource-Group-Name>" -Name "main"
-$appServiceName = $deployment.Outputs.appServiceName.Value
-Write-Host "App Service Name: $appServiceName"
-
-# バックエンドへ移動
-cd materials\backend
-
-# 依存関係インストールとビルド
-npm install
-npm run build
-
-# デプロイ ZIP の作成
-Copy-Item package.json, package-lock.json dist\
-Push-Location dist
-npm ci --omit=dev
-
-# Windows では Linux App Service 向け ZIP 作成に 7-Zip を推奨
-7z a -tzip ..\deploy.zip .\*
-
-# 任意: 先頭20件を確認
-tar.exe -tf ..\deploy.zip | Select-Object -First 20
-Pop-Location
-
-# App Service の設定
-az webapp config appsettings set `
-  --resource-group "<Resource-Group-Name>" `
-  --name $appServiceName `
-  --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false"
-
-az webapp config set `
-  --resource-group "<Resource-Group-Name>" `
-  --name $appServiceName `
-  --startup-file "node src/app.js"
-
-# デプロイ
-az webapp deploy `
-  --resource-group "<Resource-Group-Name>" `
-  --name $appServiceName `
-  --src-path deploy.zip `
-  --type zip `
-  --async true `
-  --clean true `
-  --restart true `
-  --track-status false
-
-# 待機してヘルスチェック
-Start-Sleep -Seconds 90
-Invoke-RestMethod -Uri "https://$appServiceName.azurewebsites.net/health"
-
-# クリーンアップ
-Remove-Item deploy.zip
-cd ..\..
 ```
 
 ✅ **Checkpoint:** `/health` が `{"status":"healthy"}` を返す。
@@ -826,10 +696,10 @@ cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
 code scripts/deploy-frontend.local.env
 ```
 
-**Windows PowerShell:**
-```powershell
-Copy-Item scripts\deploy-frontend.template.env scripts\deploy-frontend.local.env
-code scripts\deploy-frontend.local.env
+**Windows (WSL Ubuntu):**
+```bash
+cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
+code scripts/deploy-frontend.local.env
 ```
 
 **Edit `deploy-frontend.local.env`:**
@@ -846,7 +716,7 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
-**Windows (Git Bash or WSL):**
+**Windows (WSL Ubuntu):**
 ```bash
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
@@ -1078,10 +948,10 @@ curl -s "https://<app-service-name>.azurewebsites.net/health" | jq .
 curl -s "https://<swa-hostname>.azurestaticapps.net/api/health" | jq .
 ```
 
-**Windows PowerShell:**
-```powershell
-Invoke-RestMethod -Uri "https://<app-service-name>.azurewebsites.net/health"
-Invoke-RestMethod -Uri "https://<swa-hostname>.azurestaticapps.net/api/health"
+**Windows (WSL Ubuntu):**
+```bash
+curl -s "https://<app-service-name>.azurewebsites.net/health" | jq .
+curl -s "https://<swa-hostname>.azurestaticapps.net/api/health" | jq .
 ```
 
 ✅ **Checkpoint:** 200 OK。
@@ -1180,11 +1050,11 @@ az ad app delete --id <frontend-app-id>
 az ad app delete --id <backend-app-id>
 ```
 
-**Windows PowerShell:**
-```powershell
-Remove-AzResourceGroup -Name "<Resource-Group-Name>" -Force -AsJob
-Remove-AzADApplication -ObjectId <frontend-app-object-id>
-Remove-AzADApplication -ObjectId <backend-app-object-id>
+**Windows (WSL Ubuntu):**
+```bash
+az group delete --name <Resource-Group-Name> --yes --no-wait
+az ad app delete --id <frontend-app-id>
+az ad app delete --id <backend-app-id>
 ```
 
 ✅ **Checkpoint:** RG が削除された。
@@ -1204,7 +1074,7 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | Login fails with `AADSTS900144` | フロント runtime config が空 | `index.html` に `window.__APP_CONFIG__={...}` が注入されているか確認 |
 | API calls fail with 404 | Linked Backend 未設定 | SWA の Linked Backend を確認 |
 | `tsc: not found` during deploy | リモートビルド有効 | `SCM_DO_BUILD_DURING_DEPLOYMENT=false` を設定 |
-| Windows/Git Bash で作成した ZIP デプロイ後に Backend が起動しない | ZIP に `src\app.js` のような Windows 区切りパスが含まれる、または ZIP 構造が不正 | `materials\backend\dist` で `7z a -tzip ..\deploy.zip .\*` を実行して再作成し、再デプロイしてください。 |
+| Windows ネイティブシェルで ZIP を作成してデプロイ後に Backend が起動しない | ZIP が WSL 外で作成され、Windows 区切りパスが混入 | WSL で `./scripts/deploy-backend.sh` を再実行して再デプロイしてください。 |
 
 ### ログの確認
 
@@ -1218,14 +1088,14 @@ az webapp log download \
   --log-file /tmp/app-logs.zip
 ```
 
-**Windows PowerShell:**
-```powershell
+**Windows (WSL Ubuntu):**
+```bash
 az webapp log tail --resource-group <Resource-Group-Name> --name <app-service-name>
 
-az webapp log download `
-  --resource-group <Resource-Group-Name> `
-  --name <app-service-name> `
-  --log-file C:\Temp\app-logs.zip
+az webapp log download \
+  --resource-group <Resource-Group-Name> \
+  --name <app-service-name> \
+  --log-file /tmp/app-logs.zip
 ```
 
 ---

@@ -8,6 +8,11 @@
         "/^bash -n \\./scripts/deploy-backend\\.sh; if \\(\\$LASTEXITCODE -eq 0\\) \\{ 'OK' \\}$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "Add-Type": true,
+        "Start-Job": true,
+        "Receive-Job": true,
+        "Stop-Job": true,
+        "Remove-Job": true
     }
 }

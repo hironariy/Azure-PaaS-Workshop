@@ -153,82 +153,46 @@ Install these tools on your computer:
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
-| **Git Bash** | Latest | Run deployment scripts | Included with [Git for Windows](https://git-scm.com/download/win) |
-| **Azure PowerShell** | 12.0+ | Azure management | [Install Guide](https://docs.microsoft.com/powershell/azure/install-azure-powershell) |
-| **Bicep CLI** | Latest | Infrastructure as Code | [Install Guide](https://learn.microsoft.com/azure/azure-resource-manager/bicep/install#windows) |
-| **Node.js** | 22.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
-| **SWA CLI** | Latest | Deploy to Static Web Apps | `npm install -g @azure/static-web-apps-cli` |
-| **Azure CLI** | 2.60+ | For deployment scripts | [Install Guide](https://docs.microsoft.com/cli/azure/install-azure-cli) |
-| **7-Zip (7z)** | Latest | Create Linux-safe ZIP packages for backend deploy | [Download](https://www.7-zip.org/download.html) |
+| **WSL 2** | Latest | Linux runtime for all workshop commands | [Install Guide](https://learn.microsoft.com/windows/wsl/install) |
+| **Ubuntu (on WSL)** | 22.04+ | Recommended distro for workshop | [Get Ubuntu](https://apps.microsoft.com/detail/9PN20MSR04DW) |
+| **Azure CLI** | 2.60+ | Azure management (inside WSL) | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-linux) |
+| **Node.js** | 22.x LTS | Build frontend/backend (inside WSL) | [NodeSource Guide](https://github.com/nodesource/distributions) |
+| **SWA CLI** | Latest | Deploy to Static Web Apps (inside WSL) | `npm install -g @azure/static-web-apps-cli` |
+| **jq** | Latest | Parse JSON in script outputs | `sudo apt-get install -y jq` |
 
 <details>
-<summary>🗜️ 7-Zip: PATH setup (PowerShell + Git Bash)</summary>
+<summary>🪟 Windows policy: use WSL for all commands</summary>
 
-If `7z` is not recognized, add `C:\Program Files\7-Zip` to your **User PATH**.
+For this workshop, Windows users should run **all build/deploy/test commands in WSL (Ubuntu)**.
 
-```powershell
-# Add 7-Zip to User PATH (PowerShell)
-$sevenZipPath = 'C:\Program Files\7-Zip'
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if (-not ($userPath -split ';' | Where-Object { $_ -eq $sevenZipPath })) {
-  [Environment]::SetEnvironmentVariable('Path', "$userPath;$sevenZipPath", 'User')
-  Write-Host 'Added 7-Zip path to User PATH. Reopen terminals.'
-} else {
-  Write-Host '7-Zip path already exists in User PATH.'
-}
-```
-
-For Git Bash, reopen the terminal after PATH update. If `7z` is still not found, add this to `~/.bashrc`:
-
-```bash
-export PATH="$PATH:/c/Program Files/7-Zip"
-```
-
-Then run `source ~/.bashrc` and verify with `command -v 7z`.
-
-</details>
-
-<details>
-<summary>⏱️ Azure PowerShell: installation time note</summary>
-
-Installing Azure PowerShell modules may take **5-15 minutes**. The progress indicator appears at the **top of the VS Code terminal window** or PowerShell window. Please wait for the installation to complete before proceeding.
-
-Use `-Scope CurrentUser` if you don't have administrator privileges:
+Recommended first-time setup:
 
 ```powershell
-Install-Module -Name Az -Repository PSGallery -Force -Scope CurrentUser
+wsl --install -d Ubuntu
 ```
 
-</details>
+After installation:
+1. Reboot Windows.
+2. Open **Ubuntu** terminal.
+3. Run all commands from this README in that Ubuntu terminal.
 
-<details>
-<summary>⚠️ Bicep CLI: required on Windows</summary>
-
-Unlike Azure CLI (which auto-installs Bicep), Azure PowerShell requires manual Bicep CLI installation.
-
-**Recommended installation method (winget):**
-
-```powershell
-winget install -e --id Microsoft.Bicep
-```
-
-**Alternative methods:**
-- **Chocolatey:** `choco install bicep`
-- **Windows Installer:** [Download bicep-setup-win-x64.exe](https://github.com/Azure/bicep/releases/latest/download/bicep-setup-win-x64.exe)
-
-After installation, close and reopen your terminal, then verify:
-
-```powershell
-bicep --version
-# Expected: Bicep CLI version 0.x.x
-```
+Do not run deployment steps in Windows PowerShell or Git Bash.
 
 </details>
 
 <details>
 <summary>⚠️ Azure CLI: required for deployment scripts</summary>
 
-The deployment scripts (`deploy-backend.sh`, `deploy-frontend.sh`) use Azure CLI. Windows users should run these scripts in **Git Bash** or **WSL**, or use the equivalent PowerShell commands provided in each step.
+The deployment scripts (`deploy-backend.sh`, `deploy-frontend.sh`) use Azure CLI and are designed to run in Linux shell.
+On Windows, run them in **WSL Ubuntu**.
+
+</details>
+
+<details>
+<summary>📦 ZIP packaging on Windows</summary>
+
+Backend packaging is handled by the deployment script.
+When using WSL, Linux-compatible ZIPs are created correctly.
 
 </details>
 
@@ -257,19 +221,18 @@ swa --version
 # Expected: 2.x.x
 ```
 
-**Windows PowerShell:**
-```powershell
+**Windows (WSL Ubuntu):**
+```bash
 # Check Git
 git --version
 # Expected: git version 2.x.x
 
-# Check Azure PowerShell
-Get-InstalledModule -Name Az | Select-Object Name, Version
-# Expected: Az 12.x.x or newer
-# 💡 Alternative if above fails: Get-Module -Name Az.* -ListAvailable | Select-Object Name, Version
+# Check Azure CLI
+az --version
+# Expected: azure-cli 2.60.x or newer
 
-# Check Bicep CLI
-bicep --version
+# Check Bicep
+az bicep version
 # Expected: Bicep CLI version 0.x.x
 
 # Check Node.js
@@ -280,13 +243,9 @@ node --version
 swa --version
 # Expected: 2.x.x
 
-# Check Azure CLI (for deployment scripts)
-az --version
-# Expected: azure-cli 2.60.x or newer
-
-# Check 7-Zip (for backend ZIP packaging)
-7z | Select-Object -First 1
-# Expected: 7-Zip <version>
+# Check jq
+jq --version
+# Expected: jq-1.6 or newer
 ```
 
 > **📝 Need Docker?** Docker is only required for [local development](#22-local-development-environment-optional), not for Azure deployment.
@@ -345,8 +304,8 @@ git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
 cd Azure-PaaS-Workshop
 ```
 
-**Windows PowerShell:**
-```powershell
+**Windows (WSL Ubuntu):**
+```bash
 # Clone the repository
 git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
 
@@ -488,6 +447,8 @@ If you just want to deploy to Azure, skip to the next section.
 
 Follow these steps to deploy the application to Azure.
 
+> **Windows users:** Use **WSL (Ubuntu)** for all commands in this section.
+
 #### Step 1: Login to Azure
 
 **macOS/Linux (bash/zsh):**
@@ -502,16 +463,12 @@ az account show
 az account set --subscription "Your Subscription Name"
 ```
 
-**Windows PowerShell:**
-```powershell
-# Login to Azure
-Connect-AzAccount
-
-# Verify you're logged in
-Get-AzContext
-
-# (Optional) Set specific subscription if you have multiple
-Set-AzContext -Subscription "Your Subscription Name"
+**Windows (WSL Ubuntu):**
+```bash
+# Same commands as macOS/Linux
+az login
+az account show
+az account set --subscription "Your Subscription Name"
 ```
 
 > **💡 Multiple Tenants?** If you have access to multiple Entra ID tenants (e.g., personal and work accounts), you may need to specify the tenant explicitly:
@@ -521,12 +478,7 @@ Set-AzContext -Subscription "Your Subscription Name"
 > az login --tenant "your-tenant-id-or-domain.onmicrosoft.com"
 > ```
 > 
-> **Azure PowerShell:**
-> ```powershell
-> Connect-AzAccount -Tenant "your-tenant-id"
-> # Or set both tenant and subscription:
-> Set-AzContext -Tenant "your-tenant-id" -Subscription "Your Subscription Name"
-> ```
+> Windows users in WSL should use Azure CLI command above.
 > 
 > To find your tenant ID: Azure Portal → Microsoft Entra ID → Overview → Tenant ID
 
@@ -547,15 +499,11 @@ cp dev.bicepparam dev.local.bicepparam
 code dev.local.bicepparam
 ```
 
-**Windows PowerShell:**
-```powershell
-# Navigate to bicep folder
-cd materials\bicep
-
-# Copy template to local file (gitignored)
-Copy-Item dev.bicepparam dev.local.bicepparam
-
-# Edit with your values
+**Windows (WSL Ubuntu):**
+```bash
+# Same commands as macOS/Linux
+cd materials/bicep
+cp dev.bicepparam dev.local.bicepparam
 code dev.local.bicepparam
 ```
 
@@ -575,19 +523,12 @@ Generate `cosmosDbAdminPassword` with `openssl`:
 openssl rand -base64 16
 ```
 
-**Windows (Git Bash):**
+**Windows (WSL Ubuntu):**
 ```bash
 openssl rand -base64 16
 ```
 
-> **Windows note (if `openssl` is not installed):**
-> You can generate an equivalent strong random password in PowerShell and paste it into `dev.local.bicepparam`:
-> ```powershell
-> # Generates 16 random bytes and Base64-encodes them (similar to: openssl rand -base64 16)
-> $bytes = New-Object byte[] 16
-> [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-> [Convert]::ToBase64String($bytes)
-> ```
+> If `openssl` is missing in WSL, install it with `sudo apt-get install -y openssl`.
 
 Example `dev.local.bicepparam`:
 ```bicep
@@ -619,19 +560,14 @@ az deployment group create \
 # Note: Deployment takes approximately 10-15 minutes
 ```
 
-**Windows PowerShell:**
-```powershell
-# Create resource group (use your own name)
-New-AzResourceGroup -Name "<Resource-Group-Name>" -Location "japaneast"
-
-# Deploy infrastructure
-New-AzResourceGroupDeployment `
-  -Name "main"
-  -ResourceGroupName "<Resource-Group-Name>" `
-  -TemplateFile "main.bicep" `
-  -TemplateParameterFile "dev.local.bicepparam"
-
-# Note: Deployment takes approximately 10-15 minutes
+**Windows (WSL Ubuntu):**
+```bash
+# Same commands as macOS/Linux
+az group create --name <Resource-Group-Name> --location japaneast
+az deployment group create \
+  --resource-group <Resource-Group-Name> \
+  --template-file main.bicep \
+  --parameters dev.local.bicepparam
 ```
 
 > **💡 Multi-Group Workshops:** If multiple groups are deploying to the same subscription, use the `groupId` parameter to avoid naming conflicts:
@@ -645,15 +581,7 @@ New-AzResourceGroupDeployment `
 >   --parameters groupId='A'
 > ```
 > 
-> **Windows PowerShell:**
-> ```powershell
-> New-AzResourceGroupDeployment `
->   -Name "main" `
->   -ResourceGroupName "rg-blogapp-team-A" `
->   -TemplateFile "main.bicep" `
->   -TemplateParameterFile "dev.local.bicepparam" `
->   -groupId "A"
-> ```
+> **Windows (WSL Ubuntu):** use the Azure CLI command above with `--parameters groupId='A'`.
 
 **Verify Deployment:**
 
@@ -663,10 +591,10 @@ New-AzResourceGroupDeployment `
 az resource list --resource-group <Resource-Group-Name> --output table
 ```
 
-**Windows PowerShell:**
-```powershell
-# List deployed resources
-Get-AzResource -ResourceGroupName "<Resource-Group-Name>" | Format-Table Name, ResourceType
+**Windows (WSL Ubuntu):**
+```bash
+# Same command as macOS/Linux
+az resource list --resource-group <Resource-Group-Name> --output table
 ```
 
 ✅ **Checkpoint:** Bicep deployment completed successfully. You can see the resources in Azure Portal.
@@ -696,11 +624,13 @@ After deployment, you need to add the Static Web App URL to your Frontend app re
      --query "defaultHostname" -o tsv
    ```
 
-   **Windows PowerShell:**
-   ```powershell
-   # Get the SWA hostname
-   $swaName = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>")[0].Name
-   (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).DefaultHostname
+   **Windows (WSL Ubuntu):**
+   ```bash
+   # Same command as macOS/Linux
+   az staticwebapp show \
+     --name $(az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv) \
+     --resource-group <Resource-Group-Name> \
+     --query "defaultHostname" -o tsv
    ```
 
 2. **Add Redirect URI in Azure Portal:**
@@ -754,33 +684,7 @@ az ad app update \
 az ad app show --id "$FRONTEND_APP_ID" --query "spa.redirectUris" -o jsonc
 ```
 
-**Windows (PowerShell):**
-```powershell
-# Set your Frontend App Registration (Application / Client ID)
-$frontendAppId = "<entraFrontendClientId>"
-
-# Get the SWA hostname (same as Step 4.1)
-$swaName = az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv
-$swaHostname = az staticwebapp show --name $swaName --resource-group <Resource-Group-Name> --query "defaultHostname" -o tsv
-
-# Merge redirect URIs and update the app registration
-$existing = az ad app show --id $frontendAppId --query "spa.redirectUris" -o json | ConvertFrom-Json
-$toAdd = @("https://$swaHostname", "https://$swaHostname/")
-
-# Ensure this stays an array (even if there's only one value)
-$new = @($existing + $toAdd)
-$new = @($new | Sort-Object -Unique)
-
-# IMPORTANT (Windows): passing JSON like ["..."] through --set can lose double-quotes,
-# which triggers: "PrimitiveValue ... StartArray expected".
-# Use a Python-style list literal with single quotes instead.
-$newPyList = '[' + (($new | ForEach-Object { "'$_'" }) -join ',') + ']'
-
-az ad app update --id $frontendAppId --set "spa={}" --set "spa.redirectUris=$newPyList"
-
-# Verify
-az ad app show --id $frontendAppId --query "spa.redirectUris" -o jsonc
-```
+Windows users should run the **macOS/Linux Azure CLI** block above in WSL.
 
 ✅ **Checkpoint:** SWA URL added to Frontend app registration redirect URIs.
 
@@ -809,9 +713,9 @@ echo "App Service Name: $APP_SERVICE_NAME"
 ./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
 ```
 
-**Windows (Git Bash or WSL):**
+**Windows (WSL Ubuntu):**
 ```bash
-# Run in Git Bash or WSL
+# Run in WSL Ubuntu
 cd /path/to/Azure-PaaS-Workshop
 
 # Get the App Service name
@@ -822,63 +726,6 @@ APP_SERVICE_NAME=$(az deployment group show \
 
 # Deploy backend
 ./scripts/deploy-backend.sh <Resource-Group-Name> $APP_SERVICE_NAME
-```
-
-**Windows PowerShell (Alternative):**
-```powershell
-# Get the App Service name
-$deployment = Get-AzResourceGroupDeployment -ResourceGroupName "<Resource-Group-Name>" -Name "main"
-$appServiceName = $deployment.Outputs.appServiceName.Value
-Write-Host "App Service Name: $appServiceName"
-
-# Navigate to backend
-cd materials\backend
-
-# Install dependencies and build
-npm install
-npm run build
-
-# Create deployment package
-Copy-Item package.json, package-lock.json dist\
-Push-Location dist
-npm ci --omit=dev
-
-# Preferred on Windows for Linux App Service ZIP deploys: 7-Zip
-7z a -tzip ..\deploy.zip .\*
-
-# Optional: quick sanity check
-tar.exe -tf ..\deploy.zip | Select-Object -First 20
-Pop-Location
-
-# Configure App Service
-az webapp config appsettings set `
-  --resource-group "<Resource-Group-Name>" `
-  --name $appServiceName `
-  --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false"
-
-az webapp config set `
-  --resource-group "<Resource-Group-Name>" `
-  --name $appServiceName `
-  --startup-file "node src/app.js"
-
-# Deploy
-az webapp deploy `
-  --resource-group "<Resource-Group-Name>" `
-  --name $appServiceName `
-  --src-path deploy.zip `
-  --type zip `
-  --async true `
-  --clean true `
-  --restart true `
-  --track-status false
-
-# Wait and verify health
-Start-Sleep -Seconds 90
-Invoke-RestMethod -Uri "https://$appServiceName.azurewebsites.net/health"
-
-# Cleanup
-Remove-Item deploy.zip
-cd ..\..
 ```
 
 The script will:
@@ -906,13 +753,11 @@ cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
 code scripts/deploy-frontend.local.env
 ```
 
-**Windows PowerShell:**
-```powershell
-# Copy template to local config file (gitignored)
-Copy-Item scripts\deploy-frontend.template.env scripts\deploy-frontend.local.env
-
-# Edit with your Entra ID values
-code scripts\deploy-frontend.local.env
+**Windows (WSL Ubuntu):**
+```bash
+# Same commands as macOS/Linux
+cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
+code scripts/deploy-frontend.local.env
 ```
 
 **Edit `deploy-frontend.local.env`:**
@@ -930,70 +775,10 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
 ```
 
-**Windows (Git Bash or WSL):**
+**Windows (WSL Ubuntu):**
 ```bash
-# Run in Git Bash or WSL
+# Run in WSL Ubuntu
 ./scripts/deploy-frontend.sh <Resource-Group-Name>
-```
-
-**Windows PowerShell (Alternative):**
-```powershell
-# NOTE: This alternative uses PowerShell only (no Git Bash/WSL).
-# It expects you created scripts\deploy-frontend.local.env in the "Setup" section above.
-
-# Get SWA details
-$swaName = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>")[0].Name
-$swaHostname = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).DefaultHostname
-
-# Get deployment token (Azure PowerShell returns the secret JSON under .Property)
-$deploymentToken = ((Get-AzStaticWebAppSecret -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).Property | ConvertFrom-Json).apiKey
-
-# Build frontend
-cd materials\frontend
-npm install
-npm run build
-
-# Load Entra IDs from scripts\deploy-frontend.local.env (created in Setup)
-$envFile = Resolve-Path "..\..\scripts\deploy-frontend.local.env"
-Get-Content $envFile | ForEach-Object {
-  $line = $_.Trim()
-  if ($line -eq '' -or $line.StartsWith('#')) { return }
-  $parts = $line -split '=', 2
-  if ($parts.Length -ne 2) { return }
-  $name = $parts[0].Trim()
-  $value = $parts[1].Trim().Trim('"')
-  if ($name) { Set-Item -Path "Env:$name" -Value $value }
-}
-
-foreach ($name in 'ENTRA_TENANT_ID','ENTRA_FRONTEND_CLIENT_ID','ENTRA_BACKEND_CLIENT_ID') {
-  if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) {
-    throw "Required env var $name is empty. Check $envFile."
-  }
-}
-
-# Create config (inline injection into index.html)
-# The frontend expects uppercase keys (see materials/frontend/src/config/appConfig.ts)
-# Use a hashtable -> ConvertTo-Json to avoid PowerShell string escaping/parser errors.
-$configObj = @{
-  ENTRA_TENANT_ID = $env:ENTRA_TENANT_ID
-  ENTRA_FRONTEND_CLIENT_ID = $env:ENTRA_FRONTEND_CLIENT_ID
-  ENTRA_BACKEND_CLIENT_ID = $env:ENTRA_BACKEND_CLIENT_ID
-  API_BASE_URL = '/api'
-}
-$configJson = ($configObj | ConvertTo-Json -Compress)
-
-# Inject config into index.html
-$indexHtml = Get-Content dist\index.html -Raw
-
-# Replace placeholder whether it's null, already injected, or accidentally empty (window.__APP_CONFIG__=;)
-$indexHtml = $indexHtml -replace 'window\.__APP_CONFIG__=(null|\{.*?\}|);', ("window.__APP_CONFIG__=$configJson;")
-Set-Content dist\index.html $indexHtml
-
-# Deploy with SWA CLI
-# NOTE: SWA CLI defaults to --env preview; use production for the workshop URL
-swa deploy dist --deployment-token $deploymentToken --env production
-
-cd ..\..
 ```
 
 ✅ **Checkpoint:** Frontend deployed. SWA URL loads the blog application.
@@ -1025,24 +810,28 @@ curl -s "https://$APP_SERVICE_NAME.azurewebsites.net/health" | jq .
 curl -s "https://$SWA_HOSTNAME/api/health" | jq .
 ```
 
-**Windows PowerShell:**
-```powershell
-# Get URLs
-$deployment = Get-AzResourceGroupDeployment -ResourceGroupName "<Resource-Group-Name>" -Name "main"
-$appServiceName = $deployment.Outputs.appServiceName.Value
-$swaName = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>")[0].Name
-$swaHostname = (Get-AzStaticWebApp -ResourceGroupName "<Resource-Group-Name>" -Name $swaName).DefaultHostname
+**Windows (WSL Ubuntu):**
+```bash
+# Same commands as macOS/Linux
+APP_SERVICE_NAME=$(az deployment group show \
+  --resource-group <Resource-Group-Name> \
+  --name main \
+  --query "properties.outputs.appServiceName.value" -o tsv)
 
-Write-Host "=== Deployment URLs ==="
-Write-Host "Frontend: https://$swaHostname"
-Write-Host "API (via SWA): https://$swaHostname/api/health"
-Write-Host "API (direct): https://$appServiceName.azurewebsites.net/health"
+SWA_HOSTNAME=$(az staticwebapp show \
+  --name $(az staticwebapp list --resource-group <Resource-Group-Name> --query "[0].name" -o tsv) \
+  --resource-group <Resource-Group-Name> \
+  --query "defaultHostname" -o tsv)
 
-# Test endpoints
-Write-Host ""
-Write-Host "=== Testing Health Endpoints ==="
-Invoke-RestMethod -Uri "https://$appServiceName.azurewebsites.net/health"
-Invoke-RestMethod -Uri "https://$swaHostname/api/health"
+echo "=== Deployment URLs ==="
+echo "Frontend: https://$SWA_HOSTNAME"
+echo "API (via SWA): https://$SWA_HOSTNAME/api/health"
+echo "API (direct): https://$APP_SERVICE_NAME.azurewebsites.net/health"
+
+echo ""
+echo "=== Testing Health Endpoints ==="
+curl -s "https://$APP_SERVICE_NAME.azurewebsites.net/health" | jq .
+curl -s "https://$SWA_HOSTNAME/api/health" | jq .
 ```
 
 ✅ **Checkpoint:** Both health endpoints return `{"status":"healthy"}`. Frontend loads in browser.
@@ -1254,13 +1043,13 @@ curl -s "https://<app-service-name>.azurewebsites.net/health" | jq .
 curl -s "https://<swa-hostname>.azurestaticapps.net/api/health" | jq .
 ```
 
-**Windows PowerShell:**
-```powershell
+**Windows (WSL Ubuntu):**
+```bash
 # Backend health (direct)
-Invoke-RestMethod -Uri "https://<app-service-name>.azurewebsites.net/health"
+curl -s "https://<app-service-name>.azurewebsites.net/health" | jq .
 
 # Backend health (via SWA Linked Backend)
-Invoke-RestMethod -Uri "https://<swa-hostname>.azurestaticapps.net/api/health"
+curl -s "https://<swa-hostname>.azurestaticapps.net/api/health" | jq .
 ```
 
 Expected response:
@@ -1424,14 +1213,12 @@ az ad app delete --id <frontend-app-id>
 az ad app delete --id <backend-app-id>
 ```
 
-**Windows PowerShell:**
-```powershell
-# Delete resource group (removes all contained resources)
-Remove-AzResourceGroup -Name "<Resource-Group-Name>" -Force -AsJob
-
-# Optional: Delete Entra ID app registrations
-Remove-AzADApplication -ObjectId <frontend-app-object-id>
-Remove-AzADApplication -ObjectId <backend-app-object-id>
+**Windows (WSL Ubuntu):**
+```bash
+# Same commands as macOS/Linux
+az group delete --name <Resource-Group-Name> --yes --no-wait
+az ad app delete --id <frontend-app-id>
+az ad app delete --id <backend-app-id>
 ```
 
 ✅ **Checkpoint:** Resource group deleted. Verify in Azure Portal that no resources remain.
@@ -1448,10 +1235,10 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | Backend returns 502 | App not started yet | Wait 60-90 seconds; check logs |
 | Health check returns 401 | EasyAuth blocking `/health` | Verify `/health` is in `excludedPaths` |
 | Login redirect fails | Missing redirect URI | Add SWA URL to Entra ID app registration |
-| Login fails with `AADSTS900144` (missing `client_id`) | Frontend runtime config not injected (or injected as empty) | Re-run Step 6 PowerShell deploy: ensure `deploy-frontend.local.env` values are loaded and `index.html` contains `window.__APP_CONFIG__={...}` (not `null` or empty) |
+| Login fails with `AADSTS900144` (missing `client_id`) | Frontend runtime config not injected (or injected as empty) | Re-run Step 6 frontend deploy from WSL and ensure `deploy-frontend.local.env` has values |
 | API calls fail with 404 | Linked Backend not configured | Check SWA configuration in Azure Portal |
 | `tsc: not found` during deploy | Remote build enabled | Set `SCM_DO_BUILD_DURING_DEPLOYMENT=false` |
-| Backend fails after ZIP deploy from Windows/Git Bash | ZIP contains Windows-style paths (e.g., `src\app.js`) or invalid ZIP structure | Recreate ZIP from `materials\backend\dist` with `7z a -tzip ..\deploy.zip .\*`, then redeploy |
+| Backend fails after ZIP deploy from Windows native shell | ZIP was created outside WSL and contains Windows-style paths | Re-run backend deployment from WSL using `./scripts/deploy-backend.sh` |
 
 ### Viewing Logs
 
@@ -1467,16 +1254,15 @@ az webapp log download \
   --log-file /tmp/app-logs.zip
 ```
 
-**Windows PowerShell:**
-```powershell
-# Stream live logs (requires Azure CLI)
+**Windows (WSL Ubuntu):**
+```bash
+# Same commands as macOS/Linux
 az webapp log tail --resource-group <Resource-Group-Name> --name <app-service-name>
 
-# Download logs
-az webapp log download `
-  --resource-group <Resource-Group-Name> `
-  --name <app-service-name> `
-  --log-file C:\Temp\app-logs.zip
+az webapp log download \
+  --resource-group <Resource-Group-Name> \
+  --name <app-service-name> \
+  --log-file /tmp/app-logs.zip
 ```
 
 ---
