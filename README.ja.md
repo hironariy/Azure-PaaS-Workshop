@@ -726,12 +726,15 @@ Copy-Item package.json, package-lock.json dist\
 Push-Location dist
 npm ci --omit=dev
 
-# 重要: Linux App Service 向け ZIP は Compress-Archive を避ける
-# Compress-Archive は ZIP 内パスが src\app.js のようにバックスラッシュになる場合があり、
-# Linux 側で展開/起動に失敗することがあります。tar.exe で ZIP を作成してください。
-tar.exe -a -c -f ..\deploy.zip *
+# 重要: Windows では .NET ZipFile API で標準的な ZIP を作成する
+# 環境によっては tar.exe -a が「.zip 拡張子の TAR」を作ることがあり、
+# App Service で 0 files として展開されて 503 の原因になります。
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+if (Test-Path ..\deploy.zip) { Remove-Item ..\deploy.zip -Force }
+[System.IO.Compression.ZipFile]::CreateFromDirectory((Get-Location).Path, '..\deploy.zip')
 
-# 任意: 先頭20件を確認（src/app.js のように / 区切りであること）
+# 任意: 先頭20件を確認（実行できることを確認）
 tar.exe -tf ..\deploy.zip | Select-Object -First 20
 Pop-Location
 
@@ -1158,7 +1161,7 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | Login fails with `AADSTS900144` | フロント runtime config が空 | `index.html` に `window.__APP_CONFIG__={...}` が注入されているか確認 |
 | API calls fail with 404 | Linked Backend 未設定 | SWA の Linked Backend を確認 |
 | `tsc: not found` during deploy | リモートビルド有効 | `SCM_DO_BUILD_DURING_DEPLOYMENT=false` を設定 |
-| Windows PowerShell で作成した ZIP デプロイ後に Backend が起動しない | `Compress-Archive` で作った ZIP に `src\app.js` のような Windows 区切りパスが入り、Linux App Service 側で問題になる | `materials\backend\dist` 配下で `tar.exe -a -c -f ..\deploy.zip *` で ZIP を再作成して再デプロイ |
+| Windows/Git Bash で作成した ZIP デプロイ後に Backend が起動しない | 無効なアーカイブ（例: `.zip` 拡張子の TAR）または ZIP 構造不正 | `materials\backend\dist` 配下で PowerShell の `.NET ZipFile` API で ZIP を再作成して再デプロイ |
 
 ### ログの確認
 

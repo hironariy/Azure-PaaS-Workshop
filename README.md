@@ -794,12 +794,15 @@ npm run build
 Copy-Item package.json, package-lock.json dist\
 Push-Location dist
 npm ci --omit=dev
-# IMPORTANT (Windows): avoid Compress-Archive for Linux App Service deployments.
-# Compress-Archive can produce ZIP entries with backslashes (e.g., src\app.js),
-# which causes extraction/startup issues on Linux. Use tar.exe to create ZIP.
-tar.exe -a -c -f ..\deploy.zip *
+# IMPORTANT (Windows): use .NET ZipFile API for a standards-compliant ZIP.
+# In some environments, tar.exe -a may create a TAR file with a .zip extension,
+# which deploys as 0 files on App Service (leading to 503/Application Error).
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+if (Test-Path ..\deploy.zip) { Remove-Item ..\deploy.zip -Force }
+[System.IO.Compression.ZipFile]::CreateFromDirectory((Get-Location).Path, '..\deploy.zip')
 
-# Optional: quick sanity check (should print paths like src/app.js, not src\app.js)
+# Optional: quick sanity check (must pass)
 tar.exe -tf ..\deploy.zip | Select-Object -First 20
 Pop-Location
 
@@ -1404,7 +1407,7 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | Login fails with `AADSTS900144` (missing `client_id`) | Frontend runtime config not injected (or injected as empty) | Re-run Step 6 PowerShell deploy: ensure `deploy-frontend.local.env` values are loaded and `index.html` contains `window.__APP_CONFIG__={...}` (not `null` or empty) |
 | API calls fail with 404 | Linked Backend not configured | Check SWA configuration in Azure Portal |
 | `tsc: not found` during deploy | Remote build enabled | Set `SCM_DO_BUILD_DURING_DEPLOYMENT=false` |
-| Backend fails after ZIP deploy from Windows PowerShell | ZIP contains Windows-style paths (e.g., `src\app.js`) due to `Compress-Archive` | Recreate ZIP with `tar.exe -a -c -f ..\deploy.zip *` from `materials\backend\dist`, then redeploy |
+| Backend fails after ZIP deploy from Windows/Git Bash | Invalid archive (e.g., TAR saved as `.zip`) or wrong ZIP structure | Recreate package from `materials\backend\dist` using PowerShell `.NET ZipFile` API, then redeploy |
 
 ### Viewing Logs
 

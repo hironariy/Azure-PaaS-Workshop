@@ -69,21 +69,27 @@ npm ci --omit=dev
 
 # Create zip:
 # - Prefer 'zip' when available
-# - On Windows, use tar.exe to produce Linux-safe ZIP entry paths
-#   (Compress-Archive can produce backslash paths like src\app.js)
+# - On Windows/Git Bash fallback, use PowerShell .NET ZipFile API to create a real ZIP
+#   (tar.exe -a can create a TAR file with .zip extension in some environments)
 if command -v zip >/dev/null 2>&1; then
     zip -r ../deploy.zip .
-elif command -v tar.exe >/dev/null 2>&1; then
-    echo "  (zip not found — using tar.exe for ZIP creation)"
-    tar.exe -a -c -f ..\\deploy.zip *
 elif command -v powershell.exe >/dev/null 2>&1; then
-    echo "  (zip/tar.exe not found — using PowerShell tar.exe for ZIP creation)"
+    echo "  (zip not found — using PowerShell .NET ZipFile API)"
     powershell.exe -NoProfile -Command \
-        "tar.exe -a -c -f '..\\deploy.zip' *"
+        "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; if (Test-Path '..\\deploy.zip') { Remove-Item '..\\deploy.zip' -Force }; [System.IO.Compression.ZipFile]::CreateFromDirectory((Get-Location).Path, '..\\deploy.zip')"
 else
-    echo -e "${RED}Error: No ZIP tool found (zip/tar.exe/powershell.exe).${NC}"
-    echo "Please install zip (e.g., apt install zip) or ensure tar.exe is available on Windows."
+    echo -e "${RED}Error: No ZIP tool found (zip/powershell.exe).${NC}"
+    echo "Please install zip (e.g., apt install zip) or ensure powershell.exe is available on Windows."
     exit 1
+fi
+
+# Validate generated archive quickly (catches non-ZIP artifacts)
+if command -v unzip >/dev/null 2>&1; then
+    if ! unzip -t ../deploy.zip >/dev/null 2>&1; then
+        echo -e "${RED}Error: deploy.zip is invalid (archive test failed).${NC}"
+        echo "If running on Windows/Git Bash, ensure powershell.exe is available."
+        exit 1
+    fi
 fi
 
 cd ..
