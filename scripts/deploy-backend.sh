@@ -67,27 +67,46 @@ cp package.json package-lock.json dist/
 cd dist
 npm ci --omit=dev
 
-# Create zip:
-# - Prefer 'zip' when available
-# - On Windows/Git Bash fallback, use PowerShell .NET ZipFile API to create a real ZIP
-#   (tar.exe -a can create a TAR file with .zip extension in some environments)
-if command -v zip >/dev/null 2>&1; then
+# Create zip: prefer 'zip', then 7-Zip, then PowerShell fallback
+# (Git Bash on Windows often does not include zip)
+rm -f ../deploy.zip
+
+ZIP_TOOL=""
+if command -v zip >/dev/null 2>&1; then ZIP_TOOL="zip"; fi
+if [ -z "$ZIP_TOOL" ] && command -v 7z >/dev/null 2>&1; then ZIP_TOOL="7z"; fi
+if [ -z "$ZIP_TOOL" ] && command -v 7za >/dev/null 2>&1; then ZIP_TOOL="7za"; fi
+if [ -z "$ZIP_TOOL" ] && command -v 7zz >/dev/null 2>&1; then ZIP_TOOL="7zz"; fi
+if [ -z "$ZIP_TOOL" ] && command -v 7z.exe >/dev/null 2>&1; then ZIP_TOOL="7z.exe"; fi
+
+if [ "$ZIP_TOOL" = "zip" ]; then
     zip -r ../deploy.zip .
-elif command -v powershell.exe >/dev/null 2>&1; then
-    echo "  (zip not found — using PowerShell .NET ZipFile API)"
-    powershell.exe -NoProfile -Command \
-        "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; if (Test-Path '..\\deploy.zip') { Remove-Item '..\\deploy.zip' -Force }; [System.IO.Compression.ZipFile]::CreateFromDirectory((Get-Location).Path, '..\\deploy.zip')"
 else
-    echo -e "${RED}Error: No ZIP tool found (zip/powershell.exe).${NC}"
-    echo "Please install zip (e.g., apt install zip) or ensure powershell.exe is available on Windows."
-    exit 1
+    if [ -n "$ZIP_TOOL" ]; then
+        echo "  (zip not found — using $ZIP_TOOL)"
+        "$ZIP_TOOL" a -tzip ../deploy.zip ./* >/dev/null
+    else
+        if command -v powershell.exe >/dev/null 2>&1; then
+            echo "  (zip/7-Zip not found — using PowerShell Compress-Archive fallback)"
+            powershell.exe -NoProfile -Command \
+                "Compress-Archive -Path '.\\*' -DestinationPath '..\\deploy.zip' -Force"
+        else
+            echo -e "${RED}Error: No ZIP tool found (zip/7z/powershell.exe).${NC}"
+            echo "Install one of: zip, 7-Zip, or PowerShell (Compress-Archive)."
+            exit 1
+        fi
+    fi
 fi
 
-# Validate generated archive quickly (catches non-ZIP artifacts)
+# Validate archive and detect Windows-style separators when possible
 if command -v unzip >/dev/null 2>&1; then
     if ! unzip -t ../deploy.zip >/dev/null 2>&1; then
         echo -e "${RED}Error: deploy.zip is invalid (archive test failed).${NC}"
-        echo "If running on Windows/Git Bash, ensure powershell.exe is available."
+        exit 1
+    fi
+
+    if unzip -Z1 ../deploy.zip | awk 'index($0,"\\"){found=1; exit 0} END{exit(found?0:1)}'; then
+        echo -e "${RED}Error: deploy.zip contains Windows-style path separators (\\).${NC}"
+        echo "Repackage using zip or 7-Zip, then retry deployment."
         exit 1
     fi
 fi

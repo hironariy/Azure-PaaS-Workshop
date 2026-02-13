@@ -159,6 +159,7 @@ English version: [README.md](./README.md)
 | **Node.js** | 22.x LTS | ビルド | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | SWA デプロイ | `npm install -g @azure/static-web-apps-cli` |
 | **Azure CLI** | 2.60+ | デプロイスクリプト用 | [Install Guide](https://docs.microsoft.com/cli/azure/install-azure-cli) |
+| **7-Zip (7z)** | Latest | バックエンド ZIP 作成（Linux App Service 向け） | [Download](https://www.7-zip.org/download.html) |
 
 > **⏱️ Note: Azure PowerShell Installation Time**
 > Azure PowerShell のインストールは **5-15 分**かかることがあります。完了まで待ってから進めてください。
@@ -239,6 +240,10 @@ swa --version
 # Check Azure CLI (for deployment scripts)
 az --version
 # Expected: azure-cli 2.60.x or newer
+
+# Check 7-Zip (for backend ZIP packaging)
+7z | Select-Object -First 1
+# Expected: 7-Zip <version>
 ```
 
 > **📝 Need Docker?** Docker は [local development](#22-local-development-environment-optional) のみで必要です。Azure へのデプロイだけなら不要です。
@@ -726,15 +731,13 @@ Copy-Item package.json, package-lock.json dist\
 Push-Location dist
 npm ci --omit=dev
 
-# 重要: Windows では .NET ZipFile API で標準的な ZIP を作成する
-# 環境によっては tar.exe -a が「.zip 拡張子の TAR」を作ることがあり、
-# App Service で 0 files として展開されて 503 の原因になります。
-$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-if (Test-Path ..\deploy.zip) { Remove-Item ..\deploy.zip -Force }
-[System.IO.Compression.ZipFile]::CreateFromDirectory((Get-Location).Path, '..\deploy.zip')
+# Windows では Linux App Service 向け ZIP 作成に 7-Zip を推奨
+7z a -tzip ..\deploy.zip .\*
 
-# 任意: 先頭20件を確認（実行できることを確認）
+# フォールバック（Windows 区切りパスになる場合あり）
+# Compress-Archive -Path * -DestinationPath ..\deploy.zip -Force
+
+# 任意: 先頭20件を確認
 tar.exe -tf ..\deploy.zip | Select-Object -First 20
 Pop-Location
 
@@ -1161,7 +1164,7 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | Login fails with `AADSTS900144` | フロント runtime config が空 | `index.html` に `window.__APP_CONFIG__={...}` が注入されているか確認 |
 | API calls fail with 404 | Linked Backend 未設定 | SWA の Linked Backend を確認 |
 | `tsc: not found` during deploy | リモートビルド有効 | `SCM_DO_BUILD_DURING_DEPLOYMENT=false` を設定 |
-| Windows/Git Bash で作成した ZIP デプロイ後に Backend が起動しない | 無効なアーカイブ（例: `.zip` 拡張子の TAR）または ZIP 構造不正 | `materials\backend\dist` 配下で PowerShell の `.NET ZipFile` API で ZIP を再作成して再デプロイ |
+| Windows/Git Bash で作成した ZIP デプロイ後に Backend が起動しない | ZIP に `src\app.js` のような Windows 区切りパスが含まれる、または ZIP 構造が不正 | `materials\backend\dist` で `7z a -tzip ..\deploy.zip .\*` を実行して再作成し、再デプロイしてください。 |
 
 ### ログの確認
 

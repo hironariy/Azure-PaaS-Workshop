@@ -159,6 +159,7 @@ Install these tools on your computer:
 | **Node.js** | 22.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps | `npm install -g @azure/static-web-apps-cli` |
 | **Azure CLI** | 2.60+ | For deployment scripts | [Install Guide](https://docs.microsoft.com/cli/azure/install-azure-cli) |
+| **7-Zip (7z)** | Latest | Create Linux-safe ZIP packages for backend deploy | [Download](https://www.7-zip.org/download.html) |
 
 > **⏱️ Note: Azure PowerShell Installation Time**  
 > Installing Azure PowerShell modules may take **5-15 minutes**. The progress indicator appears at the **top of the VS Code terminal window** or PowerShell window. Please wait for the installation to complete before proceeding.
@@ -239,6 +240,10 @@ swa --version
 # Check Azure CLI (for deployment scripts)
 az --version
 # Expected: azure-cli 2.60.x or newer
+
+# Check 7-Zip (for backend ZIP packaging)
+7z | Select-Object -First 1
+# Expected: 7-Zip <version>
 ```
 
 > **📝 Need Docker?** Docker is only required for [local development](#22-local-development-environment-optional), not for Azure deployment.
@@ -794,15 +799,14 @@ npm run build
 Copy-Item package.json, package-lock.json dist\
 Push-Location dist
 npm ci --omit=dev
-# IMPORTANT (Windows): use .NET ZipFile API for a standards-compliant ZIP.
-# In some environments, tar.exe -a may create a TAR file with a .zip extension,
-# which deploys as 0 files on App Service (leading to 503/Application Error).
-$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-if (Test-Path ..\deploy.zip) { Remove-Item ..\deploy.zip -Force }
-[System.IO.Compression.ZipFile]::CreateFromDirectory((Get-Location).Path, '..\deploy.zip')
 
-# Optional: quick sanity check (must pass)
+# Preferred on Windows for Linux App Service ZIP deploys: 7-Zip
+7z a -tzip ..\deploy.zip .\*
+
+# Fallback only (may create Windows-style path separators):
+# Compress-Archive -Path * -DestinationPath ..\deploy.zip -Force
+
+# Optional: quick sanity check
 tar.exe -tf ..\deploy.zip | Select-Object -First 20
 Pop-Location
 
@@ -1407,7 +1411,7 @@ Remove-AzADApplication -ObjectId <backend-app-object-id>
 | Login fails with `AADSTS900144` (missing `client_id`) | Frontend runtime config not injected (or injected as empty) | Re-run Step 6 PowerShell deploy: ensure `deploy-frontend.local.env` values are loaded and `index.html` contains `window.__APP_CONFIG__={...}` (not `null` or empty) |
 | API calls fail with 404 | Linked Backend not configured | Check SWA configuration in Azure Portal |
 | `tsc: not found` during deploy | Remote build enabled | Set `SCM_DO_BUILD_DURING_DEPLOYMENT=false` |
-| Backend fails after ZIP deploy from Windows/Git Bash | Invalid archive (e.g., TAR saved as `.zip`) or wrong ZIP structure | Recreate package from `materials\backend\dist` using PowerShell `.NET ZipFile` API, then redeploy |
+| Backend fails after ZIP deploy from Windows/Git Bash | ZIP contains Windows-style paths (e.g., `src\app.js`) or invalid ZIP structure | Recreate ZIP from `materials\backend\dist` with `7z a -tzip ..\deploy.zip .\*`, then redeploy |
 
 ### Viewing Logs
 

@@ -4,6 +4,10 @@
         "npm install": true,
         "npm run dev": true,
         "unzip": true,
-        "zipinfo": true
+        "zipinfo": true,
+        "/^bash -n \\./scripts/deploy-backend\\.sh; if \\(\\$LASTEXITCODE -eq 0\\) \\{ 'OK' \\}$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }
