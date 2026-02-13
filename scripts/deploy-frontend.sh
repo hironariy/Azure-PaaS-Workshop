@@ -60,6 +60,12 @@ echo -e "${YELLOW}Step 0: Loading Entra ID configuration...${NC}"
 
 if [ -f "$LOCAL_ENV_FILE" ]; then
     echo "  Loading from: $LOCAL_ENV_FILE"
+    # Normalize CRLF to LF if file was edited on Windows
+    if grep -q $'\r' "$LOCAL_ENV_FILE"; then
+        echo "  Detected CRLF line endings; converting to LF..."
+        sed -i.bak $'s/\r$//' "$LOCAL_ENV_FILE"
+        rm -f "$LOCAL_ENV_FILE.bak"
+    fi
     # shellcheck source=/dev/null
     source "$LOCAL_ENV_FILE"
 else
