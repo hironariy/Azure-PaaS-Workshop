@@ -523,7 +523,7 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
 
 ---
 
-### 2.2 Windows Fast Path（PowerShell / WSL2不要） <a id="22-windows-fast-path-powershell-no-wsl2"></a>
+### 2.2 Windows Fast Path（PowerShell + Azure CLI で完結 / WSL2不要） <a id="22-windows-fast-path-powershell-no-wsl2"></a>
 
 このパスは、Windows ユーザーが **WSL2 / GitHub Actions なし** で短時間にハンズオンを完了するための最短導線です。
 （同等の手順は macOS/Linux でも bash コマンドに置き換えて実行できます。）
@@ -575,6 +575,8 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
   ```
 
   このデプロイで、Bicep によりワークショップで必要なリソース一式（DocumentDB / Key Vault / App Service / Static Web Apps / ネットワーク / 監視）を作成します。
+
+  > **重要:** デプロイ後は、SWA ドメインを Entra ID のリダイレクト先に追加してください。手順は [手順 4: Entra ID の Redirect URI を更新](#step4-update-redirect-uri) を参照してください。
 
 4. **まずバックエンドの動作確認**
   ```powershell
@@ -852,7 +854,7 @@ az resource list --resource-group <Resource-Group-Name> --output table
 
 ✅ **Checkpoint:** Bicep デプロイが完了し、リソースが見える。
 
-#### 手順 4: Entra ID の Redirect URI を更新
+#### 手順 4: Entra ID の Redirect URI を更新 <a id="step4-update-redirect-uri"></a>
 
 デプロイ後、Frontend アプリ登録に Static Web Apps の URL を追加します。
 
