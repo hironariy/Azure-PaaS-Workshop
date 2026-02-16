@@ -548,6 +548,8 @@ This path is optimized for workshop speed on Windows and avoids both WSL2 and Gi
   az account set --subscription "<Your Subscription Name>"
   ```
 
+  > **💡 Using multiple tenants?** See [Multiple Tenants tips](#multiple-tenants-tip).
+
 2. **Create resource group and App Service (Linux container)**
   ```powershell
   $rg = "<Resource-Group-Name>"
@@ -667,6 +669,7 @@ az account show
 az account set --subscription "Your Subscription Name"
 ```
 
+<a id="multiple-tenants-tip"></a>
 > **💡 Multiple Tenants?** If you have access to multiple Entra ID tenants (e.g., personal and work accounts), you may need to specify the tenant explicitly:
 > 
 > **Azure CLI:**

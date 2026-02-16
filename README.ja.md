@@ -544,6 +544,8 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
   az account set --subscription "<Your Subscription Name>"
   ```
 
+  > **💡 複数テナントを利用している場合:** [Multiple Tenants? の Tips](#multiple-tenants-tip) を参照してください。
+
 2. **リソース作成（App Service for Linux + コンテナ）**
   ```powershell
   $rg = "<Resource-Group-Name>"
@@ -664,6 +666,7 @@ az account show
 az account set --subscription "Your Subscription Name"
 ```
 
+<a id="multiple-tenants-tip"></a>
 > **💡 Multiple Tenants?**
 > 複数テナントにアクセスできる場合は tenant 指定が必要なことがあります。
 >
