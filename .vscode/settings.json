@@ -13,6 +13,7 @@
         "Start-Job": true,
         "Receive-Job": true,
         "Stop-Job": true,
-        "Remove-Job": true
+        "Remove-Job": true,
+        "docker buildx": true
     }
 }

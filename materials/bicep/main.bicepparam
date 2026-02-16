@@ -32,6 +32,15 @@ param location = 'japaneast'
 // Example: 'blogapp' → creates 'app-blogapp-prod', 'kv-blogapp-prod', etc.
 param baseName = 'blogapp'
 
+// Deployment mode
+// - 'standard': existing workshop flow (App Service code deployment + SWA linked backend)
+// - 'fastpath-container': prebuilt container image on App Service (no SWA linked backend deployment)
+param deploymentMode = 'standard'
+
+// REQUIRED only when deploymentMode = 'fastpath-container'
+// Example: 'docker.io/your-org/blogapp-api@sha256:xxxxxxxx...'
+param appServiceContainerImage = ''
+
 // =============================================================================
 // Multi-Group Workshop Support
 // =============================================================================

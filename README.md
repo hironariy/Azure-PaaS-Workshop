@@ -28,8 +28,10 @@ A hands-on workshop for learning Azure PaaS patterns through building and deploy
   - [1.4 Architecture Overview](#14-architecture-overview)
 - [2. How to Deploy](#2-how-to-deploy)
   - [2.1 Prerequisites](#21-prerequisites)
-  - [2.2 Local Development Environment (Optional)](#22-local-development-environment-optional)
-  - [2.3 Azure Deployment](#23-azure-deployment)
+  - [2.2 Windows Fast Path (PowerShell, No WSL2)](#22-windows-fast-path-powershell-no-wsl2)
+  - [2.3 Local Development Environment (Optional)](#23-local-development-environment-optional)
+  - [2.4 Standard Azure Deployment](#24-standard-azure-deployment)
+  - [2.5 Advanced Path: GitHub Actions (Alternative)](#25-advanced-path-github-actions-alternative)
 - [3. Testing the Application](#3-testing-the-application)
 - [4. IaaS vs PaaS Comparison](#4-iaas-vs-paas-comparison)
 - [5. Cost Estimate](#5-cost-estimate)
@@ -124,7 +126,9 @@ The sample application is a **multi-user blog platform** with the following feat
 This section explains how to deploy the application to Azure.
 
 > **📝 Looking for local development setup?**
-> See [Section 2.2](#22-local-development-environment-optional) or the [Local Development Guide](docs/local-development-setup.md) for running the application on your local machine.
+> See [Section 2.3](#23-local-development-environment-optional) or the [Local Development Guide](docs/local-development-setup.md) for running the application on your local machine.
+
+> **⚡ New for Windows users:** If your goal is a fast workshop start with PowerShell only, begin with [Section 2.2](#22-windows-fast-path-powershell-no-wsl2) and use instructor-provided prebuilt container images.
 
 ### 2.1 Prerequisites
 
@@ -309,7 +313,7 @@ pwsh --version
 # Expected: PowerShell 7.x.x
 ```
 
-> **📝 Need Docker?** Docker is only required for [local development](#22-local-development-environment-optional), not for Azure deployment.
+> **📝 Need Docker?** Docker is only required for [local development](#23-local-development-environment-optional), not for Azure deployment.
 
 ✅ **Checkpoint:** All tools installed and versions verified.
 
@@ -375,7 +379,7 @@ cd Azure-PaaS-Workshop
 ```
 
 > **💡 Planning to use GitHub Actions?**
-> If you want to set up CI/CD later (see [Advanced: GitHub Actions Deployment](#-advanced-github-actions-deployment-alternative---not-verified)), you should create your own repository from the template instead of cloning directly:
+> If you want to set up CI/CD later (see [Advanced Path: GitHub Actions](#25-advanced-path-github-actions-alternative)), you should create your own repository from the template instead of cloning directly:
 > 1. Go to [https://github.com/hironariy/Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop)
 > 2. Click the green **"Use this template"** → **"Create a new repository"**
 > 3. Set visibility to **Public** (required for free GitHub Actions)
@@ -491,7 +495,92 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
 
 ---
 
-### 2.2 Local Development Environment (Optional)
+### 2.2 Windows Fast Path (PowerShell, No WSL2)
+
+This path is optimized for workshop speed on Windows and avoids both WSL2 and GitHub Actions.
+
+**What this path changes:**
+- Uses **instructor-provided prebuilt Docker Hub images** (public)
+- Deploys with **Azure CLI + PowerShell only**
+- Skips local build, local Docker, and workflow setup
+
+**Recommended for:**
+- Students unfamiliar with Linux shell, WSL2, or CI/CD setup
+- Time-boxed classes where the priority is fast PaaS deployment experience
+
+#### Fast Path Steps
+
+1. **Login and choose subscription**
+  ```powershell
+  az login
+  az account set --subscription "<Your Subscription Name>"
+  ```
+
+2. **Create resource group and App Service (Linux container)**
+  ```powershell
+  $rg = "<Resource-Group-Name>"
+  $location = "japaneast"
+  $plan = "<AppServicePlan-Name>"
+  $webapp = "<WebApp-Name>"  # must be globally unique
+  $image = "docker.io/hironariy/azure-paas-workshop-backend@sha256:78a6d0dd1f0055628b80f5e0cbc0f727a9e4dae8f77d9bc24061c66d1e08fac6"  # published example image
+
+  az group create --name $rg --location $location
+  az appservice plan create --name $plan --resource-group $rg --is-linux --sku B1
+  az webapp create --resource-group $rg --plan $plan --name $webapp --deployment-container-image-name $image
+
+  # Basic hardening
+  az webapp update --resource-group $rg --name $webapp --https-only true
+  az webapp config set --resource-group $rg --name $webapp --min-tls-version 1.2 --ftps-state Disabled
+  ```
+
+3. **Store connection string in Key Vault (recommended)**
+  ```powershell
+  $kv = "<KeyVault-Name>"  # must be globally unique
+
+  # Create Key Vault and assign managed identity to App Service
+  az keyvault create --name $kv --resource-group $rg --location $location
+  $principalId = az webapp identity assign --resource-group $rg --name $webapp --query principalId -o tsv
+  az keyvault set-policy --name $kv --object-id $principalId --secret-permissions get list
+
+  # Prompt secret input (not echoed)
+  $secureConn = Read-Host "Enter Cosmos/MongoDB connection string" -AsSecureString
+  $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureConn)
+  $plainConn = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+  az keyvault secret set --vault-name $kv --name "CosmosConnectionString" --value $plainConn
+  [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+  Remove-Variable plainConn, secureConn
+  ```
+
+4. **Set application settings (no plaintext secret in app settings)**
+  ```powershell
+  $secretUri = az keyvault secret show --vault-name $kv --name "CosmosConnectionString" --query id -o tsv
+
+  az webapp config appsettings set --resource-group $rg --name $webapp --settings `
+    NODE_ENV=production `
+    WEBSITES_PORT=8080 `
+    COSMOS_CONNECTION_STRING="@Microsoft.KeyVault(SecretUri=$secretUri)" `
+    ENTRA_TENANT_ID="<tenant-id>" `
+    ENTRA_BACKEND_CLIENT_ID="<backend-client-id>"
+  ```
+
+5. **Restart and verify deployment**
+  ```powershell
+  az webapp restart --resource-group $rg --name $webapp
+
+  az webapp show --resource-group $rg --name $webapp --query defaultHostName -o tsv
+  Invoke-RestMethod "https://<WebApp-Name>.azurewebsites.net/health" | ConvertTo-Json
+  ```
+
+✅ **Checkpoint:** App Service container is running and health endpoint returns `healthy`.
+
+> **Security notes (Fast Path):**
+> - Do not commit secrets to files or repository variables.
+> - Prefer image digest (`@sha256`) over mutable tags.
+> - Use Key Vault references for sensitive settings; avoid plaintext `MONGODB_URI` in commands.
+
+---
+
+### 2.3 Local Development Environment (Optional)
 
 > **📖 Full Guide:** For local development setup, see the [Local Development Guide](docs/local-development-setup.md).
 
@@ -504,7 +593,7 @@ If you just want to deploy to Azure, skip to the next section.
 
 ---
 
-### 2.3 Azure Deployment
+### 2.4 Standard Azure Deployment
 
 Follow these steps to deploy the application to Azure.
 
@@ -837,7 +926,7 @@ If you are on Windows without WSL2, use PowerShell with equivalent Azure CLI com
 
 ✅ **Checkpoint:** SWA URL added to Frontend app registration redirect URIs.
 
-> **🚀 Prefer CI/CD?** If you'd rather deploy via GitHub Actions instead of the manual steps below, skip to the [Advanced: GitHub Actions Deployment](#-advanced-github-actions-deployment-alternative---not-verified) section.
+> **🚀 Prefer CI/CD?** If you'd rather deploy via GitHub Actions instead of the manual steps below, skip to the [Advanced Path: GitHub Actions](#25-advanced-path-github-actions-alternative) section.
 
 #### Step 5: Deploy Backend to App Service
 
@@ -878,7 +967,7 @@ APP_SERVICE_NAME=$(az deployment group show \
 ```
 
 **Windows (no WSL2, GitHub Actions):**
-See [Advanced: GitHub Actions Deployment (Alternative - Not Verified)](#-advanced-github-actions-deployment-alternative---not-verified).
+See [Advanced Path: GitHub Actions](#25-advanced-path-github-actions-alternative).
 
 The script will:
 1. Build the TypeScript backend
@@ -934,7 +1023,7 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
 **Windows (no WSL2, GitHub Actions):**
-See [Advanced: GitHub Actions Deployment (Alternative - Not Verified)](#-advanced-github-actions-deployment-alternative---not-verified).
+See [Advanced Path: GitHub Actions](#25-advanced-path-github-actions-alternative).
 
 ✅ **Checkpoint:** Frontend deployed. SWA URL loads the blog application.
 
@@ -1010,8 +1099,10 @@ Invoke-RestMethod "https://$swaHostname/api/health" | ConvertTo-Json
 
 ---
 
+### 2.5 Advanced Path: GitHub Actions (Alternative)
+
 <details>
-<summary>🚀 <strong>[Advanced] GitHub Actions Deployment (Alternative - Not Verified)</strong></summary>
+<summary>🚀 <strong>GitHub Actions Deployment Details (Not Verified)</strong></summary>
 
 > ⚠️ **Note:** This section describes CI/CD deployment using GitHub Actions. This method has not been fully verified and is provided as an alternative for teams who prefer automated deployments.
 

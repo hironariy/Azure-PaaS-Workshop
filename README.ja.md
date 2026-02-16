@@ -28,8 +28,10 @@ English version: [README.md](./README.md)
   - [1.4 アーキテクチャ概要](#14-architecture-overview)
 - [2. デプロイ手順](#2-how-to-deploy)
   - [2.1 事前準備](#21-prerequisites)
-  - [2.2 ローカル開発環境（任意）](#22-local-development-environment-optional)
-  - [2.3 Azure へのデプロイ](#23-azure-deployment)
+  - [2.2 Windows Fast Path（PowerShell / WSL2不要）](#22-windows-fast-path-powershell-no-wsl2)
+  - [2.3 ローカル開発環境（任意）](#23-local-development-environment-optional)
+  - [2.4 標準デプロイ（Bicep + 手動デプロイ）](#24-standard-azure-deployment)
+  - [2.5 上級パス: GitHub Actions（代替）](#25-advanced-path-github-actions-alternative)
 - [3. アプリケーションのテスト](#3-testing-the-application)
 - [4. IaaS と PaaS の比較](#4-iaas-vs-paas-comparison)
 - [5. 費用見積もり（概算）](#5-cost-estimate)
@@ -124,7 +126,9 @@ English version: [README.md](./README.md)
 このセクションでは、Azure にアプリをデプロイする手順を説明します。
 
 > **📝 ローカル開発を探している場合**
-> [Section 2.2](#22-local-development-environment-optional) または [Local Development Guide](docs/local-development-setup.ja.md) を参照してください。
+> [Section 2.3](#23-local-development-environment-optional) または [Local Development Guide](docs/local-development-setup.ja.md) を参照してください。
+
+> **⚡ Windows 最短導線:** PowerShell のみで短時間に進めたい場合は、[Section 2.2](#22-windows-fast-path-powershell-no-wsl2) から開始してください。
 
 ### 2.1 事前準備 <a id="21-prerequisites"></a>
 
@@ -309,7 +313,7 @@ pwsh --version
 # Expected: PowerShell 7.x.x
 ```
 
-> **📝 Need Docker?** Docker は [local development](#22-local-development-environment-optional) のみで必要です。Azure へのデプロイだけなら不要です。
+> **📝 Need Docker?** Docker は [local development](#23-local-development-environment-optional) のみで必要です。Azure へのデプロイだけなら不要です。
 
 ✅ **Checkpoint:** 必要ツールがインストールできた。
 
@@ -375,7 +379,7 @@ cd Azure-PaaS-Workshop
 ```
 
 > **💡 Planning to use GitHub Actions?**
-> 後で CI/CD（[Advanced: GitHub Actions Deployment](#-advanced-github-actions-deployment-alternative---not-verified)）を使う場合は、テンプレートから自分のリポジトリを作るのがおすすめです。
+> 後で CI/CD（[上級パス: GitHub Actions](#25-advanced-path-github-actions-alternative)）を使う場合は、テンプレートから自分のリポジトリを作るのがおすすめです。
 > 1. https://github.com/hironariy/Azure-PaaS-Workshop を開く
 > 2. **"Use this template"** → **"Create a new repository"**
 > 3. Visibility を **Public**（無料 Actions 前提の場合）
@@ -487,7 +491,90 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
 
 ---
 
-### 2.2 ローカル開発環境（任意） <a id="22-local-development-environment-optional"></a>
+### 2.2 Windows Fast Path（PowerShell / WSL2不要） <a id="22-windows-fast-path-powershell-no-wsl2"></a>
+
+このパスは、Windows ユーザーが **WSL2 / GitHub Actions なし** で短時間にハンズオンを完了するための最短導線です。
+
+**このパスの特徴:**
+- 講師が事前に用意した **Docker Hub の公開済みコンテナイメージ** を使用
+- **Azure CLI + PowerShell** のみで実施
+- ローカルビルド、ローカル Docker、CI/CD 構築をスキップ
+
+**推奨対象:**
+- Linux シェルや WSL2 に不慣れな受講者
+- 限られた時間で PaaS の体験を優先したいクラス
+
+#### Fast Path 手順
+
+1. **Azure にログインし、サブスクリプションを選択**
+  ```powershell
+  az login
+  az account set --subscription "<Your Subscription Name>"
+  ```
+
+2. **リソース作成（App Service for Linux + コンテナ）**
+  ```powershell
+  $rg = "<Resource-Group-Name>"
+  $location = "japaneast"
+  $plan = "<AppServicePlan-Name>"
+  $webapp = "<WebApp-Name>"  # globally unique
+  $image = "docker.io/hironariy/azure-paas-workshop-backend@sha256:78a6d0dd1f0055628b80f5e0cbc0f727a9e4dae8f77d9bc24061c66d1e08fac6"  # 公開済みサンプルイメージ
+
+  az group create --name $rg --location $location
+  az appservice plan create --name $plan --resource-group $rg --is-linux --sku B1
+  az webapp create --resource-group $rg --plan $plan --name $webapp --deployment-container-image-name $image
+
+  # 最低限のハードニング
+  az webapp update --resource-group $rg --name $webapp --https-only true
+  az webapp config set --resource-group $rg --name $webapp --min-tls-version 1.2 --ftps-state Disabled
+  ```
+
+3. **接続文字列は Key Vault に保存（推奨）**
+  ```powershell
+  $kv = "<KeyVault-Name>"  # globally unique
+
+  az keyvault create --name $kv --resource-group $rg --location $location
+  $principalId = az webapp identity assign --resource-group $rg --name $webapp --query principalId -o tsv
+  az keyvault set-policy --name $kv --object-id $principalId --secret-permissions get list
+
+  # 画面に表示しないで入力
+  $secureConn = Read-Host "Enter Cosmos/MongoDB connection string" -AsSecureString
+  $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureConn)
+  $plainConn = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+  az keyvault secret set --vault-name $kv --name "CosmosConnectionString" --value $plainConn
+  [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+  Remove-Variable plainConn, secureConn
+  ```
+
+4. **アプリ設定を反映（平文シークレットを直接設定しない）**
+  ```powershell
+  $secretUri = az keyvault secret show --vault-name $kv --name "CosmosConnectionString" --query id -o tsv
+
+  az webapp config appsettings set --resource-group $rg --name $webapp --settings `
+    NODE_ENV=production `
+    WEBSITES_PORT=8080 `
+    COSMOS_CONNECTION_STRING="@Microsoft.KeyVault(SecretUri=$secretUri)" `
+    ENTRA_TENANT_ID="<tenant-id>" `
+    ENTRA_BACKEND_CLIENT_ID="<backend-client-id>"
+  ```
+
+5. **再起動して動作確認**
+  ```powershell
+  az webapp restart --resource-group $rg --name $webapp
+  az webapp show --resource-group $rg --name $webapp --query defaultHostName -o tsv
+  Invoke-RestMethod "https://<WebApp-Name>.azurewebsites.net/health" | ConvertTo-Json
+  ```
+
+✅ **Checkpoint:** App Service コンテナが起動し、health endpoint が `healthy` を返す。
+
+> **Security notes（Fast Path）:**
+> - シークレットをリポジトリや設定ファイルへコミットしない
+> - mutable tag より `@sha256` digest 固定を優先
+> - 機密値は Key Vault 参照で渡し、平文設定を避ける
+
+---
+
+### 2.3 ローカル開発環境（任意） <a id="23-local-development-environment-optional"></a>
 
 > **📖 Full Guide:** ローカル開発の詳細は [Local Development Guide](docs/local-development-setup.ja.md) を参照してください。
 
@@ -500,7 +587,7 @@ Azure へデプロイするだけなら、次へ進んでください。
 
 ---
 
-### 2.3 Azure へのデプロイ <a id="23-azure-deployment"></a>
+### 2.4 標準デプロイ（Bicep + 手動デプロイ） <a id="24-standard-azure-deployment"></a>
 
 以下の手順で Azure へデプロイします。
 
@@ -588,6 +675,16 @@ Copy-Item .\dev.bicepparam .\dev.local.bicepparam
 code .\dev.local.bicepparam
 ```
 
+> **FastPath モード用テンプレート（コンテナ前提）**
+> - 開発向け: `materials/bicep/dev.fastpath.bicepparam`
+> - 本番向け: `materials/bicep/main.fastpath.bicepparam`
+>
+> 例（PowerShell）:
+> ```powershell
+> Copy-Item .\dev.fastpath.bicepparam .\dev.fastpath.local.bicepparam
+> code .\dev.fastpath.local.bicepparam
+> ```
+
 **Required Parameters:**
 
 | Parameter | Description | How to Get |
@@ -624,7 +721,7 @@ Example `dev.local.bicepparam`:
 ```bicep
 using 'main.bicep'
 
-param environmentName = 'dev'
+param environment = 'dev'
 param location = 'japaneast'
 param entraTenantId = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
 param entraBackendClientId = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
@@ -801,7 +898,7 @@ WSL2 なしの Windows 環境では、PowerShell で等価な Azure CLI コマ�
 
 ✅ **Checkpoint:** Redirect URI に SWA URL を追加できた。
 
-> **🚀 Prefer CI/CD?** 手動デプロイではなく GitHub Actions を使いたい場合は、[Advanced: GitHub Actions Deployment](#-advanced-github-actions-deployment-alternative---not-verified) へ進んでください。
+> **🚀 Prefer CI/CD?** 手動デプロイではなく GitHub Actions を使いたい場合は、[上級パス: GitHub Actions](#25-advanced-path-github-actions-alternative) へ進んでください。
 
 #### 手順 5: バックエンドを App Service にデプロイ
 
@@ -836,7 +933,7 @@ APP_SERVICE_NAME=$(az deployment group show \
 ```
 
 **Windows（WSL2 なし / GitHub Actions）:**
-[上級: GitHub Actions によるデプロイ（代替・未検証）](#-advanced-github-actions-deployment-alternative---not-verified) を参照してください。
+[上級パス: GitHub Actions](#25-advanced-path-github-actions-alternative) を参照してください。
 
 ✅ **Checkpoint:** `/health` が `{"status":"healthy"}` を返す。
 
@@ -878,7 +975,7 @@ ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
 **Windows（WSL2 なし / GitHub Actions）:**
-[上級: GitHub Actions によるデプロイ（代替・未検証）](#-advanced-github-actions-deployment-alternative---not-verified) を参照してください。
+[上級パス: GitHub Actions](#25-advanced-path-github-actions-alternative) を参照してください。
 
 ✅ **Checkpoint:** SWA の URL でアプリが表示できる。
 
@@ -927,6 +1024,8 @@ Invoke-RestMethod "https://$swaHostname/api/health" | ConvertTo-Json
 ```
 
 ---
+
+### 2.5 上級パス: GitHub Actions（代替） <a id="25-advanced-path-github-actions-alternative"></a>
 
 <a id="-advanced-github-actions-deployment-alternative---not-verified"></a>
 <details>

@@ -54,6 +54,16 @@ param swaUrl string = ''
 ])
 param sku string = 'B1'
 
+@description('Runtime mode for App Service: standard (Node.js code deploy) or fastpath-container (prebuilt container image)')
+@allowed([
+  'standard'
+  'fastpath-container'
+])
+param runtimeMode string = 'standard'
+
+@description('Container image for fastpath-container mode')
+param containerImage string = ''
+
 @description('Tags to apply to all resources')
 param tags object = {}
 
@@ -64,6 +74,27 @@ param tags object = {}
 // App Service name must be globally unique (becomes *.azurewebsites.net)
 var appServicePlanName = 'asp-${baseName}-${uniqueSuffix}'
 var appServiceName = 'app-${baseName}-${uniqueSuffix}'
+var effectiveTags = union(tags, {
+  Environment: environment
+})
+var linuxFxVersion = runtimeMode == 'fastpath-container' ? 'DOCKER|${containerImage}' : 'NODE|22-lts'
+var runtimeAppSettings = runtimeMode == 'standard'
+  ? [
+      {
+        name: 'WEBSITE_NODE_DEFAULT_VERSION'
+        value: '~20'
+      }
+      {
+        name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+        value: 'true'
+      }
+    ]
+  : [
+      {
+        name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+        value: 'false'
+      }
+    ]
 
 // =============================================================================
 // App Service Plan
@@ -72,7 +103,7 @@ var appServiceName = 'app-${baseName}-${uniqueSuffix}'
 resource appServicePlan 'Microsoft.Web/serverfarms@2024-04-01' = {
   name: appServicePlanName
   location: location
-  tags: tags
+  tags: effectiveTags
   kind: 'linux'
   sku: {
     name: sku
@@ -89,7 +120,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2024-04-01' = {
 resource appService 'Microsoft.Web/sites@2024-04-01' = {
   name: appServiceName
   location: location
-  tags: tags
+  tags: effectiveTags
   kind: 'app,linux'
   identity: {
     type: 'SystemAssigned'
@@ -104,19 +135,19 @@ resource appService 'Microsoft.Web/sites@2024-04-01' = {
     virtualNetworkSubnetId: appServiceSubnetId
     vnetRouteAllEnabled: true
     siteConfig: {
-      linuxFxVersion: 'NODE|22-lts'
+      linuxFxVersion: linuxFxVersion
       alwaysOn: true
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       http20Enabled: true
       healthCheckPath: '/health'
       // Explicit startup command (also defined in package.json)
-      appCommandLine: 'node src/app.js'
+      appCommandLine: runtimeMode == 'standard' ? 'node src/app.js' : ''
       // Allow public access (protected by Entra ID at application level)
       ipSecurityRestrictionsDefaultAction: 'Allow'
       scmIpSecurityRestrictionsUseMain: true
       scmIpSecurityRestrictionsDefaultAction: 'Allow'
-      appSettings: [
+      appSettings: concat([
         {
           name: 'NODE_ENV'
           value: 'production'
@@ -157,15 +188,7 @@ resource appService 'Microsoft.Web/sites@2024-04-01' = {
           name: 'XDT_MicrosoftApplicationInsights_NodeJS'
           value: '1'
         }
-        {
-          name: 'WEBSITE_NODE_DEFAULT_VERSION'
-          value: '~20'
-        }
-        {
-          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
-          value: 'true'
-        }
-      ]
+      ], runtimeAppSettings)
     }
   }
 }

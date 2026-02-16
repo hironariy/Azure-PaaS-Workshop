@@ -36,6 +36,16 @@ param location string = resourceGroup().location
 @maxLength(15)
 param baseName string = 'blogapp'
 
+@description('Deployment mode: standard uses code deployment, fastpath-container uses prebuilt container image')
+@allowed([
+  'standard'
+  'fastpath-container'
+])
+param deploymentMode string = 'standard'
+
+@description('Container image for fastpath-container mode (for example docker.io/org/image@sha256:...)')
+param appServiceContainerImage string = ''
+
 // =============================================================================
 // Multi-Group Workshop Support
 // =============================================================================
@@ -205,6 +215,8 @@ module appService 'modules/appservice.bicep' = {
     entraTenantId: entraTenantId
     entraBackendClientId: entraBackendClientId
     sku: appServiceSku
+    runtimeMode: deploymentMode
+    containerImage: appServiceContainerImage
     tags: tags
   }
   dependsOn: [
@@ -235,7 +247,7 @@ module keyVaultRbac 'modules/keyvault.bicep' = {
 // Module: Static Web Apps with Linked Backend
 // =============================================================================
 
-module staticWebApp 'modules/staticwebapp.bicep' = {
+module staticWebApp 'modules/staticwebapp.bicep' = if (deploymentMode == 'standard') {
   name: 'staticwebapp-deployment'
   params: {
     environment: environment
@@ -258,17 +270,14 @@ module staticWebApp 'modules/staticwebapp.bicep' = {
 // the Linked Backend to override those settings with correct API configuration.
 // =============================================================================
 
-module appServiceAuth 'modules/appservice-auth.bicep' = {
+module appServiceAuth 'modules/appservice-auth.bicep' = if (deploymentMode == 'standard') {
   name: 'appservice-auth-deployment'
   params: {
     appServiceName: appService.outputs.appServiceName
     entraTenantId: entraTenantId
     entraBackendClientId: entraBackendClientId
-    staticWebAppDefaultHostName: staticWebApp.outputs.staticWebAppDefaultHostName
+    staticWebAppDefaultHostName: staticWebApp.?outputs.staticWebAppDefaultHostName ?? ''
   }
-  dependsOn: [
-    staticWebApp  // CRITICAL: Must run AFTER SWA Linked Backend is created
-  ]
 }
 
 // =============================================================================
@@ -297,11 +306,13 @@ output appServiceDefaultHostName string = appService.outputs.appServiceDefaultHo
 output appServiceUrl string = 'https://${appService.outputs.appServiceDefaultHostName}'
 
 // Static Web Apps outputs
-output staticWebAppName string = staticWebApp.outputs.staticWebAppName
-output staticWebAppUrl string = staticWebApp.outputs.staticWebAppUrl
+output staticWebAppName string = staticWebApp.?outputs.staticWebAppName ?? ''
+output staticWebAppUrl string = staticWebApp.?outputs.staticWebAppUrl ?? ''
 
 // API URL (via SWA Linked Backend - accessed through SWA's /api/* routes)
-output apiUrl string = '${staticWebApp.outputs.staticWebAppUrl}/api'
+output apiUrl string = deploymentMode == 'standard'
+  ? '${staticWebApp.?outputs.staticWebAppUrl ?? ''}/api'
+  : 'https://${appService.outputs.appServiceDefaultHostName}/api'
 
 // Monitoring outputs
 output logAnalyticsWorkspaceId string = monitoring.outputs.logAnalyticsWorkspaceId

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "14096522552174128781"
+      "templateHash": "3825419393690400553"
     }
   },
   "parameters": {
@@ -35,6 +35,24 @@
       "maxLength": 15,
       "metadata": {
         "description": "Base name for all resources (will be combined with resource type prefix)"
+      }
+    },
+    "deploymentMode": {
+      "type": "string",
+      "defaultValue": "standard",
+      "allowedValues": [
+        "standard",
+        "fastpath-container"
+      ],
+      "metadata": {
+        "description": "Deployment mode: standard uses code deployment, fastpath-container uses prebuilt container image"
+      }
+    },
+    "appServiceContainerImage": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Container image for fastpath-container mode (for example docker.io/org/image@sha256:...)"
       }
     },
     "groupId": {
@@ -1090,6 +1108,12 @@
           "sku": {
             "value": "[parameters('appServiceSku')]"
           },
+          "runtimeMode": {
+            "value": "[parameters('deploymentMode')]"
+          },
+          "containerImage": {
+            "value": "[parameters('appServiceContainerImage')]"
+          },
           "tags": {
             "value": "[variables('tags')]"
           }
@@ -1101,7 +1125,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "7940416640151876704"
+              "templateHash": "12076308549458962967"
             }
           },
           "parameters": {
@@ -1186,6 +1210,24 @@
                 "description": "App Service Plan SKU"
               }
             },
+            "runtimeMode": {
+              "type": "string",
+              "defaultValue": "standard",
+              "allowedValues": [
+                "standard",
+                "fastpath-container"
+              ],
+              "metadata": {
+                "description": "Runtime mode for App Service: standard (Node.js code deploy) or fastpath-container (prebuilt container image)"
+              }
+            },
+            "containerImage": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Container image for fastpath-container mode"
+              }
+            },
             "tags": {
               "type": "object",
               "defaultValue": {},
@@ -1196,7 +1238,10 @@
           },
           "variables": {
             "appServicePlanName": "[format('asp-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
-            "appServiceName": "[format('app-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]"
+            "appServiceName": "[format('app-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
+            "effectiveTags": "[union(parameters('tags'), createObject('Environment', parameters('environment')))]",
+            "linuxFxVersion": "[if(equals(parameters('runtimeMode'), 'fastpath-container'), format('DOCKER|{0}', parameters('containerImage')), 'NODE|22-lts')]",
+            "runtimeAppSettings": "[if(equals(parameters('runtimeMode'), 'standard'), createArray(createObject('name', 'WEBSITE_NODE_DEFAULT_VERSION', 'value', '~20'), createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'true')), createArray(createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'false')))]"
           },
           "resources": [
             {
@@ -1204,7 +1249,7 @@
               "apiVersion": "2024-04-01",
               "name": "[variables('appServicePlanName')]",
               "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
+              "tags": "[variables('effectiveTags')]",
               "kind": "linux",
               "sku": {
                 "name": "[parameters('sku')]"
@@ -1218,7 +1263,7 @@
               "apiVersion": "2024-04-01",
               "name": "[variables('appServiceName')]",
               "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
+              "tags": "[variables('effectiveTags')]",
               "kind": "app,linux",
               "identity": {
                 "type": "SystemAssigned"
@@ -1230,66 +1275,17 @@
                 "virtualNetworkSubnetId": "[parameters('appServiceSubnetId')]",
                 "vnetRouteAllEnabled": true,
                 "siteConfig": {
-                  "linuxFxVersion": "NODE|22-lts",
+                  "linuxFxVersion": "[variables('linuxFxVersion')]",
                   "alwaysOn": true,
                   "ftpsState": "Disabled",
                   "minTlsVersion": "1.2",
                   "http20Enabled": true,
                   "healthCheckPath": "/health",
-                  "appCommandLine": "node src/app.js",
+                  "appCommandLine": "[if(equals(parameters('runtimeMode'), 'standard'), 'node src/app.js', '')]",
                   "ipSecurityRestrictionsDefaultAction": "Allow",
                   "scmIpSecurityRestrictionsUseMain": true,
                   "scmIpSecurityRestrictionsDefaultAction": "Allow",
-                  "appSettings": [
-                    {
-                      "name": "NODE_ENV",
-                      "value": "production"
-                    },
-                    {
-                      "name": "PORT",
-                      "value": "8080"
-                    },
-                    {
-                      "name": "WEBSITES_PORT",
-                      "value": "8080"
-                    },
-                    {
-                      "name": "COSMOS_CONNECTION_STRING",
-                      "value": "[format('@Microsoft.KeyVault(VaultName={0};SecretName=cosmos-connection-string)', parameters('keyVaultName'))]"
-                    },
-                    {
-                      "name": "ENTRA_TENANT_ID",
-                      "value": "[parameters('entraTenantId')]"
-                    },
-                    {
-                      "name": "ENTRA_CLIENT_ID",
-                      "value": "[parameters('entraBackendClientId')]"
-                    },
-                    {
-                      "name": "CORS_ORIGINS",
-                      "value": "[parameters('swaUrl')]"
-                    },
-                    {
-                      "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
-                      "value": "[parameters('appInsightsConnectionString')]"
-                    },
-                    {
-                      "name": "ApplicationInsightsAgent_EXTENSION_VERSION",
-                      "value": "~3"
-                    },
-                    {
-                      "name": "XDT_MicrosoftApplicationInsights_NodeJS",
-                      "value": "1"
-                    },
-                    {
-                      "name": "WEBSITE_NODE_DEFAULT_VERSION",
-                      "value": "~20"
-                    },
-                    {
-                      "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
-                      "value": "true"
-                    }
-                  ]
+                  "appSettings": "[concat(createArray(createObject('name', 'NODE_ENV', 'value', 'production'), createObject('name', 'PORT', 'value', '8080'), createObject('name', 'WEBSITES_PORT', 'value', '8080'), createObject('name', 'COSMOS_CONNECTION_STRING', 'value', format('@Microsoft.KeyVault(VaultName={0};SecretName=cosmos-connection-string)', parameters('keyVaultName'))), createObject('name', 'ENTRA_TENANT_ID', 'value', parameters('entraTenantId')), createObject('name', 'ENTRA_CLIENT_ID', 'value', parameters('entraBackendClientId')), createObject('name', 'CORS_ORIGINS', 'value', parameters('swaUrl')), createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', parameters('appInsightsConnectionString')), createObject('name', 'ApplicationInsightsAgent_EXTENSION_VERSION', 'value', '~3'), createObject('name', 'XDT_MicrosoftApplicationInsights_NodeJS', 'value', '1')), variables('runtimeAppSettings'))]"
                 }
               },
               "dependsOn": [
@@ -1584,6 +1580,7 @@
       ]
     },
     {
+      "condition": "[equals(parameters('deploymentMode'), 'standard')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "staticwebapp-deployment",
@@ -1757,6 +1754,7 @@
       ]
     },
     {
+      "condition": "[equals(parameters('deploymentMode'), 'standard')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "appservice-auth-deployment",
@@ -1776,7 +1774,7 @@
             "value": "[parameters('entraBackendClientId')]"
           },
           "staticWebAppDefaultHostName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppDefaultHostName.value]"
+            "value": "[coalesce(tryGet(if(equals(parameters('deploymentMode'), 'standard'), reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01'), null()), 'outputs', 'staticWebAppDefaultHostName', 'value'), '')]"
           }
         },
         "template": {
@@ -1925,15 +1923,15 @@
     },
     "staticWebAppName": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppName.value]"
+      "value": "[coalesce(tryGet(if(equals(parameters('deploymentMode'), 'standard'), reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01'), null()), 'outputs', 'staticWebAppName', 'value'), '')]"
     },
     "staticWebAppUrl": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppUrl.value]"
+      "value": "[coalesce(tryGet(if(equals(parameters('deploymentMode'), 'standard'), reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01'), null()), 'outputs', 'staticWebAppUrl', 'value'), '')]"
     },
     "apiUrl": {
       "type": "string",
-      "value": "[format('{0}/api', reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppUrl.value)]"
+      "value": "[if(equals(parameters('deploymentMode'), 'standard'), format('{0}/api', coalesce(tryGet(if(equals(parameters('deploymentMode'), 'standard'), reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01'), null()), 'outputs', 'staticWebAppUrl', 'value'), '')), format('https://{0}/api', reference(resourceId('Microsoft.Resources/deployments', 'appservice-deployment'), '2025-04-01').outputs.appServiceDefaultHostName.value))]"
     },
     "logAnalyticsWorkspaceId": {
       "type": "string",

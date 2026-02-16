@@ -79,6 +79,13 @@ cp main.bicepparam main.local.bicepparam
 cp dev.bicepparam main.local.bicepparam
 ```
 
+**Option C: FastPath container deployment (Windows-first, prebuilt image)**
+```bash
+cp dev.fastpath.bicepparam dev.fastpath.local.bicepparam
+# or production baseline
+cp main.fastpath.bicepparam main.fastpath.local.bicepparam
+```
+
 Edit `main.local.bicepparam` with your values:
 
 ```bicep
@@ -87,6 +94,8 @@ using 'main.bicep'
 param environment = 'dev'
 param location = 'japaneast'
 param baseName = 'blogapp'
+param deploymentMode = 'standard' // 'standard' | 'fastpath-container'
+param appServiceContainerImage = '' // Required only for fastpath-container
 param groupId = ''  // Set to 'A'-'J' for multi-group workshops
 param entraTenantId = '<your-tenant-id>'
 param entraBackendClientId = '<your-backend-app-id>'
@@ -97,6 +106,18 @@ param cosmosDbAdminPassword = '<strong-password>'
 // param sslCertificateData = '<base64-encoded-pfx>'
 // param sslCertificatePassword = 'Workshop2024!'
 ```
+
+**Mode guidance:**
+- `standard`: Existing workshop flow (App Service code deployment + SWA linked backend)
+- `fastpath-container`: App Service for Linux container mode (prebuilt image, no SWA linked backend deployment)
+
+Example for FastPath mode:
+```bicep
+param deploymentMode = 'fastpath-container'
+param appServiceContainerImage = 'docker.io/your-org/blogapp-api@sha256:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+```
+
+If you use Option C templates, these values are already preconfigured in the file and you only need to fill placeholders.
 
 ### 3. (Optional) Generate SSL Certificate for HTTPS
 

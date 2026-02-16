@@ -22,6 +22,10 @@ backend/*.zip
 *.local.bicepparam
 *.local.bicepparam.*
 
+# FastPath local parameter files (explicit for clarity)
+*.fastpath.local.bicepparam
+*.fastpath.local.bicepparam.*
+
 # =============================================================================
 # Environment Files
 # =============================================================================
