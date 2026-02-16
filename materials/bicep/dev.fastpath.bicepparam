@@ -28,7 +28,7 @@ param deploymentMode = 'fastpath-container'
 
 // REQUIRED: immutable image reference is strongly recommended
 // Example: 'docker.io/your-org/blogapp-api@sha256:xxxxxxxx...'
-param appServiceContainerImage = 'docker.io/hironariy/azure-paas-workshop-backend@sha256:78a6d0dd1f0055628b80f5e0cbc0f727a9e4dae8f77d9bc24061c66d1e08fac6'
+param appServiceContainerImage = 'docker.io/hironariy/azure-paas-workshop-backend@sha256:7af2ad591a0d791f37810cd9d1349faee7e982f4c1fa337f0cf0d7157d84f964'
 
 // Microsoft Entra configuration
 param entraTenantId = '<your-tenant-id>'
