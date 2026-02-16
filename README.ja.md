@@ -160,7 +160,8 @@ English version: [README.md](./README.md)
 | **Azure CLI（Windows）** | 2.60+ | App Service / Key Vault など Fast Path 用リソース作成・設定 | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
 | **PowerShell** | 7.x+ | Fast Path コマンドの実行 | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
-**Windows（GitHub Actions を使わない場合）:**
+<details>
+<summary><strong>Windows（GitHub Actions を使わない場合 / WSL2 利用）</strong></summary>
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
@@ -171,7 +172,10 @@ English version: [README.md](./README.md)
 | **SWA CLI** | Latest | SWA デプロイ（WSL 内） | `npm install -g @azure/static-web-apps-cli` |
 | **jq** | Latest | JSON 出力確認 | `sudo apt-get install -y jq` |
 
-**Windows（GitHub Actions を使う場合 / WSL2 不要）:**
+</details>
+
+<details>
+<summary><strong>Windows（GitHub Actions を使う場合 / WSL2 不要）</strong></summary>
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
@@ -179,6 +183,8 @@ English version: [README.md](./README.md)
 | **Node.js（Windows）** | 22.x LTS | 変更を push する前のローカル build/test（Windows ネイティブ） | [Download](https://nodejs.org/) |
 | **GitHub CLI (`gh`)** | Latest | Workflow の実行・確認・手動起動 | [Install Guide](https://cli.github.com/) |
 | **PowerShell** | 7.x+ | Windows でセットアップ系コマンドを実行 | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
+
+</details>
 
 > このツールセットは、企業のセキュリティポリシーで WSL2 を利用できない環境を想定しています。
 
@@ -270,6 +276,17 @@ swa --version
 # Expected: 2.x.x
 ```
 
+**Windows Fast Path（PowerShell のみ）:**
+```powershell
+# Check Azure CLI
+az --version
+# Expected: azure-cli 2.60.x or newer
+
+# Check PowerShell
+pwsh --version
+# Expected: PowerShell 7.x.x
+```
+
 **Windows (WSL2 Ubuntu):**
 ```bash
 # Check Git
@@ -314,17 +331,6 @@ node --version
 # Check GitHub CLI
 gh --version
 # Expected: gh version 2.x.x
-
-# Check PowerShell
-pwsh --version
-# Expected: PowerShell 7.x.x
-```
-
-**Windows Fast Path（PowerShell のみ）:**
-```powershell
-# Check Azure CLI
-az --version
-# Expected: azure-cli 2.60.x or newer
 
 # Check PowerShell
 pwsh --version

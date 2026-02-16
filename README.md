@@ -160,7 +160,8 @@ Install these tools on your computer:
 | **Azure CLI (Windows)** | 2.60+ | Create and configure App Service/Key Vault resources | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
 | **PowerShell** | 7.x+ | Execute Fast Path commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
-**Windows (without GitHub Actions):**
+<details>
+<summary><strong>Windows (without GitHub Actions / WSL2 workflow)</strong></summary>
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
@@ -171,7 +172,10 @@ Install these tools on your computer:
 | **SWA CLI** | Latest | Deploy to Static Web Apps (inside WSL) | `npm install -g @azure/static-web-apps-cli` |
 | **jq** | Latest | Parse JSON in script outputs | `sudo apt-get install -y jq` |
 
-**Windows (with GitHub Actions, no WSL2 required):**
+</details>
+
+<details>
+<summary><strong>Windows (with GitHub Actions, no WSL2 required)</strong></summary>
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
@@ -179,6 +183,8 @@ Install these tools on your computer:
 | **Node.js (Windows)** | 22.x LTS | Local build/test before pushing changes (native Windows) | [Download](https://nodejs.org/) |
 | **GitHub CLI (`gh`)** | Latest | Run/monitor workflows and manual workflow dispatch | [Install Guide](https://cli.github.com/) |
 | **PowerShell** | 7.x+ | Run workshop setup commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
+
+</details>
 
 > This toolset is intended for organizations where WSL2 is restricted by security policy.
 
@@ -270,6 +276,17 @@ swa --version
 # Expected: 2.x.x
 ```
 
+**Windows Fast Path (PowerShell only):**
+```powershell
+# Check Azure CLI
+az --version
+# Expected: azure-cli 2.60.x or newer
+
+# Check PowerShell
+pwsh --version
+# Expected: PowerShell 7.x.x
+```
+
 **Windows (WSL2 Ubuntu):**
 ```bash
 # Check Git
@@ -314,17 +331,6 @@ node --version
 # Check GitHub CLI
 gh --version
 # Expected: gh version 2.x.x
-
-# Check PowerShell
-pwsh --version
-# Expected: PowerShell 7.x.x
-```
-
-**Windows Fast Path (PowerShell only):**
-```powershell
-# Check Azure CLI
-az --version
-# Expected: azure-cli 2.60.x or newer
 
 # Check PowerShell
 pwsh --version
