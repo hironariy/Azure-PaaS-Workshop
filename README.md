@@ -550,62 +550,42 @@ This path is optimized for workshop speed on Windows and avoids both WSL2 and Gi
 
   > **💡 Using multiple tenants?** See [Multiple Tenants tips](#multiple-tenants-tip).
 
-2. **Create resource group and App Service (Linux container)**
+2. **Prepare FastPath Bicep parameters**
+  ```powershell
+  Set-Location materials/bicep
+  Copy-Item .\dev.fastpath.bicepparam .\dev.fastpath.local.bicepparam
+  code .\dev.fastpath.local.bicepparam
+  ```
+
+  Fill these values in `dev.fastpath.local.bicepparam`:
+  - `appServiceContainerImage` (digest-pinned image)
+  - `entraTenantId`, `entraBackendClientId`, `entraFrontendClientId`
+  - `cosmosDbAdminPassword`
+
+3. **Deploy Azure resources with Bicep (FastPath mode)**
   ```powershell
   $rg = "<Resource-Group-Name>"
-  $location = "japaneast"
-  $plan = "<AppServicePlan-Name>"
-  $webapp = "<WebApp-Name>"  # must be globally unique
-  $image = "docker.io/hironariy/azure-paas-workshop-backend@sha256:78a6d0dd1f0055628b80f5e0cbc0f727a9e4dae8f77d9bc24061c66d1e08fac6"  # published example image
+  az group create --name $rg --location japaneast
 
-  az group create --name $rg --location $location
-  az appservice plan create --name $plan --resource-group $rg --is-linux --sku B1
-  az webapp create --resource-group $rg --plan $plan --name $webapp --deployment-container-image-name $image
-
-  # Basic hardening
-  az webapp update --resource-group $rg --name $webapp --https-only true
-  az webapp config set --resource-group $rg --name $webapp --min-tls-version 1.2 --ftps-state Disabled
+  az deployment group create `
+    --resource-group $rg `
+    --template-file .\main.bicep `
+    --parameters .\dev.fastpath.local.bicepparam
   ```
 
-3. **Store connection string in Key Vault (recommended)**
+  This deploys the full workshop resource set via Bicep (DocumentDB, Key Vault, App Service, Static Web Apps, networking, monitoring).
+
+4. **Verify backend and frontend endpoints**
   ```powershell
-  $kv = "<KeyVault-Name>"  # must be globally unique
+  $appServiceName = az resource list --resource-group $rg --resource-type "Microsoft.Web/sites" --query "[0].name" -o tsv
+  $swaName = az staticwebapp list --resource-group $rg --query "[0].name" -o tsv
+  $swaHost = az staticwebapp show --name $swaName --resource-group $rg --query "defaultHostname" -o tsv
 
-  # Create Key Vault and assign managed identity to App Service
-  az keyvault create --name $kv --resource-group $rg --location $location
-  $principalId = az webapp identity assign --resource-group $rg --name $webapp --query principalId -o tsv
-  az keyvault set-policy --name $kv --object-id $principalId --secret-permissions get list
-
-  # Prompt secret input (not echoed)
-  $secureConn = Read-Host "Enter Cosmos/MongoDB connection string" -AsSecureString
-  $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureConn)
-  $plainConn = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-  az keyvault secret set --vault-name $kv --name "CosmosConnectionString" --value $plainConn
-  [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-  Remove-Variable plainConn, secureConn
+  Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
+  Invoke-RestMethod "https://$swaHost/api/health" | ConvertTo-Json
   ```
 
-4. **Set application settings (no plaintext secret in app settings)**
-  ```powershell
-  $secretUri = az keyvault secret show --vault-name $kv --name "CosmosConnectionString" --query id -o tsv
-
-  az webapp config appsettings set --resource-group $rg --name $webapp --settings `
-    NODE_ENV=production `
-    WEBSITES_PORT=8080 `
-    COSMOS_CONNECTION_STRING="@Microsoft.KeyVault(SecretUri=$secretUri)" `
-    ENTRA_TENANT_ID="<tenant-id>" `
-    ENTRA_BACKEND_CLIENT_ID="<backend-client-id>"
-  ```
-
-5. **Restart and verify deployment**
-  ```powershell
-  az webapp restart --resource-group $rg --name $webapp
-
-  az webapp show --resource-group $rg --name $webapp --query defaultHostName -o tsv
-  Invoke-RestMethod "https://<WebApp-Name>.azurewebsites.net/health" | ConvertTo-Json
-  ```
-
-✅ **Checkpoint:** App Service container is running and health endpoint returns `healthy`.
+✅ **Checkpoint:** Infrastructure is provisioned by Bicep and both health endpoints return `healthy`.
 
 > **Security notes (Fast Path):**
 > - Do not commit secrets to files or repository variables.

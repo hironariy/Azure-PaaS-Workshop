@@ -43,6 +43,7 @@ param appServiceSku = 'B1'
 param cosmosDbTier = 'M25'
 param cosmosDbEnableHa = false
 
-// SWA is not deployed in fastpath-container mode, but parameter remains for compatibility
+// SWA is deployed in fastpath-container mode as well (for full blog app resources)
+// Keep Standard to enable SWA Linked Backend feature
 param staticWebAppSku = 'Standard'
 param staticWebAppLocation = 'eastasia'

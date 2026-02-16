@@ -546,63 +546,42 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
 
   > **💡 複数テナントを利用している場合:** [Multiple Tenants? の Tips](#multiple-tenants-tip) を参照してください。
 
-2. **リソース作成（App Service for Linux + コンテナ）**
+2. **FastPath 用の Bicep パラメータを準備**
+  ```powershell
+  Set-Location materials/bicep
+  Copy-Item .\dev.fastpath.bicepparam .\dev.fastpath.local.bicepparam
+  code .\dev.fastpath.local.bicepparam
+  ```
+
+  `dev.fastpath.local.bicepparam` に以下を設定してください:
+  - `appServiceContainerImage`（digest 固定推奨）
+  - `entraTenantId`, `entraBackendClientId`, `entraFrontendClientId`
+  - `cosmosDbAdminPassword`
+
+3. **Bicep で Azure リソースをデプロイ（FastPath モード）**
   ```powershell
   $rg = "<Resource-Group-Name>"
-  $location = "japaneast"
-  $plan = "<AppServicePlan-Name>"
-  $webapp = "<WebApp-Name>"  # globally unique
-  $image = "docker.io/hironariy/azure-paas-workshop-backend@sha256:78a6d0dd1f0055628b80f5e0cbc0f727a9e4dae8f77d9bc24061c66d1e08fac6"  # 公開済みサンプルイメージ
+  az group create --name $rg --location japaneast
 
-  az group create --name $rg --location $location
-  az appservice plan create --name $plan --resource-group $rg --is-linux --sku B1
-  az webapp create --resource-group $rg --plan $plan --name $webapp --deployment-container-image-name $image
-
-  # 最低限のハードニング
-  az webapp update --resource-group $rg --name $webapp --https-only true
-  az webapp config set --resource-group $rg --name $webapp --min-tls-version 1.2 --ftps-state Disabled
+  az deployment group create `
+    --resource-group $rg `
+    --template-file .\main.bicep `
+    --parameters .\dev.fastpath.local.bicepparam
   ```
 
-   > **参考情報:** このワークショップのリポジトリ URL  
-   > https://github.com/hironariy/Azure-PaaS-Workshop
+  このデプロイで、Bicep によりワークショップで必要なリソース一式（DocumentDB / Key Vault / App Service / Static Web Apps / ネットワーク / 監視）を作成します。
 
-3. **接続文字列は Key Vault に保存（推奨）**
+4. **バックエンドとフロントエンドの動作確認**
   ```powershell
-  $kv = "<KeyVault-Name>"  # globally unique
+  $appServiceName = az resource list --resource-group $rg --resource-type "Microsoft.Web/sites" --query "[0].name" -o tsv
+  $swaName = az staticwebapp list --resource-group $rg --query "[0].name" -o tsv
+  $swaHost = az staticwebapp show --name $swaName --resource-group $rg --query "defaultHostname" -o tsv
 
-  az keyvault create --name $kv --resource-group $rg --location $location
-  $principalId = az webapp identity assign --resource-group $rg --name $webapp --query principalId -o tsv
-  az keyvault set-policy --name $kv --object-id $principalId --secret-permissions get list
-
-  # 画面に表示しないで入力
-  $secureConn = Read-Host "Enter Cosmos/MongoDB connection string" -AsSecureString
-  $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureConn)
-  $plainConn = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-  az keyvault secret set --vault-name $kv --name "CosmosConnectionString" --value $plainConn
-  [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-  Remove-Variable plainConn, secureConn
+  Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
+  Invoke-RestMethod "https://$swaHost/api/health" | ConvertTo-Json
   ```
 
-4. **アプリ設定を反映（平文シークレットを直接設定しない）**
-  ```powershell
-  $secretUri = az keyvault secret show --vault-name $kv --name "CosmosConnectionString" --query id -o tsv
-
-  az webapp config appsettings set --resource-group $rg --name $webapp --settings `
-    NODE_ENV=production `
-    WEBSITES_PORT=8080 `
-    COSMOS_CONNECTION_STRING="@Microsoft.KeyVault(SecretUri=$secretUri)" `
-    ENTRA_TENANT_ID="<tenant-id>" `
-    ENTRA_BACKEND_CLIENT_ID="<backend-client-id>"
-  ```
-
-5. **再起動して動作確認**
-  ```powershell
-  az webapp restart --resource-group $rg --name $webapp
-  az webapp show --resource-group $rg --name $webapp --query defaultHostName -o tsv
-  Invoke-RestMethod "https://<WebApp-Name>.azurewebsites.net/health" | ConvertTo-Json
-  ```
-
-✅ **Checkpoint:** App Service コンテナが起動し、health endpoint が `healthy` を返す。
+✅ **Checkpoint:** Bicep でインフラ一式の作成が完了し、2つの health endpoint が `healthy` を返す。
 
 > **Security notes（Fast Path）:**
 > - シークレットをリポジトリや設定ファイルへコミットしない

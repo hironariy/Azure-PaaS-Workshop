@@ -247,7 +247,7 @@ module keyVaultRbac 'modules/keyvault.bicep' = {
 // Module: Static Web Apps with Linked Backend
 // =============================================================================
 
-module staticWebApp 'modules/staticwebapp.bicep' = if (deploymentMode == 'standard') {
+module staticWebApp 'modules/staticwebapp.bicep' = {
   name: 'staticwebapp-deployment'
   params: {
     environment: environment
@@ -270,13 +270,13 @@ module staticWebApp 'modules/staticwebapp.bicep' = if (deploymentMode == 'standa
 // the Linked Backend to override those settings with correct API configuration.
 // =============================================================================
 
-module appServiceAuth 'modules/appservice-auth.bicep' = if (deploymentMode == 'standard') {
+module appServiceAuth 'modules/appservice-auth.bicep' = {
   name: 'appservice-auth-deployment'
   params: {
     appServiceName: appService.outputs.appServiceName
     entraTenantId: entraTenantId
     entraBackendClientId: entraBackendClientId
-    staticWebAppDefaultHostName: staticWebApp.?outputs.staticWebAppDefaultHostName ?? ''
+    staticWebAppDefaultHostName: staticWebApp.outputs.staticWebAppDefaultHostName
   }
 }
 
@@ -306,13 +306,11 @@ output appServiceDefaultHostName string = appService.outputs.appServiceDefaultHo
 output appServiceUrl string = 'https://${appService.outputs.appServiceDefaultHostName}'
 
 // Static Web Apps outputs
-output staticWebAppName string = staticWebApp.?outputs.staticWebAppName ?? ''
-output staticWebAppUrl string = staticWebApp.?outputs.staticWebAppUrl ?? ''
+output staticWebAppName string = staticWebApp.outputs.staticWebAppName
+output staticWebAppUrl string = staticWebApp.outputs.staticWebAppUrl
 
 // API URL (via SWA Linked Backend - accessed through SWA's /api/* routes)
-output apiUrl string = deploymentMode == 'standard'
-  ? '${staticWebApp.?outputs.staticWebAppUrl ?? ''}/api'
-  : 'https://${appService.outputs.appServiceDefaultHostName}/api'
+output apiUrl string = '${staticWebApp.outputs.staticWebAppUrl}/api'
 
 // Monitoring outputs
 output logAnalyticsWorkspaceId string = monitoring.outputs.logAnalyticsWorkspaceId
