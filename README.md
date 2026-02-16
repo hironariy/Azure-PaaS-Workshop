@@ -530,6 +530,7 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
 ### 2.2 Windows Fast Path (PowerShell, No WSL2)
 
 This path is optimized for workshop speed on Windows and avoids both WSL2 and GitHub Actions.
+(The same flow also works on macOS/Linux with equivalent bash commands.)
 
 **What this path changes:**
 - Uses **instructor-provided prebuilt Docker Hub images** (public)
@@ -562,6 +563,8 @@ This path is optimized for workshop speed on Windows and avoids both WSL2 and Gi
   - `entraTenantId`, `entraBackendClientId`, `entraFrontendClientId`
   - `cosmosDbAdminPassword`
 
+  > **Note:** If you use a custom image, make sure the container startup command matches the actual build output path (for example, `dist/src/app.js`).
+
 3. **Deploy Azure resources with Bicep (FastPath mode)**
   ```powershell
   $rg = "<Resource-Group-Name>"
@@ -575,17 +578,26 @@ This path is optimized for workshop speed on Windows and avoids both WSL2 and Gi
 
   This deploys the full workshop resource set via Bicep (DocumentDB, Key Vault, App Service, Static Web Apps, networking, monitoring).
 
-4. **Verify backend and frontend endpoints**
+4. **Verify backend endpoint first**
   ```powershell
   $appServiceName = az resource list --resource-group $rg --resource-type "Microsoft.Web/sites" --query "[0].name" -o tsv
+
+  Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
+  ```
+
+5. **Verify SWA API endpoint (after frontend deployment)**
+  ```powershell
   $swaName = az staticwebapp list --resource-group $rg --query "[0].name" -o tsv
   $swaHost = az staticwebapp show --name $swaName --resource-group $rg --query "defaultHostname" -o tsv
 
-  Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
   Invoke-RestMethod "https://$swaHost/api/health" | ConvertTo-Json
   ```
+  `/api/health` may return `404` until frontend artifacts are deployed to SWA.
+  For frontend deployment, see [Section 2.4](#24-standard-azure-deployment), Step 6.
 
-✅ **Checkpoint:** Infrastructure is provisioned by Bicep and both health endpoints return `healthy`.
+✅ **Checkpoint:**
+- Immediately after Bicep, `https://<app-service>/health` returns `healthy`
+- After frontend deployment, `https://<swa-host>/api/health` returns `healthy`
 
 > **Security notes (Fast Path):**
 > - Do not commit secrets to files or repository variables.

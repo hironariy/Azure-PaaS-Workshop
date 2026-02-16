@@ -25,4 +25,4 @@ RUN useradd --create-home --uid 10001 appuser
 USER appuser
 
 EXPOSE 8080
-CMD ["node", "dist/app.js"]
+CMD ["node", "dist/src/app.js"]

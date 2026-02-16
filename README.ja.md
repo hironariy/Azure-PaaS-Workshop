@@ -526,6 +526,7 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
 ### 2.2 Windows Fast Path（PowerShell / WSL2不要） <a id="22-windows-fast-path-powershell-no-wsl2"></a>
 
 このパスは、Windows ユーザーが **WSL2 / GitHub Actions なし** で短時間にハンズオンを完了するための最短導線です。
+（同等の手順は macOS/Linux でも bash コマンドに置き換えて実行できます。）
 
 **このパスの特徴:**
 - 講師が事前に用意した **Docker Hub の公開済みコンテナイメージ** を使用
@@ -558,6 +559,8 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
   - `entraTenantId`, `entraBackendClientId`, `entraFrontendClientId`
   - `cosmosDbAdminPassword`
 
+  > **Note:** カスタムイメージを使う場合は、コンテナの起動コマンドとビルド成果物のパスが一致していることを確認してください（例: `dist/src/app.js`）。
+
   > **💡 CosmosDB パスワード生成の Tips:** [Required Parameters の生成コマンド](#required-parameters-tip) を参照してください。
 
 3. **Bicep で Azure リソースをデプロイ（FastPath モード）**
@@ -573,17 +576,26 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
 
   このデプロイで、Bicep によりワークショップで必要なリソース一式（DocumentDB / Key Vault / App Service / Static Web Apps / ネットワーク / 監視）を作成します。
 
-4. **バックエンドとフロントエンドの動作確認**
+4. **まずバックエンドの動作確認**
   ```powershell
   $appServiceName = az resource list --resource-group $rg --resource-type "Microsoft.Web/sites" --query "[0].name" -o tsv
+
+  Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
+  ```
+
+5. **SWA 経由 API の確認（フロントエンドをデプロイ後）**
+  ```powershell
   $swaName = az staticwebapp list --resource-group $rg --query "[0].name" -o tsv
   $swaHost = az staticwebapp show --name $swaName --resource-group $rg --query "defaultHostname" -o tsv
 
-  Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
   Invoke-RestMethod "https://$swaHost/api/health" | ConvertTo-Json
   ```
+  `/api/health` は、SWA 側にフロントエンドアーティファクトをデプロイするまで `404` になることがあります。
+  フロントエンドのデプロイは [Section 2.4](#24-standard-azure-deployment) の Step 6 を参照してください。
 
-✅ **Checkpoint:** Bicep でインフラ一式の作成が完了し、2つの health endpoint が `healthy` を返す。
+✅ **Checkpoint:**
+- Bicep デプロイ直後に `https://<app-service>/health` が `healthy`
+- フロントエンドをデプロイ後に `https://<swa-host>/api/health` が `healthy`
 
 > **Security notes（Fast Path）:**
 > - シークレットをリポジトリや設定ファイルへコミットしない
