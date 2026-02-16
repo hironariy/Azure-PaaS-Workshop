@@ -553,6 +553,9 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
   az webapp config set --resource-group $rg --name $webapp --min-tls-version 1.2 --ftps-state Disabled
   ```
 
+   > **参考情報:** このワークショップのリポジトリ URL  
+   > https://github.com/hironariy/Azure-PaaS-Workshop
+
 3. **接続文字列は Key Vault に保存（推奨）**
   ```powershell
   $kv = "<KeyVault-Name>"  # globally unique
