@@ -287,7 +287,9 @@ pwsh --version
 # Expected: PowerShell 7.x.x
 ```
 
-**Windows (WSL2 Ubuntu):**
+<details>
+<summary><strong>Windows（WSL2 Ubuntu）</strong></summary>
+
 ```bash
 # Check Git
 git --version
@@ -314,7 +316,11 @@ jq --version
 # Expected: jq-1.6 or newer
 ```
 
-**Windows（GitHub Actions を使う場合 / WSL2 不要）:**
+</details>
+
+<details>
+<summary><strong>Windows（GitHub Actions を使う場合 / WSL2 不要）</strong></summary>
+
 ```powershell
 # Check Git
 git --version
@@ -336,6 +342,8 @@ gh --version
 pwsh --version
 # Expected: PowerShell 7.x.x
 ```
+
+</details>
 
 > **📝 Need Docker?** Docker は [local development](#23-local-development-environment-optional) のみで必要です。Azure へのデプロイだけなら不要です。
 

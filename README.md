@@ -287,7 +287,9 @@ pwsh --version
 # Expected: PowerShell 7.x.x
 ```
 
-**Windows (WSL2 Ubuntu):**
+<details>
+<summary><strong>Windows (WSL2 Ubuntu)</strong></summary>
+
 ```bash
 # Check Git
 git --version
@@ -314,7 +316,11 @@ jq --version
 # Expected: jq-1.6 or newer
 ```
 
-**Windows (with GitHub Actions, no WSL2):**
+</details>
+
+<details>
+<summary><strong>Windows (with GitHub Actions, no WSL2)</strong></summary>
+
 ```powershell
 # Check Git
 git --version
@@ -336,6 +342,8 @@ gh --version
 pwsh --version
 # Expected: PowerShell 7.x.x
 ```
+
+</details>
 
 > **📝 Need Docker?** Docker is only required for [local development](#23-local-development-environment-optional), not for Azure deployment.
 
