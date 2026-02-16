@@ -173,6 +173,13 @@ Install these tools on your computer:
 | **GitHub CLI (`gh`)** | Latest | Run/monitor workflows and manual workflow dispatch | [Install Guide](https://cli.github.com/) |
 | **PowerShell** | 7.x+ | Run workshop setup commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
+**Windows Fast Path (PowerShell only, no WSL2/GitHub Actions):**
+
+| Tool | Version | Purpose | Installation |
+|------|---------|---------|--------------|
+| **Azure CLI (Windows)** | 2.60+ | Create and configure App Service/Key Vault resources | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
+| **PowerShell** | 7.x+ | Execute Fast Path commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
+
 > This toolset is intended for organizations where WSL2 is restricted by security policy.
 
 <details>
@@ -307,6 +314,17 @@ node --version
 # Check GitHub CLI
 gh --version
 # Expected: gh version 2.x.x
+
+# Check PowerShell
+pwsh --version
+# Expected: PowerShell 7.x.x
+```
+
+**Windows Fast Path (PowerShell only):**
+```powershell
+# Check Azure CLI
+az --version
+# Expected: azure-cli 2.60.x or newer
 
 # Check PowerShell
 pwsh --version
