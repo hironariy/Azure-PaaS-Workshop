@@ -153,12 +153,13 @@ English version: [README.md](./README.md)
 | **Node.js** | 22.x LTS | ビルド（フロント/バック） | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | Static Web Apps へデプロイ | `npm install -g @azure/static-web-apps-cli` |
 
-**Windows Fast Path（PowerShell のみ / WSL2・GitHub Actions不要）:**
+**Windows Fast Path（PowerShell + Node.js / WSL2・GitHub Actions不要）:**
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
 | **Azure CLI（Windows）** | 2.60+ | App Service / Key Vault など Fast Path 用リソース作成・設定 | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
 | **Bicep CLI** | Latest | Bicep テンプレートのデプロイ | `az bicep install` |
+| **Node.js（Windows）** | 22.x LTS | フロントエンドの build / deploy（npm 含む） | [Download](https://nodejs.org/) |
 | **PowerShell** | 7.x+ | Fast Path コマンドの実行 | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
 <details>
@@ -277,7 +278,7 @@ swa --version
 # Expected: 2.x.x
 ```
 
-**Windows Fast Path（PowerShell のみ）:**
+**Windows Fast Path（PowerShell + Node.js）:**
 ```powershell
 # Check Azure CLI
 az --version
@@ -286,6 +287,14 @@ az --version
 # Check Bicep
 az bicep version
 # Expected: Bicep CLI version 0.x.x
+
+# Check Node.js
+node --version
+# Expected: v22.x.x
+
+# Check npm
+npm --version
+# Expected: 10.x.x or newer
 
 # Check PowerShell
 pwsh --version
@@ -528,14 +537,14 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
 
 ---
 
-### 2.2 Windows Fast Path（PowerShell + Azure CLI で完結 / WSL2不要） <a id="22-windows-fast-path-powershell-no-wsl2"></a>
+### 2.2 Windows Fast Path（PowerShell + Azure CLI + Node.js で完結 / WSL2不要） <a id="22-windows-fast-path-powershell-no-wsl2"></a>
 
 このパスは、Windows ユーザーが **WSL2 / GitHub Actions なし** で短時間にハンズオンを完了するための最短導線です。
 （同等の手順は macOS/Linux でも bash コマンドに置き換えて実行できます。）
 
 **このパスの特徴:**
 - 講師が事前に用意した **Docker Hub の公開済みコンテナイメージ** を使用
-- **Azure CLI + PowerShell** のみで実施
+- **Azure CLI + PowerShell + Node.js(npm)** で実施
 - ローカルビルド、ローカル Docker、CI/CD 構築をスキップ
 
 **推奨対象:**

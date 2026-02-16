@@ -153,11 +153,12 @@ Install these tools on your computer:
 | **Node.js** | 22.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps | `npm install -g @azure/static-web-apps-cli` |
 
-**Windows Fast Path (PowerShell only, no WSL2/GitHub Actions):**
+**Windows Fast Path (PowerShell + Node.js, no WSL2/GitHub Actions):**
 
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
 | **Azure CLI (Windows)** | 2.60+ | Create and configure App Service/Key Vault resources | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
+| **Node.js (Windows)** | 22.x LTS | Build/deploy frontend (includes npm) | [Download](https://nodejs.org/) |
 | **PowerShell** | 7.x+ | Execute Fast Path commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
 <details>
@@ -276,11 +277,19 @@ swa --version
 # Expected: 2.x.x
 ```
 
-**Windows Fast Path (PowerShell only):**
+**Windows Fast Path (PowerShell + Node.js):**
 ```powershell
 # Check Azure CLI
 az --version
 # Expected: azure-cli 2.60.x or newer
+
+# Check Node.js
+node --version
+# Expected: v22.x.x
+
+# Check npm
+npm --version
+# Expected: 10.x.x or newer
 
 # Check PowerShell
 pwsh --version
@@ -527,14 +536,14 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
 
 ---
 
-### 2.2 Windows Fast Path (PowerShell, No WSL2)
+### 2.2 Windows Fast Path (PowerShell + Node.js, No WSL2)
 
 This path is optimized for workshop speed on Windows and avoids both WSL2 and GitHub Actions.
 (The same flow also works on macOS/Linux with equivalent bash commands.)
 
 **What this path changes:**
 - Uses **instructor-provided prebuilt Docker Hub images** (public)
-- Deploys with **Azure CLI + PowerShell only**
+- Deploys with **Azure CLI + PowerShell + Node.js (npm)**
 - Skips local build, local Docker, and workflow setup
 
 **Recommended for:**
