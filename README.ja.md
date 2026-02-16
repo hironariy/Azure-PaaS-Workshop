@@ -153,6 +153,13 @@ English version: [README.md](./README.md)
 | **Node.js** | 22.x LTS | ビルド（フロント/バック） | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | Static Web Apps へデプロイ | `npm install -g @azure/static-web-apps-cli` |
 
+**Windows Fast Path（PowerShell のみ / WSL2・GitHub Actions不要）:**
+
+| Tool | Version | Purpose | Installation |
+|------|---------|---------|--------------|
+| **Azure CLI（Windows）** | 2.60+ | App Service / Key Vault など Fast Path 用リソース作成・設定 | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
+| **PowerShell** | 7.x+ | Fast Path コマンドの実行 | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
+
 **Windows（GitHub Actions を使わない場合）:**
 
 | Tool | Version | Purpose | Installation |
@@ -172,13 +179,6 @@ English version: [README.md](./README.md)
 | **Node.js（Windows）** | 22.x LTS | 変更を push する前のローカル build/test（Windows ネイティブ） | [Download](https://nodejs.org/) |
 | **GitHub CLI (`gh`)** | Latest | Workflow の実行・確認・手動起動 | [Install Guide](https://cli.github.com/) |
 | **PowerShell** | 7.x+ | Windows でセットアップ系コマンドを実行 | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
-
-**Windows Fast Path（PowerShell のみ / WSL2・GitHub Actions不要）:**
-
-| Tool | Version | Purpose | Installation |
-|------|---------|---------|--------------|
-| **Azure CLI（Windows）** | 2.60+ | App Service / Key Vault など Fast Path 用リソース作成・設定 | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
-| **PowerShell** | 7.x+ | Fast Path コマンドの実行 | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
 > このツールセットは、企業のセキュリティポリシーで WSL2 を利用できない環境を想定しています。
 

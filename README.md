@@ -153,6 +153,13 @@ Install these tools on your computer:
 | **Node.js** | 22.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps | `npm install -g @azure/static-web-apps-cli` |
 
+**Windows Fast Path (PowerShell only, no WSL2/GitHub Actions):**
+
+| Tool | Version | Purpose | Installation |
+|------|---------|---------|--------------|
+| **Azure CLI (Windows)** | 2.60+ | Create and configure App Service/Key Vault resources | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
+| **PowerShell** | 7.x+ | Execute Fast Path commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
+
 **Windows (without GitHub Actions):**
 
 | Tool | Version | Purpose | Installation |
@@ -172,13 +179,6 @@ Install these tools on your computer:
 | **Node.js (Windows)** | 22.x LTS | Local build/test before pushing changes (native Windows) | [Download](https://nodejs.org/) |
 | **GitHub CLI (`gh`)** | Latest | Run/monitor workflows and manual workflow dispatch | [Install Guide](https://cli.github.com/) |
 | **PowerShell** | 7.x+ | Run workshop setup commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
-
-**Windows Fast Path (PowerShell only, no WSL2/GitHub Actions):**
-
-| Tool | Version | Purpose | Installation |
-|------|---------|---------|--------------|
-| **Azure CLI (Windows)** | 2.60+ | Create and configure App Service/Key Vault resources | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
-| **PowerShell** | 7.x+ | Execute Fast Path commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
 > This toolset is intended for organizations where WSL2 is restricted by security policy.
 
