@@ -158,6 +158,7 @@ English version: [README.md](./README.md)
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
 | **Azure CLI（Windows）** | 2.60+ | App Service / Key Vault など Fast Path 用リソース作成・設定 | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
+| **Bicep CLI** | Latest | Bicep テンプレートのデプロイ | `az bicep install` |
 | **PowerShell** | 7.x+ | Fast Path コマンドの実行 | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
 <details>
@@ -281,6 +282,10 @@ swa --version
 # Check Azure CLI
 az --version
 # Expected: azure-cli 2.60.x or newer
+
+# Check Bicep
+az bicep version
+# Expected: Bicep CLI version 0.x.x
 
 # Check PowerShell
 pwsh --version
