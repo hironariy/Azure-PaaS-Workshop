@@ -558,6 +558,8 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
   - `entraTenantId`, `entraBackendClientId`, `entraFrontendClientId`
   - `cosmosDbAdminPassword`
 
+  > **💡 CosmosDB パスワード生成の Tips:** [Required Parameters の生成コマンド](#required-parameters-tip) を参照してください。
+
 3. **Bicep で Azure リソースをデプロイ（FastPath モード）**
   ```powershell
   $rg = "<Resource-Group-Name>"
@@ -702,6 +704,7 @@ code .\dev.local.bicepparam
 > code .\dev.fastpath.local.bicepparam
 > ```
 
+<a id="required-parameters-tip"></a>
 **Required Parameters:**
 
 | Parameter | Description | How to Get |
