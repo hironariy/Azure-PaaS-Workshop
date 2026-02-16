@@ -578,14 +578,50 @@ This path is optimized for workshop speed on Windows and avoids both WSL2 and Gi
 
   This deploys the full workshop resource set via Bicep (DocumentDB, Key Vault, App Service, Static Web Apps, networking, monitoring).
 
-4. **Verify backend endpoint first**
+  > **Important:** After deployment, add the SWA domain to Entra ID redirect URIs. See [Step 4: Update Entra ID Redirect URIs](#step4-update-redirect-uris).
+
+4. **(No Git Bash) Deploy frontend with PowerShell**
+  > In this step, run `swa deploy` directly from Windows PowerShell (do not use `deploy-frontend.sh`).
+
+  ```powershell
+  # One-time prerequisites
+  npm install -g @azure/static-web-apps-cli
+
+  # Move to frontend project
+  Set-Location materials/frontend
+
+  # Build frontend
+  npm install
+  npm run build
+
+  # Inject runtime config into dist/index.html
+  $entraTenantId = "<entraTenantId>"
+  $entraFrontendClientId = "<entraFrontendClientId>"
+  $entraBackendClientId = "<entraBackendClientId>"
+
+  $configJson = (@{
+    ENTRA_TENANT_ID = $entraTenantId
+    ENTRA_FRONTEND_CLIENT_ID = $entraFrontendClientId
+    ENTRA_BACKEND_CLIENT_ID = $entraBackendClientId
+    API_BASE_URL = "/api"
+  } | ConvertTo-Json -Compress)
+
+  (Get-Content .\dist\index.html -Raw).Replace('window.__APP_CONFIG__=null;', "window.__APP_CONFIG__=$configJson;") | Set-Content .\dist\index.html
+
+  # Deploy to Static Web Apps
+  $swaName = az staticwebapp list --resource-group $rg --query "[0].name" -o tsv
+  $swaToken = az staticwebapp secrets list --resource-group $rg --name $swaName --query "properties.apiKey" -o tsv
+  swa deploy .\dist --deployment-token $swaToken --env production
+  ```
+
+5. **Verify backend endpoint first**
   ```powershell
   $appServiceName = az resource list --resource-group $rg --resource-type "Microsoft.Web/sites" --query "[0].name" -o tsv
 
   Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
   ```
 
-5. **Verify SWA API endpoint (after frontend deployment)**
+6. **Verify SWA API endpoint (after frontend deployment)**
   ```powershell
   $swaName = az staticwebapp list --resource-group $rg --query "[0].name" -o tsv
   $swaHost = az staticwebapp show --name $swaName --resource-group $rg --query "defaultHostname" -o tsv
@@ -593,7 +629,6 @@ This path is optimized for workshop speed on Windows and avoids both WSL2 and Gi
   Invoke-RestMethod "https://$swaHost/api/health" | ConvertTo-Json
   ```
   `/api/health` may return `404` until frontend artifacts are deployed to SWA.
-  For frontend deployment, see [Section 2.4](#24-standard-azure-deployment), Step 6.
 
 ✅ **Checkpoint:**
 - Immediately after Bicep, `https://<app-service>/health` returns `healthy`
@@ -866,7 +901,7 @@ az resource list --resource-group <Resource-Group-Name> --output table
 
 </details>
 
-#### Step 4: Update Entra ID Redirect URIs
+#### Step 4: Update Entra ID Redirect URIs <a id="step4-update-redirect-uris"></a>
 
 After deployment, you need to add the Static Web App URL to your Frontend app registration.
 

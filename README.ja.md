@@ -583,14 +583,48 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
 
   > **重要:** デプロイ後は、SWA ドメインを Entra ID のリダイレクト先に追加してください。手順は [手順 4: Entra ID の Redirect URI を更新](#step4-update-redirect-uri) を参照してください。
 
-4. **まずバックエンドの動作確認**
+4. **（Git Bash 不要）PowerShell でフロントエンドをデプロイ**
+  > この手順では、Windows PowerShell から `swa deploy` を直接実行します（`deploy-frontend.sh` は使いません）。
+
+  ```powershell
+  # One-time prerequisites
+  npm install -g @azure/static-web-apps-cli
+
+  # Move to frontend project
+  Set-Location materials/frontend
+
+  # Build frontend
+  npm install
+  npm run build
+
+  # Inject runtime config into dist/index.html
+  $entraTenantId = "<entraTenantId>"
+  $entraFrontendClientId = "<entraFrontendClientId>"
+  $entraBackendClientId = "<entraBackendClientId>"
+
+  $configJson = (@{
+    ENTRA_TENANT_ID = $entraTenantId
+    ENTRA_FRONTEND_CLIENT_ID = $entraFrontendClientId
+    ENTRA_BACKEND_CLIENT_ID = $entraBackendClientId
+    API_BASE_URL = "/api"
+  } | ConvertTo-Json -Compress)
+
+  (Get-Content .\dist\index.html -Raw).Replace('window.__APP_CONFIG__=null;', "window.__APP_CONFIG__=$configJson;") | Set-Content .\dist\index.html
+
+  # Deploy to Static Web Apps
+  $swaName = az staticwebapp list --resource-group $rg --query "[0].name" -o tsv
+  $swaToken = az staticwebapp secrets list --resource-group $rg --name $swaName --query "properties.apiKey" -o tsv
+  swa deploy .\dist --deployment-token $swaToken --env production
+  ```
+
+5. **まずバックエンドの動作確認**
   ```powershell
   $appServiceName = az resource list --resource-group $rg --resource-type "Microsoft.Web/sites" --query "[0].name" -o tsv
 
   Invoke-RestMethod "https://$appServiceName.azurewebsites.net/health" | ConvertTo-Json
   ```
 
-5. **SWA 経由 API の確認（フロントエンドをデプロイ後）**
+6. **SWA 経由 API の確認（フロントエンドをデプロイ後）**
   ```powershell
   $swaName = az staticwebapp list --resource-group $rg --query "[0].name" -o tsv
   $swaHost = az staticwebapp show --name $swaName --resource-group $rg --query "defaultHostname" -o tsv
@@ -598,7 +632,6 @@ Microsoft Entra ID で **2つのアプリ登録**を作成します（Azure デ�
   Invoke-RestMethod "https://$swaHost/api/health" | ConvertTo-Json
   ```
   `/api/health` は、SWA 側にフロントエンドアーティファクトをデプロイするまで `404` になることがあります。
-  フロントエンドのデプロイは [Section 2.4](#24-standard-azure-deployment) の Step 6 を参照してください。
 
 ✅ **Checkpoint:**
 - Bicep デプロイ直後に `https://<app-service>/health` が `healthy`
