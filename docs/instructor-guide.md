@@ -4,10 +4,23 @@ This guide provides teaching points, common issues, and discussion facilitation 
 
 > **📝 Note:** This document is for instructors only. Students should follow the main [README.md](../README.md).
 
+> **📘 Architecture & Operations Guides (for instructor reference):**
+> - [BCDR Guide](../materials/docs/disaster-recovery-guide.md)
+> - [Monitoring Guide](../materials/docs/monitoring-guide.md)
+> - [Bicep Guide](../materials/docs/bicep-guide.md)
+> - [IaaS vs PaaS App Code Comparison Guide](../materials/docs/application-code-comparison-iaas-paas.md)
+> - [IaaS vs PaaS App Code Comparison Guide (JA)](../materials/docs/application-code-comparison-iaas-paas.ja.md)
+
 ---
 
 ## Table of Contents
 
+- [Architecture & Operations Guides](../materials/docs/)
+   - [BCDR Guide](../materials/docs/disaster-recovery-guide.md)
+   - [Monitoring Guide](../materials/docs/monitoring-guide.md)
+   - [Bicep Guide](../materials/docs/bicep-guide.md)
+   - [IaaS vs PaaS App Code Comparison Guide](../materials/docs/application-code-comparison-iaas-paas.md)
+   - [IaaS vs PaaS App Code Comparison Guide (JA)](../materials/docs/application-code-comparison-iaas-paas.ja.md)
 - [Workshop Overview](#workshop-overview)
 - [Section 1: Introduction](#section-1-introduction)
 - [Section 2: Prerequisites and Deployment](#section-2-prerequisites-and-deployment)

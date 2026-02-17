@@ -4,10 +4,23 @@
 
 > **📝 注意:** このドキュメントはインストラクター専用です。受講者はメインの [README.ja.md](../README.ja.md)（必要に応じて [README.md](../README.md)）に従ってください。
 
+> **📘 アーキテクチャ/運用ガイド（講師参照用）:**
+> - [BCDR ガイド](../materials/docs/disaster-recovery-guide.ja.md)
+> - [監視ガイド](../materials/docs/monitoring-guide.ja.md)
+> - [Bicep ガイド](../materials/docs/bicep-guide.ja.md)
+> - [IaaS 版と PaaS 版のアプリケーションコード比較ガイド](../materials/docs/application-code-comparison-iaas-paas.ja.md)
+> - [IaaS vs PaaS App Code Comparison Guide (EN)](../materials/docs/application-code-comparison-iaas-paas.md)
+
 ---
 
 ## 目次
 
+- [アーキテクチャ/運用ガイド](../materials/docs/)
+   - [BCDR ガイド](../materials/docs/disaster-recovery-guide.ja.md)
+   - [監視ガイド](../materials/docs/monitoring-guide.ja.md)
+   - [Bicep ガイド](../materials/docs/bicep-guide.ja.md)
+   - [IaaS 版と PaaS 版のアプリケーションコード比較ガイド](../materials/docs/application-code-comparison-iaas-paas.ja.md)
+   - [IaaS vs PaaS App Code Comparison Guide (EN)](../materials/docs/application-code-comparison-iaas-paas.md)
 - [ワークショップ概要](#ワークショップ概要)
 - [セクション 1: イントロダクション](#セクション-1-イントロダクション)
 - [セクション 2: 前提条件とデプロイ](#セクション-2-前提条件とデプロイ)

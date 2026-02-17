@@ -56,6 +56,13 @@ This workshop is designed for engineers who want to learn **Azure Platform as a 
 
 > 🎓 **For Instructors:** See the [Instructor Guide](docs/instructor-guide.md) for teaching points, common issues, and facilitation notes.
 
+> 📘 **Architecture & Operations Guides:**
+> - [BCDR Guide](materials/docs/disaster-recovery-guide.md)
+> - [Monitoring Guide](materials/docs/monitoring-guide.md)
+> - [Bicep Guide](materials/docs/bicep-guide.md)
+> - [IaaS vs PaaS App Code Comparison Guide](materials/docs/application-code-comparison-iaas-paas.md)
+> - [IaaS vs PaaS App Code Comparison Guide (JA)](materials/docs/application-code-comparison-iaas-paas.ja.md)
+
 ### 1.2 What You Will Learn
 
 By completing this workshop, you will gain hands-on experience with:

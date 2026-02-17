@@ -56,6 +56,13 @@ English version: [README.md](./README.md)
 
 > 🎓 **For Instructors:** 教えどころ・よくある詰まりポイントは [Instructor Guide](docs/instructor-guide.ja.md) を参照してください。
 
+> 📘 **アーキテクチャ/運用ガイド:**
+> - [BCDR ガイド](materials/docs/disaster-recovery-guide.ja.md)
+> - [監視ガイド](materials/docs/monitoring-guide.ja.md)
+> - [Bicep ガイド](materials/docs/bicep-guide.ja.md)
+> - [IaaS 版と PaaS 版のアプリケーションコード比較ガイド](materials/docs/application-code-comparison-iaas-paas.ja.md)
+> - [IaaS vs PaaS App Code Comparison Guide (EN)](materials/docs/application-code-comparison-iaas-paas.md)
+
 ### 1.2 学べること <a id="12-what-you-will-learn"></a>
 
 このワークショップでは、次のトピックを体験します。
