@@ -594,45 +594,94 @@ title: Azure PaaS Workshop 受講者ポータル
         var style = doc.createElement('style');
         style.id = 'wp-embedded-style';
         style.textContent = [
-          'pre { background:#0f172a !important; color:#e5e7eb !important; border-radius:10px; padding:1rem; overflow:auto; }',
-          'code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }',
-          '.wp-copy-wrap { position: relative; }',
-          '.wp-copy-btn { position:absolute; top:.45rem; right:.45rem; border:1px solid #475569; border-radius:7px; background:#1e293b; color:#f8fafc; font-size:.78rem; padding:.25rem .55rem; cursor:pointer; }',
-          '.wp-copy-btn:hover { background:#334155; }'
+          'div.highlight,.highlight,.highlighter-rouge .highlight{background:transparent;}',
+          '.highlighter-rouge .highlight pre,.highlight pre,pre.highlight,pre{background:#0d1117 !important;color:#e6edf3 !important;border:1px solid #30363d;border-radius:8px;padding:.9rem 1.05rem;overflow:auto;line-height:1.6;}',
+          '.highlighter-rouge .highlight pre code,pre code,pre.highlight code{background:transparent !important;color:inherit !important;border:0;padding:0;font-size:.92em;}',
+          'code,code.highlighter-rouge{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#eff1f3;color:#0b3a66;border:1px solid #d7dde3;padding:.1rem .35rem;border-radius:5px;font-size:.92em;}',
+          '.highlight .c,.highlight .cm,.highlight .c1,.highlight .cs,.highlight .cd,.highlight .cp{color:#8b949e;font-style:italic;}',
+          '.highlight .k,.highlight .kc,.highlight .kd,.highlight .kn,.highlight .kp,.highlight .kr,.highlight .kt,.highlight .kv{color:#ff7b72;}',
+          '.highlight .o,.highlight .ow{color:#ff7b72;}',
+          '.highlight .s,.highlight .s1,.highlight .s2,.highlight .sb,.highlight .sc,.highlight .sd,.highlight .sh,.highlight .sx,.highlight .sr,.highlight .ss,.highlight .dl{color:#a5d6ff;}',
+          '.highlight .se{color:#79c0ff;}',
+          '.highlight .si{color:#ffa657;}',
+          '.highlight .m,.highlight .mi,.highlight .mf,.highlight .mh,.highlight .mo,.highlight .il{color:#79c0ff;}',
+          '.highlight .nt{color:#7ee787;}',
+          '.highlight .nv,.highlight .vc,.highlight .vg,.highlight .vi{color:#ffa657;}',
+          '.highlight .nb,.highlight .bp{color:#79c0ff;}',
+          '.highlight .nf,.highlight .fm{color:#d2a8ff;}',
+          '.highlight .na,.highlight .nl,.highlight .nx{color:#79c0ff;}',
+          '.highlight .nc,.highlight .nn,.highlight .no{color:#ffa657;}',
+          '.highlight .gp{color:#8b949e;}',
+          '.highlight .gi{color:#7ee787;}',
+          '.highlight .gd{color:#ffa198;}',
+          '.highlight .err{color:#f85149;background:transparent;}',
+          '.wp-code-wrap{position:relative;}',
+          '.wp-copy-btn{position:absolute;top:.5rem;right:.5rem;display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .55rem;font-size:.78rem;line-height:1;color:#e6edf3;background:#21262d;border:1px solid #30363d;border-radius:6px;cursor:pointer;opacity:0;transition:opacity .15s,background .15s,border-color .15s;font-family:inherit;}',
+          '.wp-code-wrap:hover .wp-copy-btn,.wp-copy-btn:focus-visible{opacity:1;}',
+          '.wp-copy-btn:hover{background:#30363d;border-color:#8b949e;}',
+          '.wp-copy-btn.is-copied{color:#7ee787;border-color:#238636;}',
+          '.wp-copy-btn svg{width:14px;height:14px;fill:currentColor;}'
         ].join('\n');
         doc.head.appendChild(style);
 
-        Array.prototype.slice.call(doc.querySelectorAll('pre')).forEach(function (pre) {
-          if (pre.parentElement && pre.parentElement.classList.contains('wp-copy-wrap')) return;
-          var wrap = doc.createElement('div');
-          wrap.className = 'wp-copy-wrap';
-          pre.parentNode.insertBefore(wrap, pre);
-          wrap.appendChild(pre);
+        var COPY_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg>';
+        var COPY_LABEL = 'コピー';
+        var DONE_LABEL = 'コピーしました';
+        function setLabel(btn, html) {
+          btn.innerHTML = COPY_SVG + '<span>' + html + '</span>';
+        }
+        function fallbackCopy(text, done) {
+          var area = doc.createElement('textarea');
+          area.value = text;
+          area.setAttribute('readonly', '');
+          area.style.position = 'absolute';
+          area.style.left = '-9999px';
+          doc.body.appendChild(area);
+          area.select();
+          try {
+            doc.execCommand('copy');
+            done();
+          } catch (e) {
+            /* コピー失敗時は何もしない */
+          }
+          area.remove();
+        }
+        function copyText(text, btn) {
+          function done() {
+            btn.classList.add('is-copied');
+            setLabel(btn, DONE_LABEL);
+            setTimeout(function () {
+              btn.classList.remove('is-copied');
+              setLabel(btn, COPY_LABEL);
+            }, 1800);
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () {
+              fallbackCopy(text, done);
+            });
+          } else {
+            fallbackCopy(text, done);
+          }
+        }
+        var seen = [];
+        Array.prototype.slice.call(doc.querySelectorAll('div.highlight,.highlighter-rouge .highlight,pre.highlight,pre')).forEach(function (block) {
+          var pre = block.tagName === 'PRE' ? block : block.querySelector('pre');
+          if (!pre || seen.indexOf(pre) !== -1) return;
+          seen.push(pre);
+          var wrap = block.closest('.highlighter-rouge') || block;
+          if (wrap.querySelector('.wp-copy-btn')) return;
+          wrap.classList.add('wp-code-wrap');
+          if (doc.defaultView.getComputedStyle(wrap).position === 'static') {
+            wrap.style.position = 'relative';
+          }
           var btn = doc.createElement('button');
           btn.type = 'button';
           btn.className = 'wp-copy-btn';
-          btn.textContent = 'コピー';
+          btn.setAttribute('aria-label', COPY_LABEL);
+          setLabel(btn, COPY_LABEL);
           btn.addEventListener('click', function () {
-            var text = pre.innerText;
-            function done(label) {
-              btn.textContent = label;
-              setTimeout(function () { btn.textContent = 'コピー'; }, 1200);
-            }
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(text).then(function () {
-                done('コピー済み');
-              }).catch(function () {
-                done('失敗');
-              });
-            } else {
-              var area = doc.createElement('textarea');
-              area.value = text;
-              doc.body.appendChild(area);
-              area.select();
-              doc.execCommand('copy');
-              area.remove();
-              done('コピー済み');
-            }
+            var code = pre.querySelector('code');
+            copyText((code || pre).innerText.replace(/\n$/, ''), btn);
           });
           wrap.appendChild(btn);
         });
