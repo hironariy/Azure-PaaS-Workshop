@@ -66,7 +66,23 @@ chmod +x scripts/deploy-frontend.sh
 Frontend URL: https://<swa-hostname>
 ```
 
-## 5. SWA URL を確認する
+## 5. スクリプトの中身を確認する
+
+`scripts/deploy-frontend.sh` は、React build、Static Web Apps 設定、runtime config 注入、SWA CLI deploy を順番に実行します。
+
+| 処理 | スクリプトが行うこと | 意図 |
+|---|---|---|
+| 設定ファイル読み込み | `scripts/deploy-frontend.local.env` を読み込み、CRLF の場合は LF に直す | Cloud Shell から安全に Entra ID 設定を再利用する |
+| 必須値検証 | `ENTRA_TENANT_ID`、`ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_BACKEND_CLIENT_ID` が空でないことを確認する | 未設定のまま build/deploy して認証エラーになることを防ぐ |
+| Static Web Apps 情報取得 | リソースグループ内の Static Web App hostname と deployment token を Azure CLI で取得する | 手入力を減らし、SWA CLI deploy に必要な値を取得する |
+| フロントエンド build | `materials/frontend` に移動し、`npm install` と `npm run build` を実行する | Vite の本番成果物を `dist/` に作成する |
+| SWA routing 設定 | `staticwebapp.config.json` を `dist/` にコピーする | SPA fallback と `/api/*` の Linked Backend routing を Static Web Apps に反映する |
+| runtime config 注入 | `dist/index.html` の `window.__APP_CONFIG__=null;` を Entra ID 設定と `API_BASE_URL: "/api"` を含む JSON に置換する | build 後の静的ファイルに環境ごとの公開設定を埋め込む |
+| Static Web Apps deploy | `swa deploy ./dist --deployment-token "$SWA_TOKEN" --env production` を実行する | build 済み成果物を Static Web Apps の production 環境にアップロードする |
+
+`deploy-frontend.local.env` の Client ID は公開設定値ですが、`SWA_TOKEN` はデプロイ権限を持つためシークレットとして扱います。スクリプトは token 全体を表示せず、末尾だけを確認用に出力します。
+
+## 6. SWA URL を確認する
 
 ```bash
 echo "Frontend: https://$SWA_HOSTNAME"
