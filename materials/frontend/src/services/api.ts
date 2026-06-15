@@ -12,7 +12,7 @@
  */
 
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
-import { msalInstance, msalInitPromise } from '../config/msalInstance';
+import { getMsalInitPromise, getMsalInstance } from '../config/msalInstance';
 import { createApiRequest } from '../config/authConfig';
 
 /**
@@ -91,7 +91,8 @@ async function getAccessToken(mode: AuthMode = 'optional'): Promise<string | nul
 
   try {
     // Wait for MSAL to be initialized before attempting token acquisition
-    await msalInitPromise;
+    await getMsalInitPromise();
+    const msalInstance = getMsalInstance();
 
     const accounts = msalInstance.getAllAccounts();
     const activeAccount = msalInstance.getActiveAccount() || accounts[0];

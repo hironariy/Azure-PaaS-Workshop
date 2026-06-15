@@ -256,5 +256,5 @@ const config = window.__APP_CONFIG__;
 ## トラブルシューティング
 
 - `tsc: not found` などのエラーが出る場合は、バックエンド側のリモートビルドが有効になっている可能性があります。`SCM_DO_BUILD_DURING_DEPLOYMENT=false` が設定されているか確認してください。
-- フロントエンドで `AADSTS900144`（`client_id` 不足）が出る場合、`index.html` への注入が `null` や空になっていないかを確認してください。
+- フロントエンドで `AADSTS900144`（`client_id` 不足）が出る場合、`index.html` の `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID` が入っているかを確認してください。スクリプトは注入後にこの値を検査し、不足している場合はデプロイ前に停止します。
 - Windows PowerShell で作成した ZIP を使ってバックエンド起動に失敗する場合、`Compress-Archive` で作成した ZIP に `dist\src\app.js` のような Windows 区切りパスが含まれている可能性があります。`materials\backend` で `tar.exe -a -c -f deploy.zip dist package.json package-lock.json node_modules` のように `/` 区切りの ZIP を作成し、再デプロイしてください。

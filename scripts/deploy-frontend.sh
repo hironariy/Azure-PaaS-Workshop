@@ -93,18 +93,35 @@ else
 fi
 
 # Validate required values
-if [ -z "$ENTRA_TENANT_ID" ] || [ "$ENTRA_TENANT_ID" = "your-tenant-id-here" ]; then
+validate_config_value() {
+    local name="$1"
+    local value="$2"
+    local placeholder="$3"
+
+    if [ -z "$value" ] || [ "$value" = "$placeholder" ] || [ "$value" = "null" ] || [ "$value" = "undefined" ]; then
+        echo -e "${RED}Error: $name is not configured in $ENV_SOURCE_FILE${NC}"
+        exit 1
+    fi
+}
+
+validate_config_value "ENTRA_TENANT_ID" "$ENTRA_TENANT_ID" "your-tenant-id-here"
+validate_config_value "ENTRA_FRONTEND_CLIENT_ID" "$ENTRA_FRONTEND_CLIENT_ID" "your-frontend-client-id-here"
+validate_config_value "ENTRA_BACKEND_CLIENT_ID" "$ENTRA_BACKEND_CLIENT_ID" "your-backend-client-id-here"
+
+GUID_PATTERN='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+
+if ! printf '%s' "$ENTRA_TENANT_ID" | grep -Eq "$GUID_PATTERN"; then
     echo -e "${RED}Error: ENTRA_TENANT_ID not configured in $ENV_SOURCE_FILE${NC}"
     exit 1
 fi
 
-if [ -z "$ENTRA_FRONTEND_CLIENT_ID" ] || [ "$ENTRA_FRONTEND_CLIENT_ID" = "your-frontend-client-id-here" ]; then
-    echo -e "${RED}Error: ENTRA_FRONTEND_CLIENT_ID not configured in $ENV_SOURCE_FILE${NC}"
+if ! printf '%s' "$ENTRA_FRONTEND_CLIENT_ID" | grep -Eq "$GUID_PATTERN"; then
+    echo -e "${RED}Error: ENTRA_FRONTEND_CLIENT_ID must be an application client ID GUID in $ENV_SOURCE_FILE${NC}"
     exit 1
 fi
 
-if [ -z "$ENTRA_BACKEND_CLIENT_ID" ] || [ "$ENTRA_BACKEND_CLIENT_ID" = "your-backend-client-id-here" ]; then
-    echo -e "${RED}Error: ENTRA_BACKEND_CLIENT_ID not configured in $ENV_SOURCE_FILE${NC}"
+if ! printf '%s' "$ENTRA_BACKEND_CLIENT_ID" | grep -Eq "$GUID_PATTERN"; then
+    echo -e "${RED}Error: ENTRA_BACKEND_CLIENT_ID must be an application client ID GUID in $ENV_SOURCE_FILE${NC}"
     exit 1
 fi
 
@@ -178,15 +195,54 @@ echo -e "${GREEN}✅ Static Web Apps config copied${NC}"
 echo ""
 echo -e "${YELLOW}Step 4: Injecting config into index.html...${NC}"
 
-# Create the config JSON (single line for injection)
-CONFIG_JSON="{\"ENTRA_TENANT_ID\":\"$ENTRA_TENANT_ID\",\"ENTRA_FRONTEND_CLIENT_ID\":\"$ENTRA_FRONTEND_CLIENT_ID\",\"ENTRA_BACKEND_CLIENT_ID\":\"$ENTRA_BACKEND_CLIENT_ID\",\"API_BASE_URL\":\"/api\"}"
+ENTRA_TENANT_ID="$ENTRA_TENANT_ID" \
+ENTRA_FRONTEND_CLIENT_ID="$ENTRA_FRONTEND_CLIENT_ID" \
+ENTRA_BACKEND_CLIENT_ID="$ENTRA_BACKEND_CLIENT_ID" \
+node <<'NODE'
+const fs = require('fs');
 
-# Replace the placeholder in index.html
-# The placeholder is: window.__APP_CONFIG__=null;
-sed -i.bak "s|window.__APP_CONFIG__=null;|window.__APP_CONFIG__=$CONFIG_JSON;|g" dist/index.html
-rm -f dist/index.html.bak
+const indexPath = 'dist/index.html';
+const config = {
+  ENTRA_TENANT_ID: process.env.ENTRA_TENANT_ID,
+  ENTRA_FRONTEND_CLIENT_ID: process.env.ENTRA_FRONTEND_CLIENT_ID,
+  ENTRA_BACKEND_CLIENT_ID: process.env.ENTRA_BACKEND_CLIENT_ID,
+  API_BASE_URL: '/api',
+};
 
-echo "  Config injected into dist/index.html"
+const missing = Object.entries(config)
+  .filter(([key, value]) => key !== 'API_BASE_URL' && (!value || value.trim() === ''))
+  .map(([key]) => key);
+
+if (missing.length > 0) {
+  console.error(`Error: Missing config values: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
+const assignment = `window.__APP_CONFIG__=${JSON.stringify(config)};`;
+const assignmentPattern = /window\.__APP_CONFIG__\s*=\s*(?:null|undefined|\{[^<]*?\}|)\s*;/;
+const html = fs.readFileSync(indexPath, 'utf8');
+
+if (!assignmentPattern.test(html)) {
+  console.error('Error: Could not find window.__APP_CONFIG__ placeholder in dist/index.html.');
+  process.exit(1);
+}
+
+const updated = html.replace(assignmentPattern, assignment);
+fs.writeFileSync(indexPath, updated);
+
+const verified = fs.readFileSync(indexPath, 'utf8');
+if (!verified.includes(`"ENTRA_FRONTEND_CLIENT_ID":"${config.ENTRA_FRONTEND_CLIENT_ID}"`)) {
+  console.error('Error: Config injection verification failed for ENTRA_FRONTEND_CLIENT_ID.');
+  process.exit(1);
+}
+
+if (/window\.__APP_CONFIG__\s*=\s*(?:null|undefined|)\s*;/.test(verified)) {
+  console.error('Error: Config injection left an empty or null window.__APP_CONFIG__ assignment.');
+  process.exit(1);
+}
+NODE
+
+echo "  Config injected and verified in dist/index.html"
 echo -e "${GREEN}✅ Config injected (no separate config.json file)${NC}"
 
 # Step 5: Deploy to Static Web Apps

@@ -277,7 +277,7 @@ Step 3: Copying Static Web Apps config...
 ✅ Static Web Apps config copied
 
 Step 4: Injecting config into index.html...
-  Config injected into dist/index.html
+  Config injected and verified in dist/index.html
 ✅ Config injected (no separate config.json file)
 
 Step 5: Deploying to Static Web Apps...
@@ -305,6 +305,7 @@ Next steps:
 | `tsc: not found` | Remote build enabled | Script sets `SCM_DO_BUILD_DURING_DEPLOYMENT=false` automatically |
 | Health check timeout | App taking too long to start | Check logs: `az webapp log tail --resource-group <rg> --name <app>` |
 | HTTP 502 after deploy | App crashed on startup | Check logs for Key Vault or database connection errors |
+| `AADSTS900144` during frontend sign-in | `window.__APP_CONFIG__` is missing `ENTRA_FRONTEND_CLIENT_ID` in deployed `index.html` | Check the deployed HTML and rerun `scripts/deploy-frontend.sh`; the script now verifies config injection before deploy |
 | Permission denied | Script not executable | Run: `chmod +x scripts/deploy-backend.sh` |
 | Backend fails after ZIP deploy from Windows PowerShell | ZIP was created with Windows-style separators (e.g., `dist\src\app.js`) | Recreate ZIP with `/` separators from `materials\backend`, then redeploy |
 

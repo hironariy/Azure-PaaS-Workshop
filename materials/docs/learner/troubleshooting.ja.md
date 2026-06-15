@@ -224,6 +224,44 @@ az ad app permission list-grants \
 
 CLI では見えるのに Portal で見えない場合は、ブラウザー更新、Portal 再ログイン、正しい tenant と Frontend app registration を開いているかを確認します。
 
+## ログイン時に `AADSTS900144` が出る
+
+症状:
+
+```text
+AADSTS900144: The request body must contain the following parameter: 'client_id'.
+```
+
+原因:
+
+- Static Web Apps にデプロイされた `index.html` の `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID` が入っていない。
+- `$WORKSHOP_STATE_DIR/deploy-frontend.local.env` の値が空、または古い frontend 成果物を再デプロイしている。
+
+確認:
+
+```bash
+curl -fsS "https://${SWA_HOSTNAME}" \
+  | grep -o 'window.__APP_CONFIG__=[^<]*'
+
+cat "$WORKSHOP_STATE_DIR/deploy-frontend.local.env"
+```
+
+期待値は `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_TENANT_ID`、`ENTRA_BACKEND_CLIENT_ID` が含まれることです。
+
+`window.__APP_CONFIG__` が正しいのに同じエラーが続く場合は、古い JavaScript bundle やブラウザーの `sessionStorage` が残っている可能性があります。ブラウザーで対象 Static Web Apps のタブを閉じ、サイトデータまたは `sessionStorage` を削除してから再読み込みします。また、このワークショップ本線では Static Web Apps 組み込み認証の `/.auth/login/aad` ではなく、アプリ画面の **Sign in with Microsoft** ボタンから MSAL でログインします。
+
+対処:
+
+```bash
+cat > "$WORKSHOP_STATE_DIR/deploy-frontend.local.env" <<EOF
+ENTRA_TENANT_ID="$TENANT_ID"
+ENTRA_FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
+ENTRA_BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
+EOF
+
+./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
+```
+
 ## フロントエンド build が失敗する
 
 ```bash

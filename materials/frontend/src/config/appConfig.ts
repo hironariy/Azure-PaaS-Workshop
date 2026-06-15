@@ -39,13 +39,43 @@ export interface AppConfig {
  */
 let cachedConfig: AppConfig | null = null;
 
+const requiredConfigFields: Array<[keyof AppConfig, string]> = [
+  ['entraTenantId', 'ENTRA_TENANT_ID'],
+  ['entraFrontendClientId', 'ENTRA_FRONTEND_CLIENT_ID'],
+  ['entraBackendClientId', 'ENTRA_BACKEND_CLIENT_ID'],
+];
+
+function isMissingConfigValue(value: string): boolean {
+  const normalized = value.trim();
+  return (
+    normalized.length === 0 ||
+    normalized === 'null' ||
+    normalized === 'undefined' ||
+    /^your-.*-here$/i.test(normalized) ||
+    /^<.*>$/.test(normalized)
+  );
+}
+
+function assertRequiredConfig(config: AppConfig, source: string): void {
+  const missing = requiredConfigFields
+    .filter(([field]) => isMissingConfigValue(config[field]))
+    .map(([, envName]) => envName);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `[Config] Missing required runtime configuration from ${source}: ${missing.join(', ')}. ` +
+        'Recreate deploy-frontend.local.env and rerun scripts/deploy-frontend.sh.',
+    );
+  }
+}
+
 function buildConfigFromEnv(): AppConfig {
   return {
-    entraTenantId: import.meta.env.VITE_ENTRA_TENANT_ID || '',
-    entraFrontendClientId: import.meta.env.VITE_ENTRA_CLIENT_ID || '',
-    entraBackendClientId: import.meta.env.VITE_API_CLIENT_ID || '',
-    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
-    redirectUri: import.meta.env.VITE_ENTRA_REDIRECT_URI || window.location.origin,
+    entraTenantId: (import.meta.env.VITE_ENTRA_TENANT_ID || '').trim(),
+    entraFrontendClientId: (import.meta.env.VITE_ENTRA_CLIENT_ID || '').trim(),
+    entraBackendClientId: (import.meta.env.VITE_API_CLIENT_ID || '').trim(),
+    apiBaseUrl: (import.meta.env.VITE_API_BASE_URL || '/api').trim(),
+    redirectUri: (import.meta.env.VITE_ENTRA_REDIRECT_URI || window.location.origin).trim(),
   };
 }
 
@@ -82,12 +112,13 @@ export async function loadConfig(): Promise<AppConfig> {
   const inlineConfig = window.__APP_CONFIG__;
   if (inlineConfig && inlineConfig.ENTRA_TENANT_ID) {
     cachedConfig = {
-      entraTenantId: inlineConfig.ENTRA_TENANT_ID || '',
-      entraFrontendClientId: inlineConfig.ENTRA_FRONTEND_CLIENT_ID || '',
-      entraBackendClientId: inlineConfig.ENTRA_BACKEND_CLIENT_ID || '',
-      apiBaseUrl: inlineConfig.API_BASE_URL || '/api',
+      entraTenantId: (inlineConfig.ENTRA_TENANT_ID || '').trim(),
+      entraFrontendClientId: (inlineConfig.ENTRA_FRONTEND_CLIENT_ID || '').trim(),
+      entraBackendClientId: (inlineConfig.ENTRA_BACKEND_CLIENT_ID || '').trim(),
+      apiBaseUrl: (inlineConfig.API_BASE_URL || '/api').trim(),
       redirectUri: window.location.origin,
     };
+    assertRequiredConfig(cachedConfig, 'window.__APP_CONFIG__');
     console.log('[Config] Configuration loaded successfully from inline config');
     return cachedConfig;
   }
@@ -102,13 +133,14 @@ export async function loadConfig(): Promise<AppConfig> {
         const json = await response.json();
 
         cachedConfig = {
-          entraTenantId: json.ENTRA_TENANT_ID || '',
-          entraFrontendClientId: json.ENTRA_FRONTEND_CLIENT_ID || '',
-          entraBackendClientId: json.ENTRA_BACKEND_CLIENT_ID || '',
-          apiBaseUrl: json.API_BASE_URL || '/api',
+          entraTenantId: (json.ENTRA_TENANT_ID || '').trim(),
+          entraFrontendClientId: (json.ENTRA_FRONTEND_CLIENT_ID || '').trim(),
+          entraBackendClientId: (json.ENTRA_BACKEND_CLIENT_ID || '').trim(),
+          apiBaseUrl: (json.API_BASE_URL || '/api').trim(),
           redirectUri: window.location.origin,
         };
 
+        assertRequiredConfig(cachedConfig, '/config.json');
         console.log('[Config] Configuration loaded successfully from /config.json');
         return cachedConfig;
       }
@@ -128,11 +160,7 @@ export async function loadConfig(): Promise<AppConfig> {
   cachedConfig = buildConfigFromEnv();
   cachedConfig.redirectUri = window.location.origin;
 
-  if (!cachedConfig.entraTenantId || !cachedConfig.entraFrontendClientId) {
-    console.error(
-      '[Config] Missing required Entra ID configuration. Provide /config.json or build-time VITE_* values.',
-    );
-  }
+  assertRequiredConfig(cachedConfig, 'build-time VITE_* values');
 
   return cachedConfig;
 }

@@ -12,15 +12,14 @@
  */
 
 import { PublicClientApplication, EventType, type Configuration } from '@azure/msal-browser';
-import { createMsalConfig, msalConfig as legacyMsalConfig } from './authConfig';
+import { createMsalConfig } from './authConfig';
 import { isConfigLoaded } from './appConfig';
 
 /**
- * Singleton MSAL instance
- * Initially created with legacy config for backward compatibility
- * Will be replaced when initializeMsal() is called
+ * Singleton MSAL instance.
+ * Created only after runtime config has been loaded.
  */
-let msalInstance: PublicClientApplication = new PublicClientApplication(legacyMsalConfig);
+let msalInstance: PublicClientApplication | null = null;
 
 /**
  * Flag to track if MSAL has been properly initialized with runtime config
@@ -31,7 +30,23 @@ let msalInitialized = false;
  * Promise that resolves when MSAL is fully initialized
  * This MUST be awaited before making any authenticated API calls
  */
-let msalInitPromise: Promise<void>;
+let msalInitPromise: Promise<void> = Promise.resolve();
+
+function registerMsalEventCallbacks(instance: PublicClientApplication): void {
+  instance.addEventCallback((event) => {
+    if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
+      const payload = event.payload as { account: unknown };
+      if (payload.account) {
+        instance.setActiveAccount(
+          payload.account as Parameters<typeof instance.setActiveAccount>[0],
+        );
+      }
+    }
+    if (event.eventType === EventType.LOGOUT_SUCCESS) {
+      instance.setActiveAccount(null);
+    }
+  });
+}
 
 /**
  * Initialize MSAL with runtime configuration
@@ -56,47 +71,39 @@ export async function initializeMsal(): Promise<void> {
 
   // Create new MSAL instance with runtime config
   const config: Configuration = createMsalConfig();
-  msalInstance = new PublicClientApplication(config);
+  const runtimeMsalInstance = new PublicClientApplication(config);
 
   // Set up event callbacks BEFORE handling redirect
-  msalInstance.addEventCallback((event) => {
-    if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
-      const payload = event.payload as { account: unknown };
-      if (payload.account) {
-        msalInstance.setActiveAccount(
-          payload.account as Parameters<typeof msalInstance.setActiveAccount>[0],
-        );
+  registerMsalEventCallbacks(runtimeMsalInstance);
+
+  msalInstance = runtimeMsalInstance;
+  msalInitPromise = (async () => {
+    // Initialize MSAL
+    await runtimeMsalInstance.initialize();
+
+    // Handle redirect response (CRITICAL: must complete before React renders)
+    try {
+      const response = await runtimeMsalInstance.handleRedirectPromise();
+      if (response) {
+        console.log('[MSAL] Redirect response received, setting active account');
+        runtimeMsalInstance.setActiveAccount(response.account);
+      } else {
+        // No redirect response - check for existing accounts
+        const accounts = runtimeMsalInstance.getAllAccounts();
+        if (accounts.length > 0 && accounts[0] !== undefined) {
+          console.log('[MSAL] Found existing account, setting as active');
+          runtimeMsalInstance.setActiveAccount(accounts[0]);
+        }
       }
+    } catch (error) {
+      console.error('[MSAL] Redirect handling error:', error);
     }
-    if (event.eventType === EventType.LOGOUT_SUCCESS) {
-      msalInstance.setActiveAccount(null);
-    }
-  });
 
-  // Initialize MSAL
-  await msalInstance.initialize();
+    msalInitialized = true;
+    console.log('[MSAL] Initialization complete');
+  })();
 
-  // Handle redirect response (CRITICAL: must complete before React renders)
-  try {
-    const response = await msalInstance.handleRedirectPromise();
-    if (response) {
-      console.log('[MSAL] Redirect response received, setting active account');
-      msalInstance.setActiveAccount(response.account);
-    } else {
-      // No redirect response - check for existing accounts
-      const accounts = msalInstance.getAllAccounts();
-      if (accounts.length > 0 && accounts[0] !== undefined) {
-        console.log('[MSAL] Found existing account, setting as active');
-        msalInstance.setActiveAccount(accounts[0]);
-      }
-    }
-  } catch (error) {
-    console.error('[MSAL] Redirect handling error:', error);
-  }
-
-  msalInitialized = true;
-  msalInitPromise = Promise.resolve();
-  console.log('[MSAL] Initialization complete');
+  await msalInitPromise;
 }
 
 /**
@@ -104,8 +111,8 @@ export async function initializeMsal(): Promise<void> {
  * Throws if initializeMsal() hasn't been called
  */
 export function getMsalInstance(): PublicClientApplication {
-  if (!msalInitialized) {
-    console.warn(
+  if (!msalInitialized || !msalInstance) {
+    throw new Error(
       '[MSAL] Instance accessed before initialization. Call initializeMsal() in main.tsx.',
     );
   }
@@ -127,46 +134,3 @@ export function getMsalInitPromise(): Promise<void> {
 export function isMsalInitialized(): boolean {
   return msalInitialized;
 }
-
-// =============================================================================
-// Legacy exports for backward compatibility
-// These will be removed after migration is complete
-// =============================================================================
-
-// Legacy initialization (for backward compatibility during migration)
-// This will be overwritten when initializeMsal() is called
-msalInitPromise = msalInstance.initialize().then(() => {
-  return msalInstance
-    .handleRedirectPromise()
-    .then((response) => {
-      if (response) {
-        msalInstance.setActiveAccount(response.account);
-      } else {
-        const accounts = msalInstance.getAllAccounts();
-        if (accounts.length > 0 && accounts[0] !== undefined) {
-          msalInstance.setActiveAccount(accounts[0]);
-        }
-      }
-    })
-    .catch((error) => {
-      console.error('[MSAL] Redirect handling error:', error);
-    });
-});
-
-// Legacy event callback setup
-msalInstance.addEventCallback((event) => {
-  if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
-    const payload = event.payload as { account: unknown };
-    if (payload.account) {
-      msalInstance.setActiveAccount(
-        payload.account as Parameters<typeof msalInstance.setActiveAccount>[0],
-      );
-    }
-  }
-  if (event.eventType === EventType.LOGOUT_SUCCESS) {
-    msalInstance.setActiveAccount(null);
-  }
-});
-
-// Re-export msalInstance for backward compatibility
-export { msalInstance, msalInitPromise };
