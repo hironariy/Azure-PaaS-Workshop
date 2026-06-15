@@ -158,6 +158,11 @@ FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
   --query id -o tsv)"
 
+if [ -z "$FRONTEND_OBJECT_ID" ]; then
+  echo "FRONTEND_OBJECT_ID を取得できませんでした。FRONTEND_CLIENT_ID=$FRONTEND_CLIENT_ID を確認してください。"
+  exit 1
+fi
+
 SPA_PATCH="$(jq -nc --argjson redirectUris "$REDIRECT_URIS" '{
   spa: {
     redirectUris: $redirectUris

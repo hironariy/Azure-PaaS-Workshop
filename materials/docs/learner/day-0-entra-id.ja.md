@@ -35,9 +35,20 @@ az ad app update \
 
 `access_as_user` スコープを追加します。
 
-> `az ad app update --set api.oauth2PermissionScopes=...` は、新規 app registration の `api` プロパティがまだ初期化されていない場合に `Couldn't find 'api' in ''` で失敗することがあります。この手順では Microsoft Graph の application object ID (`BACKEND_OBJECT_ID`) に対して `az rest` で PATCH します。
+> `az ad app update --set api.oauth2PermissionScopes=...` は、新規 app registration の `api` プロパティがまだ初期化されていない場合に `Couldn't find 'api' in ''` で失敗することがあります。この手順では Microsoft Graph の application object ID (`BACKEND_OBJECT_ID`) に対して `az rest` で PATCH します。`BACKEND_OBJECT_ID` が空だと `/applications/` への PATCH になり `Method Not Allowed` になるため、PATCH 直前に再取得して確認します。
 
 ```bash
+export BACKEND_OBJECT_ID="$(az ad app show \
+  --id "$BACKEND_CLIENT_ID" \
+  --query id -o tsv)"
+
+if [ -z "$BACKEND_OBJECT_ID" ]; then
+  echo "BACKEND_OBJECT_ID を取得できませんでした。BACKEND_CLIENT_ID=$BACKEND_CLIENT_ID を確認してください。"
+  exit 1
+fi
+
+echo "BACKEND_OBJECT_ID=$BACKEND_OBJECT_ID"
+
 SCOPES_JSON="$(jq -nc --arg id "$ACCESS_SCOPE_ID" '[{
   id: $id,
   isEnabled: true,
@@ -86,6 +97,17 @@ export FRONTEND_OBJECT_ID="$(az ad app show \
 Cloud Shell では本番の Static Web Apps URL がまだ分からないため、まずローカル/検証用 URI を入れておきます。Day 1 のデプロイ後に SWA URL を追加します。
 
 ```bash
+export FRONTEND_OBJECT_ID="$(az ad app show \
+  --id "$FRONTEND_CLIENT_ID" \
+  --query id -o tsv)"
+
+if [ -z "$FRONTEND_OBJECT_ID" ]; then
+  echo "FRONTEND_OBJECT_ID を取得できませんでした。FRONTEND_CLIENT_ID=$FRONTEND_CLIENT_ID を確認してください。"
+  exit 1
+fi
+
+echo "FRONTEND_OBJECT_ID=$FRONTEND_OBJECT_ID"
+
 SPA_PATCH="$(jq -nc '{
   spa: {
     redirectUris: ["http://localhost:4280"]
