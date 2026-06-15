@@ -6,7 +6,26 @@ title: "Day 0: 事前準備"
 
 このページでは、Cloud Shell から Azure PaaS リソースを作成するためのサブスクリプション、Provider、リージョン、費用の前提を確認します。
 
-## 1. サブスクリプションを確認する
+## 1. アーキテクチャを確認する
+
+![Azure PaaS Workshop アーキテクチャ](../assets/images/architecture.png)
+
+このワークショップでは、受講者が Cloud Shell から Azure CLI、Bicep、デプロイスクリプトを使い、VM を直接管理せずに PaaS 構成のブログアプリを作成します。
+
+全体像は次の通りです。
+
+| 領域 | Azure サービス | 役割 |
+|---|---|---|
+| フロントエンド | Azure Static Web Apps | React アプリを配信し、`/api/*` をバックエンドへルーティングします。 |
+| バックエンド API | Azure App Service | Node.js API を実行し、Microsoft Entra ID のトークンを検証します。 |
+| データ | Azure Cosmos DB for MongoDB vCore | ブログ記事やユーザー情報を保存します。 |
+| シークレット | Azure Key Vault | Cosmos DB 接続文字列などを保存し、App Service の Managed Identity で参照します。 |
+| 監視 | Application Insights / Log Analytics | アプリのログ、依存関係、障害調査に使います。 |
+| ネットワーク | VNet Integration / Private Endpoint / NAT Gateway | App Service から private endpoint 経由でデータ層へ接続します。 |
+
+AWS に慣れている場合は、アプリ実行基盤を EC2 ではなく、Elastic Beanstalk や Amplify、Secrets Manager、CloudWatch Logs のような managed service の組み合わせとして捉えると理解しやすくなります。
+
+## 2. サブスクリプションを確認する
 
 ```bash
 az account show --query "{name:name,id:id,tenantId:tenantId}" --output table
@@ -19,7 +38,7 @@ az account set --subscription "<subscription-id-or-name>"
 az account show --output table
 ```
 
-## 2. リソースグループ名を確認する
+## 3. リソースグループ名を確認する
 
 ```bash
 echo "Resource group: $RESOURCE_GROUP"
@@ -34,7 +53,7 @@ export GROUP_ID="A"
 export RESOURCE_GROUP="rg-${BASE_NAME}-${GROUP_ID}-workshop"
 ```
 
-## 3. Resource Provider を登録する
+## 4. Resource Provider を登録する
 
 このワークショップでは、App Service、Static Web Apps、Cosmos DB/DocumentDB、Key Vault、Monitor、Network を使います。
 
@@ -67,7 +86,7 @@ done
 
 すべて `Registered` になるまで数分かかることがあります。
 
-## 4. Quota と費用の前提を確認する
+## 5. Quota と費用の前提を確認する
 
 Cloud Shell 手順では、ワークショップ向けの小さな SKU を使います。
 
@@ -82,7 +101,7 @@ Cloud Shell 手順では、ワークショップ向けの小さな SKU を使い
 
 App Service SKU の利用可否はサブスクリプションやリージョンによって異なります。デプロイ時に quota エラーが出た場合は講師に相談してください。
 
-## 5. 作業用リソースグループを作成する
+## 6. 作業用リソースグループを作成する
 
 ```bash
 az group create \
