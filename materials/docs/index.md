@@ -594,6 +594,9 @@ title: Azure PaaS Workshop 受講者ポータル
         var style = doc.createElement('style');
         style.id = 'wp-embedded-style';
         style.textContent = [
+          '.site-header,.site-footer{display:none !important;}',
+          '.page-content{padding:1.4rem 0 2rem;}',
+          '.page-content>.wrapper{max-width:900px;}',
           'div.highlight,.highlight,.highlighter-rouge .highlight{background:transparent;}',
           '.highlighter-rouge .highlight pre,.highlight pre,pre.highlight,pre{background:#0d1117 !important;color:#e6edf3 !important;border:1px solid #30363d;border-radius:8px;padding:.9rem 1.05rem;overflow:auto;line-height:1.6;}',
           '.highlighter-rouge .highlight pre code,pre code,pre.highlight code{background:transparent !important;color:inherit !important;border:0;padding:0;font-size:.92em;}',
