@@ -4,7 +4,7 @@ title: "Day 1: PaaS インフラをデプロイ"
 
 # Day 1: PaaS インフラをデプロイ
 
-Cloud Shell から Bicep を実行し、PaaS リソースを作成します。バックエンドは prebuilt container image を使うため、受講者がローカルで backend を build する必要はありません。
+Cloud Shell から Bicep を実行し、PaaS リソースを作成します。このページでは `dev.bicepparam` をコピーして **標準 mode (`deploymentMode = 'standard'`)** でデプロイします。バックエンドのアプリケーションコードは次のページでリポジトリから build して App Service に ZIP deploy するため、外部の既成コンテナイメージには依存しません。
 
 ## 1. 変数と作業ディレクトリを確認する
 
@@ -16,6 +16,7 @@ echo "$RESOURCE_GROUP"
 echo "$TENANT_ID"
 echo "$BACKEND_CLIENT_ID"
 echo "$FRONTEND_CLIENT_ID"
+echo "$PARAM_FILE"
 ```
 
 値が空の場合は、[受講者クイックスタート](cloud-shell-quickstart.ja.html) と [Day 0: Entra ID と認証設定](day-0-entra-id.ja.html) に戻って設定してください。
@@ -29,10 +30,10 @@ export COSMOS_PASSWORD="$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=' | c
 echo "Password length: ${#COSMOS_PASSWORD}"
 ```
 
-## 3. FastPath 用パラメータファイルを作成する
+## 3. 標準デプロイ用パラメータファイルを作成する
 
 ```bash
-cp materials/bicep/dev.fastpath.bicepparam "$PARAM_FILE"
+cp materials/bicep/dev.bicepparam "$PARAM_FILE"
 ```
 
 Cloud Shell から安全に値を置換します。
@@ -45,18 +46,17 @@ import os
 path = Path(os.environ["PARAM_FILE"])
 text = path.read_text()
 replacements = {
+    "param location = 'japanwest'": f"param location = '{os.environ['LOCATION']}'",
     "param baseName = 'blogapp'": f"param baseName = '{os.environ['BASE_NAME']}'",
     "param groupId = ''": f"param groupId = '{os.environ['GROUP_ID']}'",
-    "<your-tenant-id>": os.environ["TENANT_ID"],
-    "<backend-api-client-id>": os.environ["BACKEND_CLIENT_ID"],
-    "<frontend-spa-client-id>": os.environ["FRONTEND_CLIENT_ID"],
-    "<strong-password>": os.environ["COSMOS_PASSWORD"],
+    "param entraTenantId = ''": f"param entraTenantId = '{os.environ['TENANT_ID']}'",
+    "param entraBackendClientId = ''": f"param entraBackendClientId = '{os.environ['BACKEND_CLIENT_ID']}'",
+    "param entraFrontendClientId = ''": f"param entraFrontendClientId = '{os.environ['FRONTEND_CLIENT_ID']}'",
+    "param cosmosDbAdminPassword = ''": f"param cosmosDbAdminPassword = '{os.environ['COSMOS_PASSWORD']}'",
+    "param staticWebAppLocation = 'eastasia'": f"param staticWebAppLocation = '{os.environ['SWA_LOCATION']}'",
 }
 for old, new in replacements.items():
     text = text.replace(old, new)
-text = text.replace("param location = 'japaneast'", f"param location = '{os.environ['LOCATION']}'")
-text = text.replace("param staticWebAppLocation = 'eastasia'", f"param staticWebAppLocation = '{os.environ['SWA_LOCATION']}'")
-text = text.replace("param appServiceContainerImage = 'docker.io/hironariy/azure-paas-workshop-backend@sha256:7af2ad591a0d791f37810cd9d1349faee7e982f4c1fa337f0cf0d7157d84f964'", f"param appServiceContainerImage = '{os.environ['BACKEND_IMAGE']}'")
 path.write_text(text)
 PY
 ```
@@ -64,8 +64,10 @@ PY
 確認します。パスワードは表示しません。
 
 ```bash
-grep -E "param (location|baseName|groupId|deploymentMode|appServiceContainerImage|entraTenantId|entraBackendClientId|entraFrontendClientId|staticWebAppSku|staticWebAppLocation)" "$PARAM_FILE"
+grep -E "param (location|baseName|groupId|deploymentMode|entraTenantId|entraBackendClientId|entraFrontendClientId|staticWebAppSku|staticWebAppLocation)" "$PARAM_FILE"
 ```
+
+`deploymentMode` が `standard`、`staticWebAppSku` が `Standard` であることを確認します。
 
 ## 4. Bicep を検証する
 
@@ -125,7 +127,7 @@ echo "Static Web App: https://$SWA_HOSTNAME"
 ## 7. Static Web Apps URL を Entra ID に追加する
 
 ```bash
-REDIRECT_URIS="$(jq -nc --arg swa "https://$SWA_HOSTNAME" '["http://localhost:4280", $swa]')"
+REDIRECT_URIS="$(jq -nc --arg swa "https://$SWA_HOSTNAME" '["http://localhost:4280", $swa, ($swa + "/")]')"
 
 az ad app update \
   --id "$FRONTEND_CLIENT_ID" \
@@ -140,22 +142,18 @@ az ad app show \
   --query "spa.redirectUris" -o jsonc
 ```
 
-## 8. App Service のヘルスチェック
+## 8. App Service の作成状態を確認する
+
+この時点ではまだバックエンドコードをデプロイしていないため、`/health` は成功しなくて構いません。App Service が作成され、`Running` になっていることだけ確認します。
 
 ```bash
-curl -fsS "https://${APP_SERVICE_NAME}.azurewebsites.net/health" | jq .
+az webapp show \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$APP_SERVICE_NAME" \
+  --query "{name:name,state:state,defaultHostName:defaultHostName,httpsOnly:httpsOnly}" \
+  -o jsonc
 ```
-
-期待値:
-
-```json
-{
-  "status": "healthy"
-}
-```
-
-`/api/health` はフロントエンド成果物を Static Web Apps にデプロイするまで `404` になることがあります。
 
 ## 次に進む
 
-- [Day 1: フロントエンドをデプロイ](day-1-deploy-frontend.ja.html)
+- [Day 1: バックエンドをデプロイ](day-1-deploy-backend.ja.html)

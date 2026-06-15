@@ -45,8 +45,7 @@ Important parameters in `main.bicep`:
 - `environment`: `dev`, `staging`, `prod`
 - `location`: primary Azure region
 - `baseName`: base naming stem for resources
-- `deploymentMode`: `standard` or `fastpath-container`
-- `appServiceContainerImage`: required when using container fast path
+- `deploymentMode`: use `standard` for the learner path
 - `groupId`: workshop multi-group identifier (`A`-`J`)
 - `entraTenantId`, `entraBackendClientId`, `entraFrontendClientId`
 - `cosmosDbAdminPassword` (secure)
@@ -148,14 +147,13 @@ Design intent:
 Available examples:
 
 - `main.bicepparam`, `dev.bicepparam`
-- `main.fastpath.bicepparam`, `dev.fastpath.bicepparam`
 - local copies such as `*.local.bicepparam`
 
 Recommended workflow:
 
 1. Copy from the closest baseline (`dev` for workshop).
 2. Set Entra IDs and secure password values.
-3. For `fastpath-container`, set immutable container image reference.
+3. Keep `deploymentMode = 'standard'` for the learner path.
 4. Keep local overrides in non-committed local parameter files.
 
 ---
@@ -168,7 +166,7 @@ Validate before deployment:
 az deployment group validate \
   --resource-group <resource-group-name> \
   --template-file materials/bicep/main.bicep \
-  --parameters materials/bicep/dev.fastpath.local.bicepparam
+  --parameters materials/bicep/dev.local.bicepparam
 ```
 
 Deploy:
@@ -177,7 +175,7 @@ Deploy:
 az deployment group create \
   --resource-group <resource-group-name> \
   --template-file materials/bicep/main.bicep \
-  --parameters materials/bicep/dev.fastpath.local.bicepparam
+  --parameters materials/bicep/dev.local.bicepparam
 ```
 
 Read outputs:
@@ -205,7 +203,7 @@ When updating templates:
 
 ## 7. Common Pitfalls
 
-- mismatch between `deploymentMode` and `appServiceContainerImage`
+- `deploymentMode` not set to `standard`
 - missing Entra IDs in parameter files
 - forgetting to update local parameter copy before deployment
 - assuming SWA linked backend behavior while using Free SKU constraints
@@ -216,7 +214,7 @@ When updating templates:
 ## 8. Post-Deployment Tasks (Operational)
 
 - retrieve SWA deployment token if needed for frontend deployment pipeline
-- deploy backend artifact/container to App Service
+- deploy backend ZIP artifact to App Service
 - validate `/health` and `/api/health`
 - confirm Key Vault secret resolution works in App Service runtime
 - confirm telemetry flows to Application Insights / Log Analytics

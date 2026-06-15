@@ -52,6 +52,27 @@ az deployment group show \
   -o jsonc
 ```
 
+## Backend deploy
+
+```bash
+cd ~/Azure-PaaS-Workshop
+source ~/paas-workshop.env
+./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
+```
+
+## Frontend deploy
+
+```bash
+cd ~/Azure-PaaS-Workshop
+source ~/paas-workshop.env
+cat > scripts/deploy-frontend.local.env <<EOF
+ENTRA_TENANT_ID="$TENANT_ID"
+ENTRA_FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
+ENTRA_BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
+EOF
+./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
+```
+
 ## App Service logs
 
 ```bash

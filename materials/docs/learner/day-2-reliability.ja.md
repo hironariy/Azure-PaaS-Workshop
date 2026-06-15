@@ -39,10 +39,11 @@ done
 
 ## 3. 再デプロイ可能性を確認する
 
-このワークショップでは backend は prebuilt container image、frontend は Static Web Apps への成果物デプロイです。再構築時は次を確認します。
+このワークショップでは backend はリポジトリ内ソースから build した ZIP deploy、frontend は Static Web Apps への成果物デプロイです。再構築時は次を確認します。
 
 - Bicep パラメータファイルを再利用できる。
-- `BACKEND_IMAGE` が digest 固定である。
+- `scripts/deploy-backend.sh` で backend を再 build/deploy できる。
+- `scripts/deploy-frontend.sh` で frontend を再 build/deploy できる。
 - Entra ID の redirect URI に SWA URL が含まれている。
 - Key Vault secret と Managed Identity/RBAC が Bicep で再現できる。
 

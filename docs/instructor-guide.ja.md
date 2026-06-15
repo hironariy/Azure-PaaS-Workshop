@@ -4,7 +4,7 @@
 
 > **Cloud Shell 専用の受講者本線:** 受講者には [Azure PaaS Workshop 受講者ポータル](../materials/docs/index.md) を案内してください。ポータルは Cloud Shell (Bash) だけで Day 0 / Day 1 / Day 2 / Cleanup を進める構成です。
 >
-> ローカル開発、Windows/WSL、PowerShell、GitHub Actions は代替・発展・講師向け参照として扱います。
+> ローカル開発、Windows/WSL、PowerShell は代替・発展・講師向け参照として扱います。GitHub Actions は手動 build/deploy の任意代替です。
 
 > **📝 注意:** このドキュメントはインストラクター専用です。受講者はメインの [README.ja.md](../README.ja.md)（必要に応じて [README.md](../README.md)）に従ってください。
 

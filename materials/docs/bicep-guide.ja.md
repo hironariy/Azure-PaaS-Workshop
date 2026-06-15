@@ -49,8 +49,7 @@ materials/bicep/
 - `environment`: `dev` / `staging` / `prod`
 - `location`: プライマリ Azure リージョン
 - `baseName`: リソース名のベース
-- `deploymentMode`: `standard` または `fastpath-container`
-- `appServiceContainerImage`: コンテナ FastPath 時に必須
+- `deploymentMode`: 受講者本線では `standard`
 - `groupId`: ワークショップ用グループ識別子（`A`-`J`）
 - `entraTenantId`, `entraBackendClientId`, `entraFrontendClientId`
 - `cosmosDbAdminPassword`（secure）
@@ -152,14 +151,13 @@ SWA/Backend 連携後に App Service `authsettingsV2` を設定:
 利用可能な例:
 
 - `main.bicepparam`, `dev.bicepparam`
-- `main.fastpath.bicepparam`, `dev.fastpath.bicepparam`
 - ローカル用 `*.local.bicepparam`
 
 推奨運用:
 
 1. 近いベースライン（通常は `dev`）をコピーする。
 2. Entra ID と secure 値を設定する。
-3. `fastpath-container` では不変イメージ参照を設定する。
+3. 受講者本線では `deploymentMode = 'standard'` のままにする。
 4. ローカル上書き値は非コミットのローカルパラメータに保持する。
 
 ---
@@ -172,7 +170,7 @@ SWA/Backend 連携後に App Service `authsettingsV2` を設定:
 az deployment group validate \
   --resource-group <resource-group-name> \
   --template-file materials/bicep/main.bicep \
-  --parameters materials/bicep/dev.fastpath.local.bicepparam
+  --parameters materials/bicep/dev.local.bicepparam
 ```
 
 デプロイ実行:
@@ -181,7 +179,7 @@ az deployment group validate \
 az deployment group create \
   --resource-group <resource-group-name> \
   --template-file materials/bicep/main.bicep \
-  --parameters materials/bicep/dev.fastpath.local.bicepparam
+  --parameters materials/bicep/dev.local.bicepparam
 ```
 
 出力確認:
@@ -209,7 +207,7 @@ az deployment group show \
 
 ## 7. よくある落とし穴
 
-- `deploymentMode` と `appServiceContainerImage` の不整合
+- `deploymentMode` が `standard` になっていない
 - パラメータファイルの Entra ID 未設定
 - ローカルパラメータ更新漏れ
 - SWA SKU 制約を無視した Linked Backend 前提運用
@@ -220,7 +218,7 @@ az deployment group show \
 ## 8. デプロイ後タスク（運用）
 
 - 必要に応じて SWA デプロイトークンを取得
-- App Service へバックエンド成果物/コンテナをデプロイ
+- App Service へバックエンド成果物を ZIP deploy
 - `/health` と `/api/health` を検証
 - App Service で Key Vault secret 解決を確認
 - Application Insights / Log Analytics へのテレメトリ流入を確認

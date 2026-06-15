@@ -97,9 +97,25 @@ az webapp log tail \
 
 確認ポイント:
 
-- container image の pull に失敗していないか。
+- backend ZIP deploy が完了しているか。
+- App Service の startup command が `node src/app.js` になっているか。
+- `SCM_DO_BUILD_DURING_DEPLOYMENT=false` が設定されているか。
 - Key Vault reference が解決できているか。
 - Cosmos DB 接続で失敗していないか。
+
+```bash
+az webapp config show \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$APP_SERVICE_NAME" \
+  --query "{startupFile:appCommandLine,linuxFxVersion:linuxFxVersion}" \
+  -o jsonc
+
+az webapp config appsettings list \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$APP_SERVICE_NAME" \
+  --query "[?name=='SCM_DO_BUILD_DURING_DEPLOYMENT' || name=='COSMOS_CONNECTION_STRING'].{name:name,value:value}" \
+  -o table
+```
 
 ## SWA `/api/health` が 404
 
@@ -151,3 +167,20 @@ npm run build
 ```
 
 Node.js が古い場合、Cloud Shell 環境差異の可能性があります。講師に相談してください。
+
+## バックエンド build / ZIP deploy が失敗する
+
+```bash
+cd ~/Azure-PaaS-Workshop
+node --version
+npm --version
+zip -v | head -1
+./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
+```
+
+確認ポイント:
+
+- `materials/backend/package-lock.json` が存在する。
+- `npm run build` が成功している。
+- `deploy.zip` の中身が `src/app.js` のように `/` 区切りになっている。
+- App Service logs に `Cannot find module` や Key Vault reference のエラーが出ていない。

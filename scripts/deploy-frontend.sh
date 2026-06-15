@@ -22,8 +22,9 @@
 #   1. Load Entra ID values from deploy-frontend.local.env
 #   2. Query Azure for SWA info
 #   3. Build the frontend
-#   4. Inject config into index.html (secure - no separate config file)
-#   5. Deploy to Static Web Apps
+#   4. Copy Static Web Apps routing config
+#   5. Inject config into index.html (secure - no separate config file)
+#   6. Deploy to Static Web Apps
 # =============================================================================
 
 set -e
@@ -146,9 +147,23 @@ npm install
 npm run build
 echo -e "${GREEN}✅ Build complete${NC}"
 
-# Step 3: Inject config into index.html (more secure than separate config.json)
+# Step 3: Copy Static Web Apps routing config
 echo ""
-echo -e "${YELLOW}Step 3: Injecting config into index.html...${NC}"
+echo -e "${YELLOW}Step 3: Copying Static Web Apps config...${NC}"
+
+if [ -f "staticwebapp.config.json" ]; then
+    cp staticwebapp.config.json dist/staticwebapp.config.json
+    echo "  staticwebapp.config.json copied to dist/"
+else
+    echo -e "${RED}Error: staticwebapp.config.json not found in $FRONTEND_DIR${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Static Web Apps config copied${NC}"
+
+# Step 4: Inject config into index.html (more secure than separate config.json)
+echo ""
+echo -e "${YELLOW}Step 4: Injecting config into index.html...${NC}"
 
 # Create the config JSON (single line for injection)
 CONFIG_JSON="{\"ENTRA_TENANT_ID\":\"$ENTRA_TENANT_ID\",\"ENTRA_FRONTEND_CLIENT_ID\":\"$ENTRA_FRONTEND_CLIENT_ID\",\"ENTRA_BACKEND_CLIENT_ID\":\"$ENTRA_BACKEND_CLIENT_ID\",\"API_BASE_URL\":\"/api\"}"
@@ -161,9 +176,9 @@ rm -f dist/index.html.bak
 echo "  Config injected into dist/index.html"
 echo -e "${GREEN}✅ Config injected (no separate config.json file)${NC}"
 
-# Step 4: Deploy to Static Web Apps
+# Step 5: Deploy to Static Web Apps
 echo ""
-echo -e "${YELLOW}Step 4: Deploying to Static Web Apps...${NC}"
+echo -e "${YELLOW}Step 5: Deploying to Static Web Apps...${NC}"
 
 swa deploy ./dist \
     --deployment-token "$SWA_TOKEN" \

@@ -199,7 +199,13 @@ React フロントエンドをビルドし、runtime 設定（Entra ID の値な
 - 依存関係をインストール
 - `dist/` に本番ビルド
 
-#### 手順 3: 設定を注入
+#### 手順 3: Static Web Apps 設定をコピー
+```
+📄 Copy staticwebapp.config.json to dist/
+```
+- SPA fallback と `/api/*` routing の設定を成果物に含める
+
+#### 手順 4: 設定を注入
 ```
 🔧 Create config JSON with Entra ID values
 🔧 Replace placeholder in index.html
@@ -215,7 +221,7 @@ React フロントエンドをビルドし、runtime 設定（Entra ID の値な
 - `/config.json` を公開するより安全
 - デプロイ時に HTML に焼き込み、追加の HTTP リクエストが不要
 
-#### 手順 4: Static Web Apps にデプロイ
+#### 手順 5: Static Web Apps にデプロイ
 ```
 🚀 swa deploy ./dist --deployment-token $TOKEN
 ```

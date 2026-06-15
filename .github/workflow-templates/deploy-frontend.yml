@@ -38,6 +38,10 @@ jobs:
         working-directory: ${{ env.FRONTEND_DIR }}
         run: npm run build
 
+      - name: Copy Static Web Apps config
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: cp staticwebapp.config.json dist/staticwebapp.config.json
+
       - name: Fail if runtime config not configured
         run: |
           if [ -z "${{ vars.ENTRA_TENANT_ID }}" ] || [ -z "${{ vars.ENTRA_FRONTEND_CLIENT_ID }}" ] || [ -z "${{ vars.ENTRA_BACKEND_CLIENT_ID }}" ]; then
