@@ -201,10 +201,10 @@ The script performs the following steps:
 #### Step 2: Build Application
 ```
 📦 npm install
-📦 npm run build
+📦 NODE_ENV=production npm run build -- --mode production
 ```
 - Installs dependencies
-- Builds the production React application to `dist/` folder
+- Builds the production React application to `dist/` without inheriting `NODE_ENV=development` from Cloud Shell
 
 #### Step 3: Inject Configuration
 ```
@@ -305,7 +305,7 @@ Next steps:
 | `tsc: not found` | Remote build enabled | Script sets `SCM_DO_BUILD_DURING_DEPLOYMENT=false` automatically |
 | Health check timeout | App taking too long to start | Check logs: `az webapp log tail --resource-group <rg> --name <app>` |
 | HTTP 502 after deploy | App crashed on startup | Check logs for Key Vault or database connection errors |
-| `AADSTS900144` during frontend sign-in | `window.__APP_CONFIG__` is missing `ENTRA_FRONTEND_CLIENT_ID` in deployed `index.html` | Check the deployed HTML and rerun `scripts/deploy-frontend.sh`; the script now verifies config injection before deploy |
+| `AADSTS900144` during frontend sign-in | `window.__APP_CONFIG__` is missing `ENTRA_FRONTEND_CLIENT_ID`, or an older Vite development bundle ignored the injected config | Pull the latest scripts and rerun `scripts/deploy-frontend.sh`; the script now forces `NODE_ENV=production`, verifies config injection, and stops if a development bundle is detected |
 | Permission denied | Script not executable | Run: `chmod +x scripts/deploy-backend.sh` |
 | Backend fails after ZIP deploy from Windows PowerShell | ZIP was created with Windows-style separators (e.g., `dist\src\app.js`) | Recreate ZIP with `/` separators from `materials\backend`, then redeploy |
 

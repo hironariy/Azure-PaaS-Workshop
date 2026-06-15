@@ -248,7 +248,7 @@ cat "$WORKSHOP_STATE_DIR/deploy-frontend.local.env"
 
 期待値は `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_TENANT_ID`、`ENTRA_BACKEND_CLIENT_ID` が含まれることです。
 
-`window.__APP_CONFIG__` が正しいのに同じエラーが続く場合は、古い JavaScript bundle やブラウザーの `sessionStorage` が残っている可能性があります。ブラウザーで対象 Static Web Apps のタブを閉じ、サイトデータまたは `sessionStorage` を削除してから再読み込みします。また、このワークショップ本線では Static Web Apps 組み込み認証の `/.auth/login/aad` ではなく、アプリ画面の **Sign in with Microsoft** ボタンから MSAL でログインします。
+`window.__APP_CONFIG__` が正しいのに同じエラーが続く場合は、古いデプロイスクリプトで Vite の development bundle をデプロイしている可能性があります。`git pull` 後に `./scripts/deploy-frontend.sh "$RESOURCE_GROUP"` を再実行してください。スクリプトは `NODE_ENV=production` を強制し、development bundle が混入した場合はデプロイ前に停止します。また、このワークショップ本線では Static Web Apps 組み込み認証の `/.auth/login/aad` ではなく、アプリ画面の **Sign in with Microsoft** ボタンから MSAL でログインします。
 
 対処:
 

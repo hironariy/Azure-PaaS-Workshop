@@ -174,7 +174,15 @@ echo -e "${GREEN}✅ Azure resources found${NC}"
 echo ""
 echo -e "${YELLOW}Step 2: Building application...${NC}"
 npm install
-npm run build
+# Force a production Vite build even if the Cloud Shell profile has NODE_ENV=development.
+NODE_ENV=production npm run build -- --mode production
+
+if grep -R "Loading from Vite environment variables (development)" dist/assets/*.js >/dev/null 2>&1; then
+    echo -e "${RED}Error: Frontend bundle was built in Vite development mode.${NC}"
+    echo "Unset NODE_ENV or rerun this script so it can force NODE_ENV=production."
+    exit 1
+fi
+
 echo -e "${GREEN}✅ Build complete${NC}"
 
 # Step 3: Copy Static Web Apps routing config

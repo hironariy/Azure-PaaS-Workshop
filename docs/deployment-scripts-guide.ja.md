@@ -199,10 +199,10 @@ React フロントエンドをビルドし、runtime 設定（Entra ID の値な
 #### 手順 2: アプリをビルド
 ```
 📦 npm install
-📦 npm run build
+📦 NODE_ENV=production npm run build -- --mode production
 ```
 - 依存関係をインストール
-- `dist/` に本番ビルド
+- Cloud Shell の `NODE_ENV=development` を引き継がないようにして、`dist/` に本番ビルド
 
 #### 手順 3: Static Web Apps 設定をコピー
 ```
@@ -257,4 +257,5 @@ const config = window.__APP_CONFIG__;
 
 - `tsc: not found` などのエラーが出る場合は、バックエンド側のリモートビルドが有効になっている可能性があります。`SCM_DO_BUILD_DURING_DEPLOYMENT=false` が設定されているか確認してください。
 - フロントエンドで `AADSTS900144`（`client_id` 不足）が出る場合、`index.html` の `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID` が入っているかを確認してください。スクリプトは注入後にこの値を検査し、不足している場合はデプロイ前に停止します。
+- `window.__APP_CONFIG__` が正しいのに `AADSTS900144` が続く場合は、古いスクリプトで Vite の development bundle をデプロイしている可能性があります。`git pull` 後に再デプロイしてください。現行スクリプトは `NODE_ENV=production` を強制し、development bundle が混入した場合は停止します。
 - Windows PowerShell で作成した ZIP を使ってバックエンド起動に失敗する場合、`Compress-Archive` で作成した ZIP に `dist\src\app.js` のような Windows 区切りパスが含まれている可能性があります。`materials\backend` で `tar.exe -a -c -f deploy.zip dist package.json package-lock.json node_modules` のように `/` 区切りの ZIP を作成し、再デプロイしてください。

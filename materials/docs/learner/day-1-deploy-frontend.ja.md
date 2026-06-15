@@ -77,7 +77,7 @@ curl -fsS "https://${SWA_HOSTNAME}" \
 
 表示されない場合は、`$WORKSHOP_STATE_DIR/deploy-frontend.local.env` の値を確認し、このページの手順 3 から再実行します。
 
-値が表示されるのにログインで `AADSTS900144` が続く場合は、ブラウザーに古い JavaScript bundle や `sessionStorage` が残っていないか確認し、サイトデータを削除して再読み込みします。このアプリは MSAL でログインするため、`/.auth/login/aad` には直接アクセスしません。
+値が表示されるのにログインで `AADSTS900144` が続く場合は、`git pull` 後にこのページの手順 4 を再実行してください。古い手順では Cloud Shell の `NODE_ENV=development` が Vite build に引き継がれると、`window.__APP_CONFIG__` が無視される development bundle がデプロイされることがありました。このアプリは MSAL でログインするため、`/.auth/login/aad` には直接アクセスしません。
 
 ## 5. スクリプトの中身を確認する
 
@@ -88,9 +88,9 @@ curl -fsS "https://${SWA_HOSTNAME}" \
 | 設定ファイル読み込み | `$WORKSHOP_STATE_DIR/deploy-frontend.local.env` を読み込み、CRLF の場合は LF に直す | Azure Files 側に保存した Entra ID 設定を再利用する |
 | 必須値検証 | `ENTRA_TENANT_ID`、`ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_BACKEND_CLIENT_ID` が空でないことを確認する | 未設定のまま build/deploy して認証エラーになることを防ぐ |
 | Static Web Apps 情報取得 | リソースグループ内の Static Web App hostname と deployment token を Azure CLI で取得する | 手入力を減らし、SWA CLI deploy に必要な値を取得する |
-| フロントエンド build | `materials/frontend` に移動し、`npm install` と `npm run build` を実行する | Vite の本番成果物を `dist/` に作成する |
+| フロントエンド build | `materials/frontend` に移動し、`npm install` と `NODE_ENV=production npm run build -- --mode production` を実行する | Cloud Shell の環境変数に左右されず、Vite の本番成果物を `dist/` に作成する |
 | SWA routing 設定 | `staticwebapp.config.json` を `dist/` にコピーする | SPA fallback と `/api/*` の Linked Backend routing を Static Web Apps に反映する |
-| runtime config 注入 | `dist/index.html` の `window.__APP_CONFIG__` 代入を Entra ID 設定と `API_BASE_URL: "/api"` を含む JSON に置換し、`ENTRA_FRONTEND_CLIENT_ID` が入ったことを検査する | build 後の静的ファイルに環境ごとの公開設定を埋め込み、`client_id` 欠落をデプロイ前に防ぐ |
+| runtime config 注入 | `dist/index.html` の `window.__APP_CONFIG__` 代入を Entra ID 設定と `API_BASE_URL: "/api"` を含む JSON に置換し、`ENTRA_FRONTEND_CLIENT_ID` が入ったことと development bundle でないことを検査する | build 後の静的ファイルに環境ごとの公開設定を埋め込み、`client_id` 欠落をデプロイ前に防ぐ |
 | Static Web Apps deploy | `swa deploy ./dist --deployment-token "$SWA_TOKEN" --env production` を実行する | build 済み成果物を Static Web Apps の production 環境にアップロードする |
 
 `deploy-frontend.local.env` の Client ID は公開設定値ですが、`SWA_TOKEN` はデプロイ権限を持つためシークレットとして扱います。スクリプトは token 全体を表示せず、末尾だけを確認用に出力します。

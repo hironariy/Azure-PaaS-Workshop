@@ -6,7 +6,7 @@
  *
  * PaaS vs IaaS:
  * - This file is IDENTICAL to IaaS version
- * - Pattern: Development uses Vite env vars, production uses inline window.__APP_CONFIG__
+ * - Pattern: Prefer inline window.__APP_CONFIG__, fall back to Vite env vars in development
  * - IaaS: config injected by Bicep CustomScript into index.html on NGINX VM
  * - PaaS: config injected at deploy time into index.html (not a separate file for security)
  */
@@ -45,8 +45,12 @@ const requiredConfigFields: Array<[keyof AppConfig, string]> = [
   ['entraBackendClientId', 'ENTRA_BACKEND_CLIENT_ID'],
 ];
 
+function normalizeConfigValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 function isMissingConfigValue(value: string): boolean {
-  const normalized = value.trim();
+  const normalized = normalizeConfigValue(value);
   return (
     normalized.length === 0 ||
     normalized === 'null' ||
@@ -71,11 +75,23 @@ function assertRequiredConfig(config: AppConfig, source: string): void {
 
 function buildConfigFromEnv(): AppConfig {
   return {
-    entraTenantId: (import.meta.env.VITE_ENTRA_TENANT_ID || '').trim(),
-    entraFrontendClientId: (import.meta.env.VITE_ENTRA_CLIENT_ID || '').trim(),
-    entraBackendClientId: (import.meta.env.VITE_API_CLIENT_ID || '').trim(),
-    apiBaseUrl: (import.meta.env.VITE_API_BASE_URL || '/api').trim(),
-    redirectUri: (import.meta.env.VITE_ENTRA_REDIRECT_URI || window.location.origin).trim(),
+    entraTenantId: normalizeConfigValue(import.meta.env.VITE_ENTRA_TENANT_ID),
+    entraFrontendClientId: normalizeConfigValue(import.meta.env.VITE_ENTRA_CLIENT_ID),
+    entraBackendClientId: normalizeConfigValue(import.meta.env.VITE_API_CLIENT_ID),
+    apiBaseUrl: normalizeConfigValue(import.meta.env.VITE_API_BASE_URL) || '/api',
+    redirectUri: normalizeConfigValue(import.meta.env.VITE_ENTRA_REDIRECT_URI) || window.location.origin,
+  };
+}
+
+function buildConfigFromRuntimeJson(
+  json: Window['__APP_CONFIG__'] | Record<string, unknown>,
+): AppConfig {
+  return {
+    entraTenantId: normalizeConfigValue(json?.ENTRA_TENANT_ID),
+    entraFrontendClientId: normalizeConfigValue(json?.ENTRA_FRONTEND_CLIENT_ID),
+    entraBackendClientId: normalizeConfigValue(json?.ENTRA_BACKEND_CLIENT_ID),
+    apiBaseUrl: normalizeConfigValue(json?.API_BASE_URL) || '/api',
+    redirectUri: window.location.origin,
   };
 }
 
@@ -86,6 +102,17 @@ function buildConfigFromEnv(): AppConfig {
  */
 export async function loadConfig(): Promise<AppConfig> {
   if (cachedConfig) {
+    return cachedConfig;
+  }
+
+  // Prefer runtime config even if the shell accidentally sets NODE_ENV=development
+  // during a production build. Static Web Apps injects this before the module loads.
+  const inlineConfig = window.__APP_CONFIG__;
+  if (inlineConfig && inlineConfig.ENTRA_TENANT_ID) {
+    console.log('[Config] Loading from window.__APP_CONFIG__');
+    cachedConfig = buildConfigFromRuntimeJson(inlineConfig);
+    assertRequiredConfig(cachedConfig, 'window.__APP_CONFIG__');
+    console.log('[Config] Configuration loaded successfully from inline config');
     return cachedConfig;
   }
 
@@ -105,24 +132,6 @@ export async function loadConfig(): Promise<AppConfig> {
     return cachedConfig;
   }
 
-  // Production: read from window.__APP_CONFIG__ (injected at deploy time)
-  // This is more secure than serving a separate /config.json file
-  console.log('[Config] Loading from window.__APP_CONFIG__ (production)');
-  
-  const inlineConfig = window.__APP_CONFIG__;
-  if (inlineConfig && inlineConfig.ENTRA_TENANT_ID) {
-    cachedConfig = {
-      entraTenantId: (inlineConfig.ENTRA_TENANT_ID || '').trim(),
-      entraFrontendClientId: (inlineConfig.ENTRA_FRONTEND_CLIENT_ID || '').trim(),
-      entraBackendClientId: (inlineConfig.ENTRA_BACKEND_CLIENT_ID || '').trim(),
-      apiBaseUrl: (inlineConfig.API_BASE_URL || '/api').trim(),
-      redirectUri: window.location.origin,
-    };
-    assertRequiredConfig(cachedConfig, 'window.__APP_CONFIG__');
-    console.log('[Config] Configuration loaded successfully from inline config');
-    return cachedConfig;
-  }
-
   // Fallback: try /config.json for backwards compatibility (IaaS pattern)
   console.log('[Config] No inline config found, trying /config.json fallback');
   try {
@@ -132,14 +141,7 @@ export async function loadConfig(): Promise<AppConfig> {
       if (contentType.includes('application/json')) {
         const json = await response.json();
 
-        cachedConfig = {
-          entraTenantId: (json.ENTRA_TENANT_ID || '').trim(),
-          entraFrontendClientId: (json.ENTRA_FRONTEND_CLIENT_ID || '').trim(),
-          entraBackendClientId: (json.ENTRA_BACKEND_CLIENT_ID || '').trim(),
-          apiBaseUrl: (json.API_BASE_URL || '/api').trim(),
-          redirectUri: window.location.origin,
-        };
-
+        cachedConfig = buildConfigFromRuntimeJson(json);
         assertRequiredConfig(cachedConfig, '/config.json');
         console.log('[Config] Configuration loaded successfully from /config.json');
         return cachedConfig;

@@ -4,7 +4,7 @@
  * Reference: /design/FrontendApplicationDesign.md
  *
  * Configuration Loading Order:
- * 1. Load app config (from .env in dev, /config.json in production)
+ * 1. Load app config (inline window.__APP_CONFIG__ in Azure, .env in dev)
  * 2. Initialize MSAL with loaded config
  * 3. Render React app with MsalProvider
  *
@@ -26,7 +26,7 @@ import './index.css';
  * Bootstrap the application
  *
  * Order is critical:
- * 1. Load configuration (dev: .env, prod: /config.json)
+ * 1. Load configuration (Azure: inline config, dev: .env)
  * 2. Initialize MSAL with that configuration
  * 3. Render React app
  */

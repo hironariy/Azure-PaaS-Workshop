@@ -5,7 +5,7 @@
  *
  * This module uses runtime configuration loaded from appConfig.ts
  * - Development: Vite environment variables (.env.local)
- * - Production: /config.json (created by deployment)
+ * - Production: inline window.__APP_CONFIG__ (created by deployment)
  *
  * PaaS vs IaaS:
  * - This file is IDENTICAL to IaaS version
