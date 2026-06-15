@@ -152,8 +152,22 @@ az ad app show \
 `https://<swa-hostname>` が無い場合は追加します。
 
 ```bash
-REDIRECT_URIS="$(jq -nc --arg swa "https://$SWA_HOSTNAME" '["http://localhost:4280", $swa]')"
-az ad app update --id "$FRONTEND_CLIENT_ID" --set spa.redirectUris="$REDIRECT_URIS"
+REDIRECT_URIS="$(jq -nc --arg swa "https://$SWA_HOSTNAME" '["http://localhost:4280", $swa, ($swa + "/")]')"
+
+FRONTEND_OBJECT_ID="$(az ad app show \
+  --id "$FRONTEND_CLIENT_ID" \
+  --query id -o tsv)"
+
+SPA_PATCH="$(jq -nc --argjson redirectUris "$REDIRECT_URIS" '{
+  spa: {
+    redirectUris: $redirectUris
+  }
+}')"
+
+az rest \
+  --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
+  --body "$SPA_PATCH"
 ```
 
 ## フロントエンド build が失敗する

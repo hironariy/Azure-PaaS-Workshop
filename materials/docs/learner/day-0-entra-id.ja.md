@@ -24,12 +24,18 @@ export BACKEND_CLIENT_ID="$(az ad app create \
   --sign-in-audience AzureADMyOrg \
   --query appId -o tsv)"
 
+export BACKEND_OBJECT_ID="$(az ad app show \
+  --id "$BACKEND_CLIENT_ID" \
+  --query id -o tsv)"
+
 az ad app update \
   --id "$BACKEND_CLIENT_ID" \
   --identifier-uris "api://$BACKEND_CLIENT_ID"
 ```
 
 `access_as_user` スコープを追加します。
+
+> `az ad app update --set api.oauth2PermissionScopes=...` は、新規 app registration の `api` プロパティがまだ初期化されていない場合に `Couldn't find 'api' in ''` で失敗することがあります。この手順では Microsoft Graph の application object ID (`BACKEND_OBJECT_ID`) に対して `az rest` で PATCH します。
 
 ```bash
 SCOPES_JSON="$(jq -nc --arg id "$ACCESS_SCOPE_ID" '[{
@@ -43,9 +49,16 @@ SCOPES_JSON="$(jq -nc --arg id "$ACCESS_SCOPE_ID" '[{
   userConsentDescription: "Allow this app to access the PaaS Blog API on your behalf."
 }]')"
 
-az ad app update \
-  --id "$BACKEND_CLIENT_ID" \
-  --set api.oauth2PermissionScopes="$SCOPES_JSON"
+API_PATCH="$(jq -nc --argjson scopes "$SCOPES_JSON" '{
+  api: {
+    oauth2PermissionScopes: $scopes
+  }
+}')"
+
+az rest \
+  --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/$BACKEND_OBJECT_ID" \
+  --body "$API_PATCH"
 ```
 
 確認します。
@@ -53,7 +66,7 @@ az ad app update \
 ```bash
 az ad app show \
   --id "$BACKEND_CLIENT_ID" \
-  --query "{displayName:displayName,appId:appId,identifierUris:identifierUris}" \
+  --query "{displayName:displayName,appId:appId,identifierUris:identifierUris,scopes:api.oauth2PermissionScopes[].value}" \
   -o jsonc
 ```
 
@@ -64,19 +77,33 @@ export FRONTEND_CLIENT_ID="$(az ad app create \
   --display-name "$FRONTEND_APP_NAME" \
   --sign-in-audience AzureADMyOrg \
   --query appId -o tsv)"
+
+export FRONTEND_OBJECT_ID="$(az ad app show \
+  --id "$FRONTEND_CLIENT_ID" \
+  --query id -o tsv)"
 ```
 
 Cloud Shell では本番の Static Web Apps URL がまだ分からないため、まずローカル/検証用 URI を入れておきます。Day 1 のデプロイ後に SWA URL を追加します。
 
 ```bash
-az ad app update \
-  --id "$FRONTEND_CLIENT_ID" \
-  --set spa.redirectUris='["http://localhost:4280"]'
+SPA_PATCH="$(jq -nc '{
+  spa: {
+    redirectUris: ["http://localhost:4280"]
+  }
+}')"
+
+az rest \
+  --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
+  --body "$SPA_PATCH"
 ```
 
 Frontend から Backend API のスコープを呼べるようにします。
 
 ```bash
+echo "Waiting for Microsoft Graph propagation..."
+sleep 10
+
 az ad app permission add \
   --id "$FRONTEND_CLIENT_ID" \
   --api "$BACKEND_CLIENT_ID" \
@@ -112,6 +139,7 @@ export PARAM_FILE="$PARAM_FILE"
 export TENANT_ID="$TENANT_ID"
 export BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
 export FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
+export ACCESS_SCOPE_ID="$ACCESS_SCOPE_ID"
 EOF
 
 cat ~/paas-workshop.env

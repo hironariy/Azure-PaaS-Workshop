@@ -150,9 +150,20 @@ echo "Static Web App: https://$SWA_HOSTNAME"
 ```bash
 REDIRECT_URIS="$(jq -nc --arg swa "https://$SWA_HOSTNAME" '["http://localhost:4280", $swa, ($swa + "/")]')"
 
-az ad app update \
+FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
-  --set spa.redirectUris="$REDIRECT_URIS"
+  --query id -o tsv)"
+
+SPA_PATCH="$(jq -nc --argjson redirectUris "$REDIRECT_URIS" '{
+  spa: {
+    redirectUris: $redirectUris
+  }
+}')"
+
+az rest \
+  --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
+  --body "$SPA_PATCH"
 ```
 
 確認します。
