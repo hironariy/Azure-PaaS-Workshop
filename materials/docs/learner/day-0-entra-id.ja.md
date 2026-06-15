@@ -132,11 +132,24 @@ az ad app permission add \
   --api-permissions "${ACCESS_SCOPE_ID}=Scope"
 ```
 
-管理者権限がある場合は admin consent を付与します。権限がない場合はエラーになっても構いません。講師またはテナント管理者に依頼してください。
+`az ad app permission add` は Frontend app registration に「この API scope を要求する」という設定を追加します。実際に delegated permission を有効にするには、service principal を作成したうえで `permission grant` に scope 名を渡します。
 
 ```bash
-az ad app permission admin-consent --id "$FRONTEND_CLIENT_ID" || true
+if ! az ad sp show --id "$BACKEND_CLIENT_ID" 1>/dev/null 2>&1; then
+  az ad sp create --id "$BACKEND_CLIENT_ID" 1>/dev/null
+fi
+
+if ! az ad sp show --id "$FRONTEND_CLIENT_ID" 1>/dev/null 2>&1; then
+  az ad sp create --id "$FRONTEND_CLIENT_ID" 1>/dev/null
+fi
+
+az ad app permission grant \
+  --id "$FRONTEND_CLIENT_ID" \
+  --api "$BACKEND_CLIENT_ID" \
+  --scope "access_as_user"
 ```
+
+`--scope` は scope の ID (`ACCESS_SCOPE_ID`) ではなく、Backend API で公開した scope value の `access_as_user` を指定します。管理者権限がない場合は `permission grant` が失敗することがあります。その場合は講師またはテナント管理者に依頼してください。
 
 確認します。
 
@@ -144,6 +157,14 @@ az ad app permission admin-consent --id "$FRONTEND_CLIENT_ID" || true
 echo "TENANT_ID=$TENANT_ID"
 echo "BACKEND_CLIENT_ID=$BACKEND_CLIENT_ID"
 echo "FRONTEND_CLIENT_ID=$FRONTEND_CLIENT_ID"
+
+az ad app permission list \
+  --id "$FRONTEND_CLIENT_ID" \
+  -o jsonc
+
+az ad app permission list-grants \
+  --id "$FRONTEND_CLIENT_ID" \
+  -o jsonc
 ```
 
 ## 4. 値を Cloud Shell に保存する
