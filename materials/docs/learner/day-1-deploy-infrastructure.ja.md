@@ -32,39 +32,60 @@ echo "Password length: ${#COSMOS_PASSWORD}"
 
 ## 3. 標準デプロイ用パラメータファイルを作成する
 
+テンプレートをローカル用ファイルにコピーし、Cloud Shell のエディターで自分の値に変更します。この章では、パラメータの意味を確認しながら手動で編集します。
+
 ```bash
 cp materials/bicep/dev.bicepparam "$PARAM_FILE"
 ```
 
-Cloud Shell から安全に値を置換します。
+編集に使う値を確認します。`cosmosDbAdminPassword` はこのあとパラメータファイルに貼り付けるため、このタイミングだけ表示します。
 
 ```bash
-python3 - <<'PY'
-from pathlib import Path
-import os
-
-path = Path(os.environ["PARAM_FILE"])
-text = path.read_text()
-replacements = {
-    "param location = 'japanwest'": f"param location = '{os.environ['LOCATION']}'",
-    "param baseName = 'blogapp'": f"param baseName = '{os.environ['BASE_NAME']}'",
-    "param groupId = ''": f"param groupId = '{os.environ['GROUP_ID']}'",
-    "param entraTenantId = ''": f"param entraTenantId = '{os.environ['TENANT_ID']}'",
-    "param entraBackendClientId = ''": f"param entraBackendClientId = '{os.environ['BACKEND_CLIENT_ID']}'",
-    "param entraFrontendClientId = ''": f"param entraFrontendClientId = '{os.environ['FRONTEND_CLIENT_ID']}'",
-    "param cosmosDbAdminPassword = ''": f"param cosmosDbAdminPassword = '{os.environ['COSMOS_PASSWORD']}'",
-    "param staticWebAppLocation = 'eastasia'": f"param staticWebAppLocation = '{os.environ['SWA_LOCATION']}'",
-}
-for old, new in replacements.items():
-    text = text.replace(old, new)
-path.write_text(text)
-PY
+cat <<EOF
+PARAM_FILE=$PARAM_FILE
+location=$LOCATION
+staticWebAppLocation=$SWA_LOCATION
+baseName=$BASE_NAME
+groupId=$GROUP_ID
+entraTenantId=$TENANT_ID
+entraBackendClientId=$BACKEND_CLIENT_ID
+entraFrontendClientId=$FRONTEND_CLIENT_ID
+cosmosDbAdminPassword=$COSMOS_PASSWORD
+EOF
 ```
 
-確認します。パスワードは表示しません。
+Cloud Shell の `code` エディターでパラメータファイルを開きます。
+
+```bash
+code "$PARAM_FILE"
+```
+
+エディターが開いたら、次の行を変更します。変更後は `Ctrl+S` で保存します。
+
+| パラメータ | 設定する値 | 補足 |
+|---|---|---|
+| `param location` | `$LOCATION` の値 | App Service、DocumentDB、Key Vault などのリージョン |
+| `param baseName` | `$BASE_NAME` の値 | リソース名のベース |
+| `param groupId` | `$GROUP_ID` の値 | 個人演習では空文字、グループ演習では割り当てられた文字 |
+| `param deploymentMode` | `'standard'` のまま | App Service へ ZIP deploy する本線 |
+| `param appServiceContainerImage` | `''` のまま | 標準デプロイでは使いません |
+| `param entraTenantId` | `$TENANT_ID` の値 | Day 0 で確認した tenant ID |
+| `param entraBackendClientId` | `$BACKEND_CLIENT_ID` の値 | Backend API app registration の client ID |
+| `param entraFrontendClientId` | `$FRONTEND_CLIENT_ID` の値 | Frontend SPA app registration の client ID |
+| `param cosmosDbAdminPassword` | `$COSMOS_PASSWORD` の値 | 直前に生成した URL-safe なパスワード |
+| `param staticWebAppSku` | `'Standard'` のまま | Static Web Apps Linked Backend に必要 |
+| `param staticWebAppLocation` | `$SWA_LOCATION` の値 | Static Web Apps のリージョン |
+
+保存後、編集結果を確認します。パスワード値は表示しません。
 
 ```bash
 grep -E "param (location|baseName|groupId|deploymentMode|entraTenantId|entraBackendClientId|entraFrontendClientId|staticWebAppSku|staticWebAppLocation)" "$PARAM_FILE"
+
+if grep -q "param cosmosDbAdminPassword = ''" "$PARAM_FILE"; then
+  echo "cosmosDbAdminPassword が未設定です。code \"$PARAM_FILE\" で設定してください。"
+else
+  echo "cosmosDbAdminPassword is set (value hidden)"
+fi
 ```
 
 `deploymentMode` が `standard`、`staticWebAppSku` が `Standard` であることを確認します。
