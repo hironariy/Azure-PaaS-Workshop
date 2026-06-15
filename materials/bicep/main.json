@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.39.26.7824",
-      "templateHash": "3825419393690400553"
+      "version": "0.44.1.10279",
+      "templateHash": "11428339328223983106"
     }
   },
   "parameters": {
@@ -202,8 +202,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "3755423324119954429"
+              "version": "0.44.1.10279",
+              "templateHash": "17365067642594122346"
             }
           },
           "parameters": {
@@ -458,8 +458,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "8247076602314119182"
+              "version": "0.44.1.10279",
+              "templateHash": "5312940186781194365"
             }
           },
           "parameters": {
@@ -622,8 +622,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "7928785523076703939"
+              "version": "0.44.1.10279",
+              "templateHash": "9535606549026757098"
             }
           },
           "parameters": {
@@ -766,7 +766,7 @@
               "condition": "[not(empty(parameters('appServicePrincipalId')))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[format('Microsoft.KeyVault/vaults/{0}', variables('keyVaultName'))]",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
               "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), parameters('appServicePrincipalId'), variables('keyVaultSecretsUserRoleId'))]",
               "properties": {
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleId'))]",
@@ -852,8 +852,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "14502735417150560341"
+              "version": "0.44.1.10279",
+              "templateHash": "6068784329823604200"
             }
           },
           "parameters": {
@@ -1124,8 +1124,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "12076308549458962967"
+              "version": "0.44.1.10279",
+              "templateHash": "16707819590535856058"
             }
           },
           "parameters": {
@@ -1241,7 +1241,7 @@
             "appServiceName": "[format('app-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
             "effectiveTags": "[union(parameters('tags'), createObject('Environment', parameters('environment')))]",
             "linuxFxVersion": "[if(equals(parameters('runtimeMode'), 'fastpath-container'), format('DOCKER|{0}', parameters('containerImage')), 'NODE|22-lts')]",
-            "runtimeAppSettings": "[if(equals(parameters('runtimeMode'), 'standard'), createArray(createObject('name', 'WEBSITE_NODE_DEFAULT_VERSION', 'value', '~20'), createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'true')), createArray(createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'false')))]"
+            "runtimeAppSettings": "[if(equals(parameters('runtimeMode'), 'standard'), createArray(createObject('name', 'WEBSITE_NODE_DEFAULT_VERSION', 'value', '~20'), createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'false')), createArray(createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'false')))]"
           },
           "resources": [
             {
@@ -1281,7 +1281,7 @@
                   "minTlsVersion": "1.2",
                   "http20Enabled": true,
                   "healthCheckPath": "/health",
-                  "appCommandLine": "[if(equals(parameters('runtimeMode'), 'standard'), 'node src/app.js', '')]",
+                  "appCommandLine": "[if(equals(parameters('runtimeMode'), 'standard'), 'node dist/src/app.js', '')]",
                   "ipSecurityRestrictionsDefaultAction": "Allow",
                   "scmIpSecurityRestrictionsUseMain": true,
                   "scmIpSecurityRestrictionsDefaultAction": "Allow",
@@ -1398,8 +1398,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "7928785523076703939"
+              "version": "0.44.1.10279",
+              "templateHash": "9535606549026757098"
             }
           },
           "parameters": {
@@ -1542,7 +1542,7 @@
               "condition": "[not(empty(parameters('appServicePrincipalId')))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[format('Microsoft.KeyVault/vaults/{0}', variables('keyVaultName'))]",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
               "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), parameters('appServicePrincipalId'), variables('keyVaultSecretsUserRoleId'))]",
               "properties": {
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleId'))]",
@@ -1580,7 +1580,6 @@
       ]
     },
     {
-      "condition": "[equals(parameters('deploymentMode'), 'standard')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "staticwebapp-deployment",
@@ -1621,8 +1620,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "4537178054100492999"
+              "version": "0.44.1.10279",
+              "templateHash": "9441482257264932925"
             }
           },
           "parameters": {
@@ -1754,7 +1753,6 @@
       ]
     },
     {
-      "condition": "[equals(parameters('deploymentMode'), 'standard')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "appservice-auth-deployment",
@@ -1774,7 +1772,7 @@
             "value": "[parameters('entraBackendClientId')]"
           },
           "staticWebAppDefaultHostName": {
-            "value": "[coalesce(tryGet(if(equals(parameters('deploymentMode'), 'standard'), reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01'), null()), 'outputs', 'staticWebAppDefaultHostName', 'value'), '')]"
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppDefaultHostName.value]"
           }
         },
         "template": {
@@ -1783,8 +1781,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.39.26.7824",
-              "templateHash": "11259939779811537895"
+              "version": "0.44.1.10279",
+              "templateHash": "14437948248290618357"
             }
           },
           "parameters": {
@@ -1923,15 +1921,15 @@
     },
     "staticWebAppName": {
       "type": "string",
-      "value": "[coalesce(tryGet(if(equals(parameters('deploymentMode'), 'standard'), reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01'), null()), 'outputs', 'staticWebAppName', 'value'), '')]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppName.value]"
     },
     "staticWebAppUrl": {
       "type": "string",
-      "value": "[coalesce(tryGet(if(equals(parameters('deploymentMode'), 'standard'), reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01'), null()), 'outputs', 'staticWebAppUrl', 'value'), '')]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppUrl.value]"
     },
     "apiUrl": {
       "type": "string",
-      "value": "[if(equals(parameters('deploymentMode'), 'standard'), format('{0}/api', coalesce(tryGet(if(equals(parameters('deploymentMode'), 'standard'), reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01'), null()), 'outputs', 'staticWebAppUrl', 'value'), '')), format('https://{0}/api', reference(resourceId('Microsoft.Resources/deployments', 'appservice-deployment'), '2025-04-01').outputs.appServiceDefaultHostName.value))]"
+      "value": "[format('{0}/api', reference(resourceId('Microsoft.Resources/deployments', 'staticwebapp-deployment'), '2025-04-01').outputs.staticWebAppUrl.value)]"
     },
     "logAnalyticsWorkspaceId": {
       "type": "string",

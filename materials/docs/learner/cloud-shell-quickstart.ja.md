@@ -48,10 +48,23 @@ az account show --output table
 
 ## リポジトリを取得する
 
+Cloud Shell の `~/clouddrive` は Azure Files にマウントされた永続領域です。一方、Node.js の `npm install` / build は Azure Files 上だと遅くなりやすいため、リポジトリ本体は `~/Azure-PaaS-Workshop` に配置します。セッションをまたいで残したい変数やパラメータファイルだけを `~/clouddrive/paas-workshop` に保存します。
+
 ```bash
-cd ~
-git clone https://github.com/hironariy/Azure-PaaS-Workshop.git
-cd Azure-PaaS-Workshop
+export WORKSHOP_REPO_DIR="$HOME/Azure-PaaS-Workshop"
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+export ENV_FILE="$WORKSHOP_STATE_DIR/paas-workshop.env"
+
+mkdir -p "$WORKSHOP_STATE_DIR"
+
+cd "$HOME"
+if [ ! -d "$WORKSHOP_REPO_DIR/.git" ]; then
+  git clone https://github.com/hironariy/Azure-PaaS-Workshop.git "$WORKSHOP_REPO_DIR"
+else
+  git -C "$WORKSHOP_REPO_DIR" pull --ff-only
+fi
+
+cd "$WORKSHOP_REPO_DIR"
 ```
 
 作業ディレクトリを確認します。
@@ -94,18 +107,43 @@ export SWA_LOCATION="eastasia"
 export BASE_NAME="blogapp"
 export GROUP_ID="A"
 export RESOURCE_GROUP="rg-${BASE_NAME}-${GROUP_ID}-workshop"
-export PARAM_FILE="materials/bicep/dev.local.bicepparam"
+export PARAM_FILE="$WORKSHOP_STATE_DIR/dev.local.bicepparam"
 export TENANT_ID="$(az account show --query tenantId -o tsv)"
+```
+
+共通変数を Azure Files 側に保存します。
+
+```bash
+cat > "$ENV_FILE" <<EOF
+export WORKSHOP_REPO_DIR="$WORKSHOP_REPO_DIR"
+export WORKSHOP_STATE_DIR="$WORKSHOP_STATE_DIR"
+export ENV_FILE="$ENV_FILE"
+export LOCATION="$LOCATION"
+export SWA_LOCATION="$SWA_LOCATION"
+export BASE_NAME="$BASE_NAME"
+export GROUP_ID="$GROUP_ID"
+export RESOURCE_GROUP="$RESOURCE_GROUP"
+export PARAM_FILE="$PARAM_FILE"
+export TENANT_ID="$TENANT_ID"
+EOF
 ```
 
 確認します。
 
 ```bash
+echo "$WORKSHOP_REPO_DIR"
+echo "$WORKSHOP_STATE_DIR"
 echo "$RESOURCE_GROUP"
 echo "$TENANT_ID"
 ```
 
-Cloud Shell のセッションが切れた場合は、このページの「ワークショップ共通変数を設定する」から再実行してください。
+Cloud Shell のセッションが切れた場合は、次で復元できます。
+
+```bash
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+cd "$WORKSHOP_REPO_DIR"
+```
 
 ## 次に進む
 

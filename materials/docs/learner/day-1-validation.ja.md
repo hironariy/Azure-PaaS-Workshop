@@ -9,8 +9,9 @@ title: "Day 1: アプリを検証"
 ## 1. 変数を復元する
 
 ```bash
-cd ~/Azure-PaaS-Workshop
-source ~/paas-workshop.env
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+cd "$WORKSHOP_REPO_DIR"
 ```
 
 ## 2. App Service 直接ヘルスチェック

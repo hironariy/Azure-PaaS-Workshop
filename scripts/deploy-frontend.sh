@@ -9,17 +9,18 @@
 #   - Azure CLI logged in
 #   - SWA CLI installed (npm install -g @azure/static-web-apps-cli)
 #   - Entra ID app registrations created
-#   - Local config file created from template
+#   - Frontend config file created from template
 #
 # Setup (one-time):
-#   cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
+#   mkdir -p "$HOME/clouddrive/paas-workshop"
+#   cp scripts/deploy-frontend.template.env "$HOME/clouddrive/paas-workshop/deploy-frontend.local.env"
 #   # Edit deploy-frontend.local.env with your Entra ID values
 #
 # Usage:
 #   ./scripts/deploy-frontend.sh <resource-group>
 #
 # The script will:
-#   1. Load Entra ID values from deploy-frontend.local.env
+#   1. Load Entra ID values from the Cloud Shell state or repo-local deploy-frontend.local.env
 #   2. Query Azure for SWA info
 #   3. Build the frontend
 #   4. Copy Static Web Apps routing config
@@ -40,6 +41,7 @@ NC='\033[0m' # No Color
 RESOURCE_GROUP="${1:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCAL_ENV_FILE="$SCRIPT_DIR/deploy-frontend.local.env"
+STATE_ENV_FILE="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}/deploy-frontend.local.env"
 TEMPLATE_ENV_FILE="$SCRIPT_DIR/deploy-frontend.template.env"
 
 # Validate arguments
@@ -55,43 +57,54 @@ echo "=============================================="
 echo "Resource Group: $RESOURCE_GROUP"
 echo "=============================================="
 
-# Step 0: Load Entra ID configuration from local.env file
+# Step 0: Load Entra ID configuration from frontend env file
 echo ""
 echo -e "${YELLOW}Step 0: Loading Entra ID configuration...${NC}"
 
-if [ -f "$LOCAL_ENV_FILE" ]; then
-    echo "  Loading from: $LOCAL_ENV_FILE"
+ENV_SOURCE_FILE=""
+if [ -f "$STATE_ENV_FILE" ]; then
+    ENV_SOURCE_FILE="$STATE_ENV_FILE"
+elif [ -f "$LOCAL_ENV_FILE" ]; then
+    ENV_SOURCE_FILE="$LOCAL_ENV_FILE"
+fi
+
+if [ -n "$ENV_SOURCE_FILE" ]; then
+    echo "  Loading from: $ENV_SOURCE_FILE"
     # Normalize CRLF to LF if file was edited on Windows
-    if grep -q $'\r' "$LOCAL_ENV_FILE"; then
+    if grep -q $'\r' "$ENV_SOURCE_FILE"; then
         echo "  Detected CRLF line endings; converting to LF..."
-        sed -i.bak $'s/\r$//' "$LOCAL_ENV_FILE"
-        rm -f "$LOCAL_ENV_FILE.bak"
+        sed -i.bak $'s/\r$//' "$ENV_SOURCE_FILE"
+        rm -f "$ENV_SOURCE_FILE.bak"
     fi
     # shellcheck source=/dev/null
-    source "$LOCAL_ENV_FILE"
+    source "$ENV_SOURCE_FILE"
 else
-    echo -e "${RED}Error: Local configuration file not found.${NC}"
+    echo -e "${RED}Error: Frontend configuration file not found.${NC}"
     echo ""
-    echo "Please create it from the template:"
+    echo "Please create it in the Cloud Shell state directory:"
+    echo "  mkdir -p $(dirname "$STATE_ENV_FILE")"
+    echo "  cp $TEMPLATE_ENV_FILE $STATE_ENV_FILE"
+    echo ""
+    echo "Or create the legacy repo-local file:"
     echo "  cp $TEMPLATE_ENV_FILE $LOCAL_ENV_FILE"
     echo ""
-    echo "Then edit $LOCAL_ENV_FILE with your Entra ID values."
+    echo "Then edit the file with your Entra ID values."
     exit 1
 fi
 
 # Validate required values
 if [ -z "$ENTRA_TENANT_ID" ] || [ "$ENTRA_TENANT_ID" = "your-tenant-id-here" ]; then
-    echo -e "${RED}Error: ENTRA_TENANT_ID not configured in $LOCAL_ENV_FILE${NC}"
+    echo -e "${RED}Error: ENTRA_TENANT_ID not configured in $ENV_SOURCE_FILE${NC}"
     exit 1
 fi
 
 if [ -z "$ENTRA_FRONTEND_CLIENT_ID" ] || [ "$ENTRA_FRONTEND_CLIENT_ID" = "your-frontend-client-id-here" ]; then
-    echo -e "${RED}Error: ENTRA_FRONTEND_CLIENT_ID not configured in $LOCAL_ENV_FILE${NC}"
+    echo -e "${RED}Error: ENTRA_FRONTEND_CLIENT_ID not configured in $ENV_SOURCE_FILE${NC}"
     exit 1
 fi
 
 if [ -z "$ENTRA_BACKEND_CLIENT_ID" ] || [ "$ENTRA_BACKEND_CLIENT_ID" = "your-backend-client-id-here" ]; then
-    echo -e "${RED}Error: ENTRA_BACKEND_CLIENT_ID not configured in $LOCAL_ENV_FILE${NC}"
+    echo -e "${RED}Error: ENTRA_BACKEND_CLIENT_ID not configured in $ENV_SOURCE_FILE${NC}"
     exit 1
 fi
 

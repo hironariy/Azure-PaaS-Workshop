@@ -9,8 +9,9 @@ title: "Day 1: バックエンドをデプロイ"
 ## 1. 変数を復元する
 
 ```bash
-cd ~/Azure-PaaS-Workshop
-source ~/paas-workshop.env
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+cd "$WORKSHOP_REPO_DIR"
 
 echo "$RESOURCE_GROUP"
 echo "$APP_SERVICE_NAME"
@@ -44,14 +45,14 @@ chmod +x scripts/deploy-backend.sh
 |---|---|---|
 | 引数と作業ディレクトリ確認 | `<resource-group>` と `<app-service-name>` を受け取り、`materials/backend` に移動する | 誤ったリソースやディレクトリにデプロイしない |
 | アプリ build | `npm install` と `npm run build` を実行する | TypeScript を Cloud Shell 側で JavaScript に変換する |
-| ZIP package 作成 | `dist/` に `package.json` / `package-lock.json` をコピーし、`npm ci --omit=dev` で production 依存関係だけを入れてから ZIP 化する | App Service 上で追加 build せず、実行に必要なファイルだけを配置する |
+| ZIP package 作成 | `deploy-package/` に `dist/` と `package.json` / `package-lock.json` をコピーし、`npm ci --omit=dev` で production 依存関係だけを入れてから ZIP 化する | App Service 上で追加 build せず、実行に必要なファイルだけを配置する |
 | ZIP の検査 | `unzip -t` とパス区切りの確認を行う | 壊れた ZIP や Windows 形式の区切り文字による起動失敗を防ぐ |
-| App Service 設定 | `SCM_DO_BUILD_DURING_DEPLOYMENT=false` と startup command `node src/app.js` を設定する | App Service 側の remote build を避け、ZIP 内の build 済みアプリを起動する |
+| App Service 設定 | `SCM_DO_BUILD_DURING_DEPLOYMENT=false` と startup command `node dist/src/app.js` を設定する | App Service 側の remote build を避け、ZIP 内の build 済みアプリを起動する |
 | ZIP deploy | `az webapp deploy --type zip --clean true --restart true --async true` を実行する | 既存ファイルを整理し、アップロード後に App Service を再起動する |
 | 起動待ち | `/health` を 20 秒後から最大 30 回、15 秒間隔で確認する | VNet Integration、Key Vault reference、DB 接続の初期化待ちを吸収する |
 | 後片付け | 成功/失敗時に `deploy.zip` を削除する | Cloud Shell 作業ディレクトリに不要な成果物を残さない |
 
-重要なポイントは、ZIP のルートが `dist/` ディレクトリそのものではなく、`src/app.js` と `node_modules/` を含む実行ファイル群になることです。これにより、startup command の `node src/app.js` と App Service 上のファイル配置が一致します。
+重要なポイントは、ZIP のルートに `dist/src/app.js` と `node_modules/` を含めることです。これにより、Dockerfile、`package.json`、startup command の `node dist/src/app.js` と App Service 上のファイル配置が一致します。
 
 期待値:
 

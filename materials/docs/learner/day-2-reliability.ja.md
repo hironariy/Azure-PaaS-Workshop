@@ -9,7 +9,9 @@ title: "Day 2: 信頼性と復旧"
 ## 1. ヘルスチェックを基準にする
 
 ```bash
-source ~/paas-workshop.env
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+cd "$WORKSHOP_REPO_DIR"
 
 curl -fsS "https://${APP_SERVICE_NAME}.azurewebsites.net/health" | jq .
 curl -fsS "https://${SWA_HOSTNAME}/api/health" | jq .

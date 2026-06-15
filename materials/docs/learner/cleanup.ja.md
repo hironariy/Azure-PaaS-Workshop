@@ -9,7 +9,8 @@ title: Cleanup
 ## 1. 変数を復元する
 
 ```bash
-source ~/paas-workshop.env
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
 echo "$RESOURCE_GROUP"
 ```
 
@@ -49,9 +50,11 @@ az ad app show --id "$BACKEND_CLIENT_ID" 2>/dev/null || echo "Backend app delete
 ## 4. Cloud Shell の作業ファイルを削除する
 
 ```bash
-rm -f ~/paas-workshop.env
-rm -rf ~/Azure-PaaS-Workshop
+rm -rf "$WORKSHOP_REPO_DIR"
+rm -rf "$WORKSHOP_STATE_DIR"
 ```
+
+`WORKSHOP_REPO_DIR` は build 高速化のため `~/Azure-PaaS-Workshop` に置いたリポジトリ、`WORKSHOP_STATE_DIR` は Azure Files (`~/clouddrive`) 側に置いた永続化 state です。
 
 ## 5. 費用確認
 

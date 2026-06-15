@@ -43,7 +43,7 @@ The script performs the following steps:
 
 #### Step 2: Create Deployment Package
 ```
-📁 Copy package.json and package-lock.json to dist/
+📁 Copy dist/ and package.json/package-lock.json to deploy-package/
 📁 Run npm ci --omit=dev (production dependencies only)
 📁 Create deploy.zip
 ```
@@ -59,7 +59,7 @@ The script performs the following steps:
 #### Step 3: Configure App Service
 ```
 ⚙️ SCM_DO_BUILD_DURING_DEPLOYMENT=false
-⚙️ Startup command: node src/app.js
+⚙️ Startup command: node dist/src/app.js
 ```
 - **Disables remote build**: Prevents Azure from trying to run `npm install` and `tsc` on the server (which would fail because TypeScript is a devDependency)
 - **Sets startup command**: Tells App Service how to start the pre-compiled application
@@ -151,18 +151,22 @@ Builds the React frontend, injects runtime configuration, and deploys to Azure S
 
 Before running this script:
 
-1. **Create local configuration file:**
+1. **Create the configuration file in the Cloud Shell state directory:**
    ```bash
-   cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env
+   export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+   mkdir -p "$WORKSHOP_STATE_DIR"
+   cp scripts/deploy-frontend.template.env "$WORKSHOP_STATE_DIR/deploy-frontend.local.env"
    ```
 
 2. **Edit with your Entra ID values:**
    ```bash
-   # scripts/deploy-frontend.local.env
+   # $WORKSHOP_STATE_DIR/deploy-frontend.local.env
    ENTRA_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
    ENTRA_FRONTEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
    ENTRA_BACKEND_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
    ```
+
+   The legacy `scripts/deploy-frontend.local.env` path is still supported, but the Cloud Shell learner path stores persistent state under Azure Files (`~/clouddrive`).
 
 ### Usage
 
@@ -179,10 +183,11 @@ The script performs the following steps:
 
 #### Step 0: Load Entra ID Configuration
 ```
-📄 Source deploy-frontend.local.env
+📄 Source $WORKSHOP_STATE_DIR/deploy-frontend.local.env
 ✅ Validate required values are set
 ```
-- Reads Entra ID configuration from the local (gitignored) file
+- Reads Entra ID configuration from the Azure Files state file in the Cloud Shell learner path
+- Still supports the legacy `scripts/deploy-frontend.local.env` file as a fallback
 - Validates that all required values are configured
 
 #### Step 1: Query Azure Resources
@@ -253,7 +258,7 @@ Resource Group: rg-blogapp-paas
 ==============================================
 
 Step 0: Loading Entra ID configuration...
-  Loading from: /path/to/scripts/deploy-frontend.local.env
+  Loading from: /home/<user>/clouddrive/paas-workshop/deploy-frontend.local.env
   Tenant ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   Frontend Client ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   Backend Client ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -267,11 +272,15 @@ Step 1: Querying Azure resources...
 Step 2: Building application...
 ✅ Build complete
 
-Step 3: Injecting config into index.html...
+Step 3: Copying Static Web Apps config...
+  staticwebapp.config.json copied to dist/
+✅ Static Web Apps config copied
+
+Step 4: Injecting config into index.html...
   Config injected into dist/index.html
 ✅ Config injected (no separate config.json file)
 
-Step 4: Deploying to Static Web Apps...
+Step 5: Deploying to Static Web Apps...
 [SWA CLI output...]
 
 ==============================================
@@ -297,13 +306,13 @@ Next steps:
 | Health check timeout | App taking too long to start | Check logs: `az webapp log tail --resource-group <rg> --name <app>` |
 | HTTP 502 after deploy | App crashed on startup | Check logs for Key Vault or database connection errors |
 | Permission denied | Script not executable | Run: `chmod +x scripts/deploy-backend.sh` |
-| Backend fails after ZIP deploy from Windows PowerShell | ZIP was created with Windows-style separators (e.g., `src\app.js`) | Recreate ZIP with `tar.exe -a -c -f ..\deploy.zip *` from `materials\backend\dist`, then redeploy |
+| Backend fails after ZIP deploy from Windows PowerShell | ZIP was created with Windows-style separators (e.g., `dist\src\app.js`) | Recreate ZIP with `/` separators from `materials\backend`, then redeploy |
 
 ### Frontend Deployment Issues
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
-| "Local configuration file not found" | Missing `.local.env` file | Copy template: `cp scripts/deploy-frontend.template.env scripts/deploy-frontend.local.env` |
+| "Local configuration file not found" | Missing `.local.env` file | Create state file: `cp scripts/deploy-frontend.template.env "$HOME/clouddrive/paas-workshop/deploy-frontend.local.env"` |
 | "No Static Web App found" | Wrong resource group | Verify resource group name |
 | "Could not get SWA deployment token" | Permissions issue | Ensure you have Contributor access |
 | SWA CLI not found | Not installed | Install: `npm install -g @azure/static-web-apps-cli` |
@@ -336,7 +345,8 @@ az webapp log download \
 | `scripts/deploy-backend.sh` | Main backend deployment script |
 | `scripts/deploy-frontend.sh` | Main frontend deployment script |
 | `scripts/deploy-frontend.template.env` | Template for frontend config (committed to git) |
-| `scripts/deploy-frontend.local.env` | Local frontend config (gitignored) |
+| `$HOME/clouddrive/paas-workshop/deploy-frontend.local.env` | Cloud Shell frontend config (persistent) |
+| `scripts/deploy-frontend.local.env` | Legacy repo-local frontend config (gitignored) |
 
 ---
 

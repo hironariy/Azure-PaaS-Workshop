@@ -19,8 +19,9 @@ echo "$RESOURCE_GROUP"
 対処:
 
 ```bash
-source ~/paas-workshop.env
-cat ~/paas-workshop.env
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+cat "$WORKSHOP_STATE_DIR/paas-workshop.env"
 ```
 
 ファイルが無い場合は [受講者クイックスタート](cloud-shell-quickstart.ja.html) から変数を再設定します。
@@ -56,15 +57,18 @@ Insufficient privileges
 対処:
 
 - 講師から `TENANT_ID`、`BACKEND_CLIENT_ID`、`FRONTEND_CLIENT_ID` を受け取ります。
-- 受け取った値を `~/paas-workshop.env` に保存します。
+- 受け取った値を Azure Files 側の state ファイルに保存します。
 
 ```bash
-cat >> ~/paas-workshop.env <<EOF
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+mkdir -p "$WORKSHOP_STATE_DIR"
+
+cat >> "$WORKSHOP_STATE_DIR/paas-workshop.env" <<EOF
 export TENANT_ID="<tenant-id>"
 export BACKEND_CLIENT_ID="<backend-client-id>"
 export FRONTEND_CLIENT_ID="<frontend-client-id>"
 EOF
-source ~/paas-workshop.env
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
 ```
 
 ## Bicep デプロイが失敗する
@@ -98,7 +102,7 @@ az webapp log tail \
 確認ポイント:
 
 - backend ZIP deploy が完了しているか。
-- App Service の startup command が `node src/app.js` になっているか。
+- App Service の startup command が `node dist/src/app.js` になっているか。
 - `SCM_DO_BUILD_DURING_DEPLOYMENT=false` が設定されているか。
 - Key Vault reference が解決できているか。
 - Cosmos DB 接続で失敗していないか。
@@ -116,6 +120,26 @@ az webapp config appsettings list \
   --query "[?name=='SCM_DO_BUILD_DURING_DEPLOYMENT' || name=='COSMOS_CONNECTION_STRING'].{name:name,value:value}" \
   -o table
 ```
+
+### `Cannot find module '/home/site/wwwroot/src/app.js'`
+
+原因:
+
+- 古い手順または古いスクリプトで App Service の startup command が `node src/app.js` のままになっている。
+- ZIP deploy が完了する前に App Service が再起動し、まだ起動ファイルが配置されていない。
+
+対処:
+
+```bash
+az webapp config set \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$APP_SERVICE_NAME" \
+  --startup-file "node dist/src/app.js"
+
+./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
+```
+
+`az webapp deploy` の出力が `Warmed up Kudu instance successfully.` でしばらく止まって見える場合があります。Cloud Shell から ZIP をアップロードしている間は追加ログが出ないことがあるため、数分待ってから App Service logs と `/health` を確認します。
 
 ## SWA `/api/health` が 404
 
@@ -175,10 +199,37 @@ az rest \
   --body "$SPA_PATCH"
 ```
 
+## Frontend の API permissions が Portal に表示されない
+
+`az ad app permission add` は Frontend app registration の API permission 要求を追加し、`az ad app permission grant` は Frontend service principal に delegated permission grant を作成します。Portal の **App registrations > Frontend > API permissions** は前者を表示しますが、反映に時間がかかることがあります。
+
+CLI で状態を確認します。
+
+```bash
+az ad app show \
+  --id "$FRONTEND_CLIENT_ID" \
+  --query "requiredResourceAccess[?resourceAppId=='$BACKEND_CLIENT_ID']" \
+  -o jsonc
+
+az ad app permission list-grants \
+  --id "$FRONTEND_CLIENT_ID" \
+  -o jsonc
+```
+
+期待値:
+
+- `requiredResourceAccess[].resourceAppId` が `$BACKEND_CLIENT_ID`
+- `requiredResourceAccess[].resourceAccess[].id` が `$ACCESS_SCOPE_ID`
+- `list-grants` の `scope` に `access_as_user`
+
+CLI では見えるのに Portal で見えない場合は、ブラウザー更新、Portal 再ログイン、正しい tenant と Frontend app registration を開いているかを確認します。
+
 ## フロントエンド build が失敗する
 
 ```bash
-cd ~/Azure-PaaS-Workshop/materials/frontend
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+cd "$WORKSHOP_REPO_DIR/materials/frontend"
 node --version
 npm --version
 npm ci
@@ -190,7 +241,9 @@ Node.js が古い場合、Cloud Shell 環境差異の可能性があります。
 ## バックエンド build / ZIP deploy が失敗する
 
 ```bash
-cd ~/Azure-PaaS-Workshop
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+cd "$WORKSHOP_REPO_DIR"
 node --version
 npm --version
 zip -v | head -1
@@ -201,5 +254,5 @@ zip -v | head -1
 
 - `materials/backend/package-lock.json` が存在する。
 - `npm run build` が成功している。
-- `deploy.zip` の中身が `src/app.js` のように `/` 区切りになっている。
+- `deploy.zip` の中身に `dist/src/app.js` があり、パスが `/` 区切りになっている。
 - App Service logs に `Cannot find module` や Key Vault reference のエラーが出ていない。

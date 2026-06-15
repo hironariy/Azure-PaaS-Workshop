@@ -11,6 +11,10 @@ title: "Day 0: Entra ID と認証設定"
 ## 1. 名前を決める
 
 ```bash
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+cd "$WORKSHOP_REPO_DIR"
+
 export BACKEND_APP_NAME="paas-blog-backend-${GROUP_ID}"
 export FRONTEND_APP_NAME="paas-blog-frontend-${GROUP_ID}"
 export ACCESS_SCOPE_ID="$(uuidgen)"
@@ -167,12 +171,32 @@ az ad app permission list-grants \
   -o jsonc
 ```
 
-## 4. 値を Cloud Shell に保存する
+確認の見方:
 
-Cloud Shell のセッション切断に備え、再利用する値をファイルに保存します。
+| 確認先 | 何を見ているか | 期待値 |
+|---|---|---|
+| `az ad app permission list` | Frontend app registration の API permission 要求 (`requiredResourceAccess`) | Backend API の `access_as_user` が含まれる |
+| `az ad app permission list-grants` | Frontend service principal に対する delegated permission grant | `scope` に `access_as_user` が含まれる |
+| Azure Portal の **App registrations > Frontend > API permissions** | `requiredResourceAccess` の表示 | 反映に時間がかかる場合があります。ブラウザー更新、Portal 再ログイン、対象 tenant/app の確認を行います。 |
+
+Portal に表示されない場合でも、次の CLI で `resourceAppId` が `$BACKEND_CLIENT_ID`、`resourceAccess[].id` が `$ACCESS_SCOPE_ID` であれば、Frontend app registration には API permission 要求が入っています。
 
 ```bash
-cat > ~/paas-workshop.env <<EOF
+az ad app show \
+  --id "$FRONTEND_CLIENT_ID" \
+  --query "requiredResourceAccess[?resourceAppId=='$BACKEND_CLIENT_ID']" \
+  -o jsonc
+```
+
+## 4. 値を Cloud Shell に保存する
+
+Cloud Shell のセッション切断に備え、再利用する値を Azure Files 側の state ファイルに保存します。
+
+```bash
+cat > "$ENV_FILE" <<EOF
+export WORKSHOP_REPO_DIR="$WORKSHOP_REPO_DIR"
+export WORKSHOP_STATE_DIR="$WORKSHOP_STATE_DIR"
+export ENV_FILE="$ENV_FILE"
 export LOCATION="$LOCATION"
 export SWA_LOCATION="$SWA_LOCATION"
 export BASE_NAME="$BASE_NAME"
@@ -185,13 +209,15 @@ export FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
 export ACCESS_SCOPE_ID="$ACCESS_SCOPE_ID"
 EOF
 
-cat ~/paas-workshop.env
+cat "$ENV_FILE"
 ```
 
 次回 Cloud Shell を開いたら、次で復元できます。
 
 ```bash
-source ~/paas-workshop.env
+export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
+source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+cd "$WORKSHOP_REPO_DIR"
 ```
 
 ## 次に進む

@@ -26,6 +26,7 @@ APP_SERVICE_NAME="${2:-}"
 MAX_RETRIES=30
 RETRY_INTERVAL=15
 INITIAL_HEALTH_DELAY=20
+DEPLOY_PACKAGE_DIR="deploy-package"
 
 # Validate arguments
 if [ -z "$RESOURCE_GROUP" ] || [ -z "$APP_SERVICE_NAME" ]; then
@@ -53,18 +54,29 @@ fi
 cd "$BACKEND_DIR"
 echo "Working directory: $(pwd)"
 
+cleanup_artifacts() {
+    rm -rf "$BACKEND_DIR/deploy.zip" "$BACKEND_DIR/$DEPLOY_PACKAGE_DIR"
+}
+
+trap cleanup_artifacts EXIT
+
 # Step 1: Build the application
 echo ""
 echo -e "${YELLOW}Step 1: Building application...${NC}"
 npm install
+rm -rf dist
 npm run build
 echo -e "${GREEN}✅ Build complete${NC}"
 
 # Step 2: Create deployment package
 echo ""
 echo -e "${YELLOW}Step 2: Creating deployment package...${NC}"
-cp package.json package-lock.json dist/
-cd dist
+rm -rf "$DEPLOY_PACKAGE_DIR" deploy.zip
+mkdir -p "$DEPLOY_PACKAGE_DIR"
+cp package.json package-lock.json "$DEPLOY_PACKAGE_DIR/"
+cp -R dist "$DEPLOY_PACKAGE_DIR/"
+
+cd "$DEPLOY_PACKAGE_DIR"
 npm ci --omit=dev
 
 # Create zip: prefer 'zip', then 7-Zip
@@ -98,9 +110,17 @@ if command -v unzip >/dev/null 2>&1; then
         exit 1
     fi
 
-    if unzip -Z1 ../deploy.zip | awk 'index($0,"\\"){found=1; exit 0} END{exit(found?0:1)}'; then
+    ZIP_ENTRIES="$(unzip -Z1 ../deploy.zip)"
+
+    if printf '%s\n' "$ZIP_ENTRIES" | awk 'index($0,"\\"){found=1; exit 0} END{exit(found?0:1)}'; then
         echo -e "${RED}Error: deploy.zip contains Windows-style path separators (\\).${NC}"
         echo "Repackage using zip or 7-Zip, then retry deployment."
+        exit 1
+    fi
+
+    if ! printf '%s\n' "$ZIP_ENTRIES" | grep -qx 'dist/src/app.js'; then
+        echo -e "${RED}Error: deploy.zip does not contain dist/src/app.js.${NC}"
+        echo "The App Service startup command expects node dist/src/app.js."
         exit 1
     fi
 fi
@@ -119,11 +139,11 @@ az webapp config appsettings set \
     --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false" \
     >/dev/null
 
-# Set startup command (pre-built package has src/app.js at root)
+# Set startup command (pre-built package has dist/src/app.js at root)
 az webapp config set \
     --resource-group "$RESOURCE_GROUP" \
     --name "$APP_SERVICE_NAME" \
-    --startup-file "node src/app.js" \
+    --startup-file "node dist/src/app.js" \
     >/dev/null
 
 echo -e "${GREEN}✅ App Service configured${NC}"
@@ -132,6 +152,7 @@ echo -e "${GREEN}✅ App Service configured${NC}"
 echo ""
 echo -e "${YELLOW}Step 4: Deploying to App Service...${NC}"
 echo "Note: Using async deployment - will poll health endpoint separately"
+echo "Note: After Kudu warmup, uploading deploy.zip from Cloud Shell can take several minutes without additional progress output"
 
 TRACK_STATUS_FLAG=""
 if az webapp deploy -h 2>/dev/null | grep -q "track-status"; then
@@ -179,8 +200,6 @@ for i in $(seq 1 $MAX_RETRIES); do
         echo "App URL: https://$APP_SERVICE_NAME.azurewebsites.net"
         echo "=============================================="
         
-        # Cleanup
-        rm -f deploy.zip
         exit 0
     fi
     
@@ -202,6 +221,4 @@ echo ""
 echo "3. Check Key Vault RBAC:"
 echo "   az role assignment list --assignee \$(az webapp identity show --resource-group $RESOURCE_GROUP --name $APP_SERVICE_NAME --query principalId -o tsv) --query '[].roleDefinitionName'"
 
-# Cleanup
-rm -f deploy.zip
 exit 1

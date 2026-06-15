@@ -86,7 +86,7 @@ var runtimeAppSettings = runtimeMode == 'standard'
       }
       {
         name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
-        value: 'true'
+        value: 'false'
       }
     ]
   : [
@@ -142,7 +142,7 @@ resource appService 'Microsoft.Web/sites@2024-04-01' = {
       http20Enabled: true
       healthCheckPath: '/health'
       // Explicit startup command (also defined in package.json)
-      appCommandLine: runtimeMode == 'standard' ? 'node src/app.js' : ''
+      appCommandLine: runtimeMode == 'standard' ? 'node dist/src/app.js' : ''
       // Allow public access (protected by Entra ID at application level)
       ipSecurityRestrictionsDefaultAction: 'Allow'
       scmIpSecurityRestrictionsUseMain: true
