@@ -2,6 +2,8 @@
 
 このガイドでは、本ワークショップの PaaS アーキテクチャに対する、実践的な **事業継続（Business Continuity）/ 災害復旧（Disaster Recovery）= BCDR** の進め方を説明します。
 
+> **受講者本線:** Cloud Shell 専用の Day 2 手順は [Day 2: 信頼性と復旧](learner/day-2-reliability.ja.html) を参照してください。このガイドは BCDR の参照用です。
+
 - **Frontend**: Azure Static Web Apps（SWA）
 - **Backend**: Azure App Service（Linux, Node.js）
 - **Database**: Azure Cosmos DB for MongoDB vCore

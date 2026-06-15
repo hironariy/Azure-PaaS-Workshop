@@ -4,6 +4,10 @@
 
 English version: [README.md](./README.md)
 
+> **受講者向け Cloud Shell 手順:** 新しい本線は [Azure PaaS Workshop 受講者ポータル](materials/docs/index.md) です。Azure Cloud Shell (Bash) だけで Day 0 / Day 1 / Day 2 / Cleanup を進める構成に整理しています。
+>
+> この README のローカル開発、Windows/WSL、PowerShell、GitHub Actions の手順は、代替・発展・講師向け参照として扱ってください。
+
 本リポジトリは、Azure の PaaS パターンを学ぶためのハンズオンワークショップです。実運用を意識した構成で、Web アプリケーションを Azure 上にデプロイします。
 
 > 📚 **Workshop Series - Day 2**

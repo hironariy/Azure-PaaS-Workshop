@@ -2,6 +2,8 @@
 
 このドキュメントは、同じブログアプリケーションに対して **IaaS 実装から PaaS 実装へ移行する際に、アプリケーションコードのどこを変更したか** を整理した解説書です。
 
+> このページは任意の比較資料です。PaaS ワークショップの受講者本線では、IaaS 側のアーキテクチャは参照せず、Cloud Shell から App Service / Static Web Apps / Cosmos DB or DocumentDB / Key Vault / Application Insights を使う手順に従ってください。
+
 - 対象: `iaas/materials/backend` vs `materials/backend`、`iaas/materials/frontend` vs `materials/frontend`
 - 主眼: **差分（What）**、**背景（Context）**、**理由（Why）**
 - 非対象: Bicep インフラ定義の詳細（別ガイド参照）

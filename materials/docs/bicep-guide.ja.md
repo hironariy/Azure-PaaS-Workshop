@@ -2,6 +2,10 @@
 
 このガイドでは、ワークショップの Bicep テンプレート構成、主要パラメータ、運用時の安全なデプロイ手順を解説します。
 
+> **受講者本線:** Cloud Shell 専用の手順は [Day 1: PaaS インフラをデプロイ](learner/day-1-deploy-infrastructure.ja.html) を参照してください。このガイドは Bicep の背景理解と参照用です。
+>
+> この PaaS ワークショップの本線は Static Web Apps Linked Backend + App Service です。Application Gateway や Bastion は使用しません。
+
 ディレクトリ構成:
 
 ```

@@ -1,0 +1,33 @@
+title: Azure PaaS Workshop Learner Portal
+description: Cloud Shell-first learner materials for the Azure PaaS Workshop.
+lang: ja-JP
+theme: minima
+
+header_pages:
+  - index.md
+
+plugins:
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-relative-links
+
+defaults:
+  - scope:
+      path: ""
+      type: pages
+    values:
+      layout: default
+
+optional_front_matter:
+  remove_originals: true
+
+readme_index:
+  enabled: true
+  remove_originals: true
+
+relative_links:
+  enabled: true
+  collections: true
+
+exclude:
+  - archive/

@@ -2,6 +2,8 @@
 
 このガイドでは、Azure PaaS ワークショップのブログアプリケーションを監視・トラブルシュートする方法を説明します。
 
+> **受講者本線:** Cloud Shell 専用の Day 2 手順は [Day 2: 監視と運用](learner/day-2-operations.ja.html) を参照してください。このガイドは監視設計と KQL の参照用です。
+
 - **Frontend**: Azure Static Web Apps
 - **Backend**: Azure App Service（`/health`, `/api/health`）
 - **Database**: Azure Cosmos DB for MongoDB vCore
