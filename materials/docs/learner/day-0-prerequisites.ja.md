@@ -55,7 +55,7 @@ export RESOURCE_GROUP="rg-${BASE_NAME}-${GROUP_ID}-workshop"
 
 ## 4. Resource Provider を登録する
 
-このワークショップでは、App Service、Static Web Apps、Cosmos DB/DocumentDB、Key Vault、Monitor、Network を使います。
+このワークショップでは、App Service、Static Web Apps、Cosmos DB/DocumentDB、Key Vault、Monitor/Alerts Management、Network を使います。
 
 ```bash
 for ns in \
@@ -63,6 +63,7 @@ for ns in \
   Microsoft.DocumentDB \
   Microsoft.KeyVault \
   Microsoft.Insights \
+  Microsoft.AlertsManagement \
   Microsoft.OperationalInsights \
   Microsoft.Network \
   Microsoft.Authorization
@@ -78,13 +79,15 @@ done
 登録状態を確認します。
 
 ```bash
-for ns in Microsoft.Web Microsoft.DocumentDB Microsoft.KeyVault Microsoft.Insights Microsoft.OperationalInsights Microsoft.Network Microsoft.Authorization
+for ns in Microsoft.Web Microsoft.DocumentDB Microsoft.KeyVault Microsoft.Insights Microsoft.AlertsManagement Microsoft.OperationalInsights Microsoft.Network Microsoft.Authorization
 do
   az provider show --namespace "$ns" --query "{namespace:namespace,state:registrationState}" -o table
 done
 ```
 
 すべて `Registered` になるまで数分かかることがあります。
+
+`Microsoft.AlertsManagement` が未登録の場合、Application Insights の `Failure Anomalies` アラート作成でデプロイが失敗することがあります。
 
 ## 5. Quota と費用の前提を確認する
 

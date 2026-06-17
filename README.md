@@ -821,11 +821,11 @@ For this workshop, pre-check these namespaces before deployment:
 - `Microsoft.OperationalInsights`
 - `Microsoft.Insights`
 - `Microsoft.Authorization`
-- `Microsoft.AlertManagement` (recommended pre-registration for alert-related dependencies)
+- `Microsoft.AlertsManagement` (recommended pre-registration for alert-related dependencies)
 
 You can check/register them in one shot:
 ```bash
-for ns in Microsoft.Web Microsoft.Network Microsoft.DocumentDB Microsoft.KeyVault Microsoft.OperationalInsights Microsoft.Insights Microsoft.Authorization Microsoft.AlertManagement; do
+for ns in Microsoft.Web Microsoft.Network Microsoft.DocumentDB Microsoft.KeyVault Microsoft.OperationalInsights Microsoft.Insights Microsoft.Authorization Microsoft.AlertsManagement; do
   state=$(az provider show --namespace "$ns" --query registrationState -o tsv 2>/dev/null || echo NotRegistered)
   echo "$ns: $state"
   if [ "$state" != "Registered" ]; then
