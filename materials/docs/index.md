@@ -4,7 +4,7 @@ title: Azure PaaS Workshop 受講者ポータル
 
 # Azure PaaS Workshop 受講者ポータル
 
-<p class="wp-lead">このポータルは、Azure PaaS Workshop を <strong>Azure Cloud Shell (Bash)</strong> だけで進めるための受講者向け入口です。App Service、Static Web Apps、Cosmos DB/DocumentDB、Key Vault、Managed Identity、Application Insights / Azure Monitor を使う PaaS 構成を、事前準備から cleanup まで順番に確認します。</p>
+<p class="wp-lead">このポータルは、Azure PaaS Workshop を <strong>Azure Cloud Shell (Bash)</strong> だけで進めるための受講者向け入口です。App Service、Static Web Apps、Cosmos DB/DocumentDB、Key Vault、Managed Identity、Application Insights / Azure Monitor を使う PaaS 構成を、事前準備から cleanup まで順番に確認します。<br/>もととなっているリポジトリは<a href='https://github.com/hironariy/Azure-PaaS-Workshop'>こちら</a>です</p>
 
 <style>
   :root {
