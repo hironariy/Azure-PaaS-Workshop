@@ -88,51 +88,65 @@
 
 ## 5. KQL クエリ例（スターター）
 
-> テーブル名は、診断カテゴリやエージェント有効化状況で変わる場合があります。
+> Log Analytics ワークスペースの Logs では、workspace-based Application Insights のテーブル名は `AppRequests` / `AppExceptions` です。Application Insights リソースの Logs では `requests` / `exceptions` の別名が使える場合があります。以降は Log Analytics ワークスペースから実行する前提です。
 
-### 5.1 直近テレメトリの簡易確認
+### 5.1 テーブルと直近テレメトリの簡易確認
 
 ```kusto
 search *
-| where TimeGenerated > ago(15m)
-| take 100
+| where TimeGenerated > ago(24h)
+| summarize Records=count() by $table
+| order by Records desc
 ```
 
 ### 5.2 App Service の HTTP 失敗（Application Insights）
 
 ```kusto
-requests
-| where timestamp > ago(1h)
-| where success == false or resultCode startswith "5"
-| project timestamp, name, resultCode, duration, operation_Id
-| order by timestamp desc
+AppRequests
+| where TimeGenerated > ago(1h)
+| where Success == false or ResultCode startswith "5"
+| project TimeGenerated, Name, ResultCode, DurationMs, OperationId, AppRoleName
+| order by TimeGenerated desc
 ```
 
 ### 5.3 API 遅延（P95）
 
 ```kusto
-requests
-| where timestamp > ago(24h)
-| summarize p95_duration=percentile(duration, 95) by name
-| order by p95_duration desc
+AppRequests
+| where TimeGenerated > ago(24h)
+| summarize P95DurationMs=percentile(DurationMs, 95) by Name
+| order by P95DurationMs desc
 ```
 
 ### 5.4 例外の種類別集計
 
 ```kusto
-exceptions
-| where timestamp > ago(24h)
-| summarize count() by type
-| order by count_ desc
+AppExceptions
+| where TimeGenerated > ago(24h)
+| summarize Exceptions=count() by ExceptionType
+| order by Exceptions desc
 ```
 
-### 5.5 Heartbeat / エージェント稼働確認
+### 5.5 テーブルが見えない場合の確認
 
-```kusto
-Heartbeat
-| summarize LastSeen=max(TimeGenerated) by Computer
-| order by LastSeen desc
+`AppRequests` / `AppExceptions` が表示されない場合は、まずバックエンドへリクエストを送って Application Insights にテレメトリを発生させます。
+
+```bash
+curl -fsS "https://${APP_SERVICE_NAME}.azurewebsites.net/health" | jq .
+curl -fsS "https://${SWA_HOSTNAME}/api/health" | jq .
 ```
+
+数分待っても `AppRequests` が出ない場合は、App Service の `APPLICATIONINSIGHTS_CONNECTION_STRING` が空ではないことを確認します。
+
+```bash
+az webapp config appsettings list \
+	--resource-group "$RESOURCE_GROUP" \
+	--name "$APP_SERVICE_NAME" \
+	--query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].{name:name,value:value}" \
+	-o table
+```
+
+接続文字列を追加・更新した後は、App Service を再起動してから再度 `/health` にアクセスします。
 
 ---
 

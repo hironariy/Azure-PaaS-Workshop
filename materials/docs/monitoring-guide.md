@@ -86,51 +86,65 @@ For production-like observability, route platform logs/metrics to Log Analytics 
 
 ## 5. Starter KQL Queries
 
-> Table names can vary by enabled diagnostic categories and agents.
+> In Log Analytics workspace Logs, workspace-based Application Insights uses `AppRequests` / `AppExceptions`. In Application Insights resource Logs, the `requests` / `exceptions` aliases may also be available. The queries below assume Log Analytics workspace Logs.
 
-### 5.1 Quick Recent Telemetry Check
+### 5.1 Quick Table and Telemetry Check
 
 ```kusto
 search *
-| where TimeGenerated > ago(15m)
-| take 100
+| where TimeGenerated > ago(24h)
+| summarize Records=count() by $table
+| order by Records desc
 ```
 
 ### 5.2 App Service HTTP Failures (Application Insights)
 
 ```kusto
-requests
-| where timestamp > ago(1h)
-| where success == false or resultCode startswith "5"
-| project timestamp, name, resultCode, duration, operation_Id
-| order by timestamp desc
+AppRequests
+| where TimeGenerated > ago(1h)
+| where Success == false or ResultCode startswith "5"
+| project TimeGenerated, Name, ResultCode, DurationMs, OperationId, AppRoleName
+| order by TimeGenerated desc
 ```
 
 ### 5.3 Slow API Requests (P95)
 
 ```kusto
-requests
-| where timestamp > ago(24h)
-| summarize p95_duration=percentile(duration, 95) by name
-| order by p95_duration desc
+AppRequests
+| where TimeGenerated > ago(24h)
+| summarize P95DurationMs=percentile(DurationMs, 95) by Name
+| order by P95DurationMs desc
 ```
 
 ### 5.4 Exceptions by Type
 
 ```kusto
-exceptions
-| where timestamp > ago(24h)
-| summarize count() by type
-| order by count_ desc
+AppExceptions
+| where TimeGenerated > ago(24h)
+| summarize Exceptions=count() by ExceptionType
+| order by Exceptions desc
 ```
 
-### 5.5 Heartbeat / Agent Presence
+### 5.5 If Tables Are Missing
 
-```kusto
-Heartbeat
-| summarize LastSeen=max(TimeGenerated) by Computer
-| order by LastSeen desc
+If `AppRequests` / `AppExceptions` do not appear, first generate backend traffic so Application Insights has telemetry to ingest.
+
+```bash
+curl -fsS "https://${APP_SERVICE_NAME}.azurewebsites.net/health" | jq .
+curl -fsS "https://${SWA_HOSTNAME}/api/health" | jq .
 ```
+
+If `AppRequests` still does not appear after a few minutes, confirm that the App Service `APPLICATIONINSIGHTS_CONNECTION_STRING` app setting is not empty.
+
+```bash
+az webapp config appsettings list \
+	--resource-group "$RESOURCE_GROUP" \
+	--name "$APP_SERVICE_NAME" \
+	--query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].{name:name,value:value}" \
+	-o table
+```
+
+After adding or updating the connection string, restart App Service and call `/health` again.
 
 ---
 

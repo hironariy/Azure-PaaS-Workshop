@@ -93,20 +93,41 @@ echo "Application Insights: $APPINSIGHTS_NAME"
 echo "Workspace ID: $WORKSPACE_ID"
 ```
 
+Log Analytics ワークスペースの Logs から実行する場合、workspace-based Application Insights のテーブル名は `AppRequests` / `AppExceptions` です。Application Insights リソースの Logs では `requests` / `exceptions` の別名が使える場合があります。
+
+まず、直近でデータが入っているテーブルを確認します。
+
+```kusto
+search *
+| where TimeGenerated > ago(24h)
+| summarize Records=count() by $table
+| order by Records desc
+```
+
 KQL 例:
 
 ```kusto
-requests
-| where timestamp > ago(1h)
-| summarize count(), failures=countif(success == false) by bin(timestamp, 5m)
-| order by timestamp desc
+AppRequests
+| where TimeGenerated > ago(1h)
+| summarize Requests=count(), Failures=countif(Success == false) by bin(TimeGenerated, 5m)
+| order by TimeGenerated desc
 ```
 
 ```kusto
-exceptions
-| where timestamp > ago(1h)
-| order by timestamp desc
+AppExceptions
+| where TimeGenerated > ago(1h)
+| project TimeGenerated, ExceptionType, Message, OperationId, AppRoleName
+| order by TimeGenerated desc
 ```
+
+`AppRequests` / `AppExceptions` も表示されない場合は、先にアプリへリクエストを送ってから数分待ちます。
+
+```bash
+curl -fsS "https://${APP_SERVICE_NAME}.azurewebsites.net/health" | jq .
+curl -fsS "https://${SWA_HOSTNAME}/api/health" | jq .
+```
+
+それでも表示されない場合は、手順 4 の `APPLICATIONINSIGHTS_CONNECTION_STRING` が空ではないことと、App Service が再起動済みであることを確認します。
 
 詳細は [監視ガイド](../monitoring-guide.ja.html) を参照してください。
 
