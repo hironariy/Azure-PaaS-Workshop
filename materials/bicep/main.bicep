@@ -318,8 +318,8 @@ output appInsightsName string = monitoring.outputs.appInsightsName
 
 // Multi-group workshop support
 output recommendedResourceGroupName string = empty(groupId) 
-  ? 'rg-${baseName}-workshop' 
-  : 'rg-${baseName}-${groupId}-workshop'
+  ? 'rg-${baseName}-paas-workshop' 
+  : 'rg-${baseName}-${groupId}-paas-workshop'
 
 // =============================================================================
 // Post-Deployment Instructions

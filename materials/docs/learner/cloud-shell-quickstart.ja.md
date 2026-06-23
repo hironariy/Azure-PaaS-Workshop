@@ -1,5 +1,5 @@
 ---
-title: 受講者クイックスタート
+title: "Day 0: 事前準備 1 Cloud Shell 設定"
 ---
 
 # 受講者クイックスタート
@@ -106,7 +106,7 @@ export LOCATION="japaneast"
 export SWA_LOCATION="eastasia"
 export BASE_NAME="blogapp"
 export GROUP_ID="A"
-export RESOURCE_GROUP="rg-${BASE_NAME}-${GROUP_ID}-workshop"
+export RESOURCE_GROUP="rg-${BASE_NAME}-${GROUP_ID}-paas-workshop"
 export PARAM_FILE="$WORKSHOP_STATE_DIR/dev.local.bicepparam"
 export TENANT_ID="$(az account show --query tenantId -o tsv)"
 ```

@@ -355,18 +355,18 @@ title: Azure PaaS Workshop 受講者ポータル
       <li class="wp-step" data-page="learner/cloud-shell-quickstart.ja.html">
         <span class="wp-step__num" aria-hidden="true">1</span>
         <span class="wp-step__body">
-          <span class="wp-badge wp-badge--pre">開始</span>
-          <a class="wp-step__link" href="learner/cloud-shell-quickstart.ja.html" target="workshop-content-frame">受講者クイックスタート</a>
+          <span class="wp-badge wp-badge--d0">Day 0</span>
+          <a class="wp-step__link" href="learner/cloud-shell-quickstart.ja.html" target="workshop-content-frame">事前準備 1</a>
         </span>
-        <label class="wp-check"><input type="checkbox" data-progress-id="lp-quickstart" aria-label="受講者クイックスタート完了"></label>
+        <label class="wp-check"><input type="checkbox" data-progress-id="lp-quickstart" aria-label="Day 0 事前準備 1 完了"></label>
       </li>
       <li class="wp-step" data-page="learner/day-0-prerequisites.ja.html">
         <span class="wp-step__num" aria-hidden="true">2</span>
         <span class="wp-step__body">
           <span class="wp-badge wp-badge--d0">Day 0</span>
-          <a class="wp-step__link" href="learner/day-0-prerequisites.ja.html" target="workshop-content-frame">事前準備</a>
+          <a class="wp-step__link" href="learner/day-0-prerequisites.ja.html" target="workshop-content-frame">事前準備 2</a>
         </span>
-        <label class="wp-check"><input type="checkbox" data-progress-id="lp-day0-prereq" aria-label="Day 0 事前準備完了"></label>
+        <label class="wp-check"><input type="checkbox" data-progress-id="lp-day0-prereq" aria-label="Day 0 事前準備 2 完了"></label>
       </li>
       <li class="wp-step" data-page="learner/day-0-entra-id.ja.html">
         <span class="wp-step__num" aria-hidden="true">3</span>
