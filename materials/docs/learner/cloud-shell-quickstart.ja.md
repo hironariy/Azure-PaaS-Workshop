@@ -2,7 +2,7 @@
 title: "Day 0: 事前準備 1 Cloud Shell 設定"
 ---
 
-# 受講者クイックスタート
+# Day 0: 事前準備 1 Cloud Shell 設定
 
 このページは、Azure PaaS Workshop を **Azure Cloud Shell (Bash) だけ**で進めるための入口です。ローカル PC への Azure CLI、Node.js、Docker、WSL、PowerShell のインストールは不要です。バックエンドは、このリポジトリのソースコードから Cloud Shell 上で build して App Service に ZIP deploy します。
 
