@@ -6,16 +6,16 @@ Azure PaaS Workshop の Blog アプリケーションをローカルで動かす
 
 | ソフトウェア | バージョン | インストール |
 |----------|---------|--------------|
-| Node.js | 22.x LTS | [nodejs.org](https://nodejs.org/) |
+| Node.js | 24.x LTS | [nodejs.org](https://nodejs.org/) |
 | Docker Desktop | 最新 | [docker.com](https://www.docker.com/products/docker-desktop/) |
-| npm | 10.x+ | Node.js に同梱 |
+| npm | 11.x+ | Node.js に同梱 |
 | Git | 最新 | [git-scm.com](https://git-scm.com/) |
 | SWA CLI | 最新 | `npm install -g @azure/static-web-apps-cli` |
 
 **インストール確認:**
 ```bash
-node --version    # v22.x.x が表示される
-npm --version     # 10.x.x が表示される
+node --version    # v24.x.x が表示される
+npm --version     # 11.x.x が表示される
 docker --version  # Docker version 24.x 以降が目安
 swa --version     # SWA CLI のバージョンが表示される
 ```

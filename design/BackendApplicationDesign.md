@@ -12,7 +12,7 @@ This document defines the backend API requirements for the Azure PaaS Workshop b
 - **Framework**: Express.js 4.18+ with TypeScript 5+
 - **Database**: Azure Cosmos DB for MongoDB vCore (via Mongoose ODM)
 - **Authentication**: Microsoft Entra ID OAuth2.0 JWT validation
-- **Deployment**: Azure App Service (Linux, Node.js 20 LTS)
+- **Deployment**: Azure App Service (Linux, Node.js 24 LTS)
 - **Target Users**: Workshop students learning Azure PaaS patterns
 - **Code Standard**: Google TypeScript Style Guide (mandatory)
 
@@ -21,7 +21,7 @@ This document defines the backend API requirements for the Azure PaaS Workshop b
 ## Technology Stack (Same as IaaS)
 
 ### Core Technologies
-- **Runtime**: Node.js 20.x LTS
+- **Runtime**: Node.js 24.x LTS
 - **Framework**: Express.js 4.18+
 - **Language**: TypeScript 5+ (strict mode)
 - **Database ODM**: Mongoose 8.x

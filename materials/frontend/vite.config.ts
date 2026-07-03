@@ -30,9 +30,20 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          msal: ['@azure/msal-browser', '@azure/msal-react'],
+        manualChunks(id) {
+          if (id.includes('node_modules/@azure/msal-browser') || id.includes('node_modules/@azure/msal-react')) {
+            return 'msal';
+          }
+
+          if (
+            id.includes('node_modules/react') ||
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/react-router-dom')
+          ) {
+            return 'vendor';
+          }
+
+          return undefined;
         },
       },
     },

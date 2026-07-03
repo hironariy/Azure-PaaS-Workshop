@@ -168,7 +168,7 @@ Static Web Apps does **NOT** require Application Gateway because:
 
 **Runtime Stack**:
 - OS: Linux
-- Runtime: Node.js 20 LTS
+- Runtime: Node.js 24 LTS
 - Startup Command: `npm start` (runs compiled JS)
 
 **App Settings (Environment Variables)**:

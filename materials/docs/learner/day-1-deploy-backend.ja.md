@@ -26,7 +26,7 @@ zip -v | head -1
 az webapp deploy --help | head -20
 ```
 
-Node.js 20 以上を推奨します。`zip` が見つからない場合は講師に相談してください。
+Node.js 24 LTS を推奨します。`zip` が見つからない場合は講師に相談してください。
 
 ## 3. バックエンドを build して App Service にデプロイする
 

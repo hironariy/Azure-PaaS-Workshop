@@ -77,12 +77,12 @@ var appServiceName = 'app-${baseName}-${uniqueSuffix}'
 var effectiveTags = union(tags, {
   Environment: environment
 })
-var linuxFxVersion = runtimeMode == 'fastpath-container' ? 'DOCKER|${containerImage}' : 'NODE|22-lts'
+var linuxFxVersion = runtimeMode == 'fastpath-container' ? 'DOCKER|${containerImage}' : 'NODE|24-lts'
 var runtimeAppSettings = runtimeMode == 'standard'
   ? [
       {
         name: 'WEBSITE_NODE_DEFAULT_VERSION'
-        value: '~20'
+        value: '~24'
       }
       {
         name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'

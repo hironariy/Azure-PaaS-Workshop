@@ -77,7 +77,7 @@ backend/
 
 ### Prerequisites
 
-- Node.js 20.x LTS
+- Node.js 24.x LTS
 - npm or yarn
 - Docker (for local MongoDB) or Azure Cosmos DB connection
 

@@ -295,9 +295,9 @@ See [Entra ID Setup Guide](../docs/entra-id-setup.md) for:
 
 | Software | Version | Purpose |
 |----------|---------|---------|
-| Node.js | 20.x LTS | Backend/Frontend runtime |
+| Node.js | 24.x LTS | Backend/Frontend runtime |
 | Docker Desktop | Latest | MongoDB container |
-| npm | 10.x+ | Package management |
+| npm | 11.x+ | Package management |
 | SWA CLI | 2.x+ | Static Web Apps emulator |
 
 **Install SWA CLI**:

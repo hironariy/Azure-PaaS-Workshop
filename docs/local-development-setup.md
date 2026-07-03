@@ -6,16 +6,16 @@ Complete guide to run the Azure PaaS Workshop Blog Application locally.
 
 | Software | Version | Installation |
 |----------|---------|--------------|
-| Node.js | 22.x LTS | [nodejs.org](https://nodejs.org/) |
+| Node.js | 24.x LTS | [nodejs.org](https://nodejs.org/) |
 | Docker Desktop | Latest | [docker.com](https://www.docker.com/products/docker-desktop/) |
-| npm | 10.x+ | Included with Node.js |
+| npm | 11.x+ | Included with Node.js |
 | Git | Latest | [git-scm.com](https://git-scm.com/) |
 | SWA CLI | Latest | `npm install -g @azure/static-web-apps-cli` |
 
 **Verify installations:**
 ```bash
-node --version    # Should show v22.x.x
-npm --version     # Should show 10.x.x
+node --version    # Should show v24.x.x
+npm --version     # Should show 11.x.x
 docker --version  # Should show Docker version 24.x or later
 swa --version     # Should show SWA CLI version
 ```

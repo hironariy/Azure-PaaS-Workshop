@@ -66,7 +66,7 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 | レイヤー | 技術 |
 |---|---|
 | フロントエンド | React 18、TypeScript、TailwindCSS、Vite |
-| バックエンド | Node.js 22、Express.js、TypeScript |
+| バックエンド | Node.js 24、Express.js、TypeScript |
 | データベース | Azure DocumentDB / Cosmos DB for MongoDB vCore |
 | 認証 | Microsoft Entra ID + MSAL.js |
 

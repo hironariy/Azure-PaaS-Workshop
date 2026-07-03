@@ -33,7 +33,7 @@ npm install -g @azure/static-web-apps-cli
 swa --version
 ```
 
-Node.js 20 以上を推奨します。古い場合は講師に相談してください。
+Node.js 24 LTS を推奨します。古い場合は講師に相談してください。
 
 ## 3. フロントエンド runtime config を作成する
 

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "11428339328223983106"
+      "templateHash": "15362458888282945291"
     }
   },
   "parameters": {
@@ -1125,7 +1125,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "16707819590535856058"
+              "templateHash": "16431691488541348045"
             }
           },
           "parameters": {
@@ -1240,8 +1240,8 @@
             "appServicePlanName": "[format('asp-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
             "appServiceName": "[format('app-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
             "effectiveTags": "[union(parameters('tags'), createObject('Environment', parameters('environment')))]",
-            "linuxFxVersion": "[if(equals(parameters('runtimeMode'), 'fastpath-container'), format('DOCKER|{0}', parameters('containerImage')), 'NODE|22-lts')]",
-            "runtimeAppSettings": "[if(equals(parameters('runtimeMode'), 'standard'), createArray(createObject('name', 'WEBSITE_NODE_DEFAULT_VERSION', 'value', '~20'), createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'false')), createArray(createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'false')))]"
+            "linuxFxVersion": "[if(equals(parameters('runtimeMode'), 'fastpath-container'), format('DOCKER|{0}', parameters('containerImage')), 'NODE|24-lts')]",
+            "runtimeAppSettings": "[if(equals(parameters('runtimeMode'), 'standard'), createArray(createObject('name', 'WEBSITE_NODE_DEFAULT_VERSION', 'value', '~24'), createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'false')), createArray(createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'false')))]"
           },
           "resources": [
             {
@@ -1941,7 +1941,7 @@
     },
     "recommendedResourceGroupName": {
       "type": "string",
-      "value": "[if(empty(parameters('groupId')), format('rg-{0}-workshop', parameters('baseName')), format('rg-{0}-{1}-workshop', parameters('baseName'), parameters('groupId')))]"
+      "value": "[if(empty(parameters('groupId')), format('rg-{0}-paas-workshop', parameters('baseName')), format('rg-{0}-{1}-paas-workshop', parameters('baseName'), parameters('groupId')))]"
     }
   }
 }

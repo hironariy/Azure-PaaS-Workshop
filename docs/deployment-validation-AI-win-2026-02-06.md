@@ -32,7 +32,7 @@ Commands executed from repo root.
 
 ### `node --version`
 - Result: `v24.12.0`
-- Note: README expects Node.js 22.x LTS; Node 24 is installed. Proceeding unless we hit compatibility issues.
+- Note: README expects Node.js 24.x LTS; Node 24 is installed.
 
 ### `swa --version`
 - Result: FAILED (`swa` not recognized)

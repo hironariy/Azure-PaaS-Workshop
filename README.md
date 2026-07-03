@@ -105,7 +105,7 @@ The sample application is a **multi-user blog platform** with the following feat
 | Layer | Technology |
 |-------|------------|
 | Frontend | React 18, TypeScript, TailwindCSS, Vite |
-| Backend | Node.js 22, Express.js, TypeScript |
+| Backend | Node.js 24, Express.js, TypeScript |
 | Database | Azure DocumentDB (formerly called as Cosmos DB for MongoDB vCore) |
 | Authentication | Microsoft Entra ID with MSAL.js |
 
@@ -157,7 +157,7 @@ Install these tools on your computer:
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
 | **Azure CLI** | 2.60+ | Azure management | [Install Guide](https://docs.microsoft.com/cli/azure/install-azure-cli) |
-| **Node.js** | 22.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
+| **Node.js** | 24.x LTS | Build frontend/backend | [Download](https://nodejs.org/) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps | `npm install -g @azure/static-web-apps-cli` |
 
 **Windows Fast Path (PowerShell + Node.js, no WSL2/GitHub Actions):**
@@ -165,7 +165,7 @@ Install these tools on your computer:
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
 | **Azure CLI (Windows)** | 2.60+ | Create and configure App Service/Key Vault resources | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
-| **Node.js (Windows)** | 22.x LTS | Build/deploy frontend (includes npm) | [Download](https://nodejs.org/) |
+| **Node.js (Windows)** | 24.x LTS | Build/deploy frontend (includes npm) | [Download](https://nodejs.org/) |
 | **PowerShell** | 7.x+ | Execute Fast Path commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
 <details>
@@ -176,7 +176,7 @@ Install these tools on your computer:
 | **WSL 2** | Latest | Linux runtime for all workshop commands | [Install Guide](https://learn.microsoft.com/windows/wsl/install) |
 | **Ubuntu (on WSL)** | 22.04+ | Recommended distro for workshop | [Get Ubuntu](https://apps.microsoft.com/detail/9PN20MSR04DW) |
 | **Azure CLI** | 2.60+ | Azure management (inside WSL) | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-linux) |
-| **Node.js** | 22.x LTS | Build frontend/backend (inside WSL) | [NodeSource Guide](https://learn.microsoft.com/en-us/windows/dev-environment/javascript/nodejs-on-wsl) |
+| **Node.js** | 24.x LTS | Build frontend/backend (inside WSL) | [NodeSource Guide](https://learn.microsoft.com/en-us/windows/dev-environment/javascript/nodejs-on-wsl) |
 | **SWA CLI** | Latest | Deploy to Static Web Apps (inside WSL) | `npm install -g @azure/static-web-apps-cli` |
 | **jq** | Latest | Parse JSON in script outputs | `sudo apt-get install -y jq` |
 
@@ -188,7 +188,7 @@ Install these tools on your computer:
 | Tool | Version | Purpose | Installation |
 |------|---------|---------|--------------|
 | **Azure CLI (Windows)** | 2.60+ | Azure management and setup validation (native Windows) | [Install Guide](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) |
-| **Node.js (Windows)** | 22.x LTS | Local build/test before pushing changes (native Windows) | [Download](https://nodejs.org/) |
+| **Node.js (Windows)** | 24.x LTS | Local build/test before pushing changes (native Windows) | [Download](https://nodejs.org/) |
 | **GitHub CLI (`gh`)** | Latest | Run/monitor workflows and manual workflow dispatch | [Install Guide](https://cli.github.com/) |
 | **PowerShell** | 7.x+ | Run workshop setup commands on Windows | [Install Guide](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) |
 
@@ -277,7 +277,7 @@ az bicep version
 
 # Check Node.js
 node --version
-# Expected: v22.x.x
+# Expected: v24.x.x
 
 # Check SWA CLI
 swa --version
@@ -292,11 +292,11 @@ az --version
 
 # Check Node.js
 node --version
-# Expected: v22.x.x
+# Expected: v24.x.x
 
 # Check npm
 npm --version
-# Expected: 10.x.x or newer
+# Expected: 11.x.x or newer
 
 # Check PowerShell
 pwsh --version
@@ -321,7 +321,7 @@ az bicep version
 
 # Check Node.js
 node --version
-# Expected: v22.x.x
+# Expected: v24.x.x
 
 # Check SWA CLI
 swa --version
@@ -348,7 +348,7 @@ az --version
 
 # Check Node.js
 node --version
-# Expected: v22.x.x
+# Expected: v24.x.x
 
 # Check GitHub CLI
 gh --version
