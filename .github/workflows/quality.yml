@@ -32,6 +32,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  deployment-tool:
+    name: Public SWA deployment-tool audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      TOOL_DIRECTORY: ${{ runner.temp }}/public-swa-cli
+    steps:
+      - name: Checkout provenance verifier without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - name: Resolve the pinned upstream CLI from public npm without lifecycle scripts
+        shell: bash
+        run: |
+          mkdir "$TOOL_DIRECTORY"
+          cd "$TOOL_DIRECTORY"
+          npm init --yes >/dev/null
+          npm view @microsoft/static-web-apps-cli@2.0.10 version engines dist.tarball dist.integrity \
+            --json --registry=https://registry.npmjs.org > release.json
+          npm install --save-exact --package-lock-only --ignore-scripts --no-fund \
+            --registry=https://registry.npmjs.org @microsoft/static-web-apps-cli@2.0.10
+          node "$GITHUB_WORKSPACE/scripts/check-public-lock.cjs" package-lock.json
+      - name: Verify clean public installation and CLI loading without Azure
+        shell: bash
+        run: |
+          cd "$TOOL_DIRECTORY"
+          npm ci --ignore-scripts --no-fund --registry=https://registry.npmjs.org
+          ./node_modules/.bin/swa --version
+      - name: Require zero deployment-tool advisories
+        shell: bash
+        run: |
+          cd "$TOOL_DIRECTORY"
+          npm audit --package-lock-only --audit-level=low --json \
+            --registry=https://registry.npmjs.org > audit.json
+      - name: Preserve public tooling evidence even when its audit fails
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: public-swa-cli
+          path: |
+            ${{ runner.temp }}/public-swa-cli/package.json
+            ${{ runner.temp }}/public-swa-cli/package-lock.json
+            ${{ runner.temp }}/public-swa-cli/release.json
+            ${{ runner.temp }}/public-swa-cli/audit.json
+          if-no-files-found: error
+          retention-days: 1
+
   public-package-evidence:
     name: Public npm evidence (${{ matrix.application }})
     runs-on: ubuntu-24.04
