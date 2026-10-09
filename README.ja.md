@@ -31,7 +31,7 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 | 8 | [Day 2: 監視と運用](materials/docs/learner/day-2-operations.ja.md) | App Service logs、Key Vault reference、Managed Identity、Application Insights、Log Analytics |
 | 9 | [Day 2: 信頼性と復旧](materials/docs/learner/day-2-reliability.ja.md) | ヘルスチェック、restart、再デプロイ可能性、BCDR 観点 |
 | 10 | [Cleanup](materials/docs/learner/cleanup.ja.md) | Resource Group、Entra ID app registration、Cloud Shell 作業ファイルの削除 |
-| 11 | [GitHub Actions でデプロイ（代替）](materials/docs/learner/day-1-github-actions-alternative.ja.md) | backend/frontend を GitHub Actions で build/deploy する任意パス |
+| 11 | [GitHub Actions でデプロイ（代替）](materials/docs/learner/day-1-github-actions-alternative.ja.md) | Frontend のみなら SWA CLI / 追加 SP 不要。Backend は追加権限が必要な OIDC-only の任意パス |
 | 12 | [トラブルシューティング](materials/docs/learner/troubleshooting.ja.md) | Cloud Shell、Provider、Entra ID、Bicep、App Service、SWA の症状別確認 |
 | 13 | [クイックリファレンス](materials/docs/reference/quick-reference-card.ja.md) | 変数、主要 URL、ヘルスチェック、ログ、redirect URI、Cleanup コマンド |
 

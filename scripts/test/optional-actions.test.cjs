@@ -43,11 +43,12 @@ test('shared frontend artifact configuration is strict, repeatable and preserves
   const directory = temporaryDirectory(t);
   const file = path.join(directory, 'index.html');
   fs.writeFileSync(file, '<h1>Workshop</h1><script>window.__APP_CONFIG__ = null;</script>');
-  configureFrontend(directory, ids);
+  configureFrontend(directory, { ...ids, SWA_DEPLOYMENT_TOKEN: 'PRIVATE_TOKEN_FIXTURE' });
   const first = fs.readFileSync(file, 'utf8');
   assert(first.startsWith('<h1>Workshop</h1>'));
   assert(first.includes(`"ENTRA_FRONTEND_CLIENT_ID":"${ids.ENTRA_FRONTEND_CLIENT_ID}"`));
   assert(first.includes('"API_BASE_URL":"/api"'));
+  assert.doesNotMatch(first, /PRIVATE_TOKEN_FIXTURE|SWA_DEPLOYMENT_TOKEN/);
   configureFrontend(directory, ids);
   assert.equal(fs.readFileSync(file, 'utf8'), first);
 });
