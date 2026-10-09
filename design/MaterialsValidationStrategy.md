@@ -1,9 +1,42 @@
 # Materials Validation Strategy
 
-This document defines the comprehensive testing strategy for validating Azure PaaS Workshop materials before release.
+This document preserves an earlier validation proposal. Use the release gates below, not the old walkthrough, when accepting the current workshop.
 
 **Created:** 2026-02-04  
-**Status:** Draft
+**Status:** Historical proposal; not an executable learner runbook
+
+## Use the current release acceptance gates
+
+The [learner path](../materials/docs/learner/cloud-shell-quickstart.ja.md),
+[Bicep baseline](../materials/bicep/README.md) and actual application source
+define the executable contract. The older sections below retain useful test
+ideas, but their tool versions, setup commands, cost/duration estimates and
+SWA-emulator parity claims are not release evidence. Do not copy their commands
+as the current Day 0/1/2 procedure.
+
+| Gate | Required evidence | What it does not prove |
+|------|-------------------|------------------------|
+| Application portability | Reviewed public-npm lockfiles, clean Node 24 installation, application/test type-check, lint, regressions, production builds, installed/production/lockfile audits with zero advisories | Azure startup, real DB behavior, user consent or browser CRUD |
+| Backend production artifact | Production-only ZIP extraction, no build/test tools, compiled sanitizer and app loading, production audit=0; disconnected DB returns 503 on both health routes | A 503 is not healthy or a successful deployment |
+| Scripts and infrastructure | Native state/context/failure/cleanup/smoke/recovery regressions, Bicep/ARM parity and parameter-template compilation | Mock success is not deployment authorization, capacity or network isolation |
+| Deployment tooling | Separate public-source installation/version check and zero-advisory SWA CLI audit | Application audit=0 does not clear tooling advisories; emulator behavior is not Azure parity |
+| Identity and permissions | [Day 0 policy and permission checks](../materials/docs/learner/day-0-prerequisites.ja.md), isolated Contributor negative case, actual registration/self-consent/token/API evidence | Azure Contributor does not grant Entra permissions or `roleAssignments/write`; no organizer setup or RBAC bypass |
+| Live baseline | [Day 1 validation](../materials/docs/learner/day-1-validation.ja.md): deployed release, actual hostnames, effective private DB/Key Vault access, browser CRUD/drafts, both published-read contracts and telemetry | Private endpoint existence or public health alone does not prove the complete learner path |
+| Recovery and cleanup | [Day 2 runbook](../materials/docs/learner/day-2-reliability.ja.md): timestamped restart/redeploy/known-revision rebuild, stable dual-path health and data checks; [owned cleanup](../materials/docs/learner/cleanup.ja.md) | An outage not observed has no measured recovery duration; B1/M25 baseline is not HA/DR |
+
+Record the tested source revision, environment, checks and failures for each
+gate. Never publish credentials, connection values, deployment tokens, raw
+diagnostic bodies or personal identity data in the evidence. A failed quota,
+permission or audit check stays failed; do not record an unavailable value as
+zero or substitute an untested environment.
+
+Application-stack evidence in #41 includes actual Actions run `37952822043`
+(all five jobs successful; backend/frontend eight tests each and all application
+audit scopes zero, including the extracted production ZIP). This is evidence
+for that reviewed stack, not a claim that the unmerged main branch or live
+workshop is accepted. SWA CLI and live Azure gates remain separate.
+
+## Read the historical proposal as reference only
 
 ---
 
