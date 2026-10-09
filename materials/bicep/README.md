@@ -55,6 +55,40 @@ modules/
   - Backend API (server application)
   - Frontend SPA (public client)
 
+### Permission boundary before creating resources
+
+**Contributor-only, with no organizer preparation, cannot complete the current
+fresh deployment.** `modules/keyvault.bicep` creates a Key Vault Secrets User
+assignment for App Service's Managed Identity. This requires
+`Microsoft.Authorization/roleAssignments/write`, which Contributor excludes.
+Resource management, permission assignment, Key Vault secret access, and Entra
+registration/consent are different authorization planes.
+
+After selecting and verifying the intended subscription and tenant, run the
+read-only check **from the repository root** with Node.js 24:
+
+```bash
+SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+TENANT_ID="$(az account show --query tenantId -o tsv)"
+RESOURCE_GROUP="rg-paasworkshop-dev" # Match your intended deployment group
+
+node scripts/check-role-assignment-permission.cjs \
+  "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP" || exit "$?"
+```
+
+Exit `3` means the required action is not reported at the checked scope.
+Exit `1` means the check failed (context/API/response error), not permission
+denial or success. Exit `0` checks only this reported management action, not
+deny/role conditions, policy, region/quota, Entra consent, or data-plane access.
+Absent groups are checked at their parent subscription; resource-specific
+permissions on existing infrastructure require separate review.
+
+Do not skip the required assignment, turn off Key Vault RBAC, switch to access
+policies, or expose secrets as a workaround. A separately authorized
+administrator deployment can verify the infrastructure, but cannot establish
+Contributor-only success. See the [learner prerequisites](../docs/learner/day-0-prerequisites.ja.md)
+and [Key Vault RBAC documentation](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide).
+
 ## Quick Start
 
 ### 1. Create Resource Group
