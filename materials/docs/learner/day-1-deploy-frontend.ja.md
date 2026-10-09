@@ -101,6 +101,19 @@ echo "Frontend: https://$SWA_HOSTNAME"
 echo "API via SWA: https://$SWA_HOSTNAME/api/health"
 ```
 
+ブラウザーの開発者ツールで Network を開き、投稿一覧を再読み込みします。
+投稿一覧のリクエストが **表示中の SWA host の `/api/posts`** に送られることを確認してください。
+`API_BASE_URL: "/api"` の実行時設定を使い、古い `.env.local` の API host に送信したり、
+`/api/api/posts` のように prefix を二重に付けたりしません。
+
+| 症状 | 確認と対処 |
+|---|---|
+| 古い host に送信される | 配信中の `index.html` の公開 runtime config とデプロイ対象を確認し、正しい保存済み state で再デプロイして再読み込みする |
+| 必須 Entra 設定のエラー | `paas-workshop.json` の Day 0 identity と対象 context を確認し、`scripts/deploy-frontend.sh` を再実行する。不正な設定を保持したまま通信を続行しない |
+| 正しい host の `/api/health` が失敗する | Backend 自体の health と Linked Backend の接続を [アプリを検証](day-1-validation.ja.html) で分けて確認する |
+
+Authorization header、access token、秘密を含む URL をログや Issue に貼らないでください。
+
 ## GitHub Actions を使う場合
 
 Cloud Shell で手動デプロイせず GitHub Actions で backend/frontend をデプロイしたい場合は、任意の代替手順として [GitHub Actions でデプロイ（代替）](day-1-github-actions-alternative.ja.html) を参照してください。

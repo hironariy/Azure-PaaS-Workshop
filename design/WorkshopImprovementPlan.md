@@ -4,7 +4,7 @@
 
 状態: 実装計画承認済み・段階的に実施
 
-最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#43–#45 の文書・統合・任意 Actions 経路に続き、#46 で実 MongoDB による HTTP persistence 検証と pagination 不整合修正を追加した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–20 節を参照する。
+最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#46 の実 MongoDB persistence に続き、#47 で署名付き API token の audience/permission 判定、#48 で runtime API routing と failed-config cache を修正した。documented ARM ZIP deployment も代替候補へ追加した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–23 節を参照する。
 
 対象: [Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop) の Issue #13–#23
 
@@ -466,3 +466,50 @@ Local backend type/lint/build、**9 DB-free tests / 8 integration tests / 49 nat
 | `1075d325652d0aaceb1d886aef6ab4b6b4804663` | quality `37962658482` / native `37962658457` | multilingual fields を含め、同じ 7 jobs / unit9 / database8 / native49 成功。CLI audit のみ failure、overall failure |
 
 **MongoDB fixture actors は actual Entra/JWT/consent、Azure DocumentDB compatibility/TLS、Key Vault/private networking、SWA routing、browser、telemetry、live recovery の実証ではない。** Release gates を消さず、これらは第 18 節の停止条件として残す。公開 version を再確認しても official SWA CLI latest は v2.0.10。current official `az staticwebapp` command reference に content upload/deploy command はなく、未文書化 native interface を Cloud Shell の supported solution として追加しない。
+
+## 21. 署名付き API token で audience と delegated permission を検証する
+
+#47（base: #46）は #13 / #19 の authentication gap を扱う。従来の HTTP identity mock から独立して ephemeral RSA key / public JWK を作り、本物の JWT signature / issuer / audience / expiry 検証を通す。mock は JWKS key retrieval だけで、middleware / JWT verifier は置き換えない。新規 dependency、production bypass、再利用できる signing secret は導入しない。
+
+回帰テストは、正しい Backend API GUID audience が拒否される問題と、必要な delegated permission がない token が受理される問題を再現した。
+
+| Contract | 修正と維持する境界 |
+|---|---|
+| v1 resource token | 当該 tenant の v1 issuer と Backend GUID / resource URI audience を受け付ける |
+| v2 resource token | 当該 tenant の v2 issuer と Backend GUID audience のみを受け付ける。scope URI と audience を混同しない |
+| user permission | 非空の `oid` / `sub` と `scp` 中の exact `access_as_user` を要求する |
+| rejection | invalid / ID / app-only / malformed token は 401、有効な user resource token の delegated permission 不足は 403 |
+| optional authentication | invalid / insufficient token の anonymous fallback を維持し、private draft ownership は与えない |
+
+source `1ff83418b1a7d55f2124c7cb31a902062a36e129` の actual native run `37965407765` は **49 tests / success**。quality run `37965407777` は **backend15 / database8** と application / public provenance / Bicep / workflow validation の 7 jobs が成功した。SWA CLI の audit artifact は **high5 / low1 / total6 package-level findings**、当該 job と overall は failure。local type/lint/build / Pages build も成功した。
+
+これは locally signed contract と public clean-install CI の証拠であり、Microsoft-issued keys、real tenant registration / browser consent / MSAL interaction の証拠ではない。learner の Day 0 と developer testing guide に audience / scope / 401–403 の区別を反映し、第 18 節の real identity gate は残す。
+
+## 22. Runtime API の接続先と失敗後の再試行を一致させる
+
+#48（base: #47）は #13 / #19 / #21 の実行時設定を扱う。prepared artifact は `API_BASE_URL: "/api"` を注入していたが、Axios は stale build-time `VITE_API_BASE_URL` を使っていた。また production config は validation 前に cache へ代入され、最初の load が拒否されても次の呼出しで不正値を成功として返していた。追加した 6 regressions は修正前に失敗した。
+
+- Request interceptor で loaded `AppConfig.apiBaseUrl` を取得する。module import 時の eager getter と build-time host の優先を除く。
+- pathname の terminal `/api` だけを正規化し、same-origin `/api/posts`、localhost backend、gateway prefix、`https://api` hostname、Unicode permalink encoding を維持する。
+- API root は HTTP(S) に限定し、credentials / query / fragment を token acquisition / transport 前に拒否する。エラーに URL 値を出さない。
+- Inline / JSON / build-env の production candidate は検証後だけ cache に保存する。修正した inline / JSON source を再試行でき、既存 development warning / fallback は維持する。
+
+Tests は real Axios interceptor / URL joining と real Backend scope builder を通す。MSAL response / transport だけ fixture とし、network access は不要。developer guide と Day 1 frontend に exact request destination / saved-state recovery / token を公開しない確認を追加した。
+
+source `9e01ed0d06fca0f9b32bf973d1dbc39081be65fb` の local frontend type/lint/build / **14 tests**、Pages build は成功。actual native run `37966845009` は success、quality run `37966845313` は **frontend14 / backend15 / database8** を含む 7 jobs 成功。CLI audit は **high5 / low1 / total6** のみ失敗し、overall は failure。実ブラウザー、CORS、SWA Linked Backend routing、Azure upload、private data path の acceptance と読み替えない。
+
+## 23. Documented ARM ZIP deployment を supported alternative の候補へ追加する
+
+`az staticwebapp` に upload subcommand がないことは、supported REST operation がないことを意味しない。第 19–20 節の検討を補完し、Microsoft の [Create Zip Deployment For Static Site](https://learn.microsoft.com/en-us/rest/api/appservice/static-sites/create-zip-deployment-for-static-site?view=rest-appservice-2025-05-01) を正式な候補に追加する。公式 Actions だけを唯一の supported alternative としない。
+
+API version `2025-05-01` の `POST .../Microsoft.Web/staticSites/{name}/zipdeploy` は Azure OAuth の ARM interface であり、JSON の `properties.appZipUrl` に **remote ZIP URL** を渡す。未文書化 native client wrapper、inline ZIP / base64 body、SWA deployment token を必須とする operation ではない。ただし文書の存在だけで、Cloud Shell から local dist を直接送れることや actual acceptance を実証したことにはならない。
+
+| 次の設計・検証 | 完成に必要な根拠 |
+|---|---|
+| Owned hosted artifact | approved owner / target、prepared runtime/routing ZIP、checksum、短い公開期限と owned cleanup。新規有料 Storage・共有 Cloud Shell storage・他者の artifact を無承認で利用しない |
+| Authentication / redaction | explicit subscription/tenant、ARM permission、token/SAS を stdout・command trace・reflective error に出さない。GitHub や client secret を Cloud Shell の必須条件へ追加しない |
+| Bounded completion | 200 / 202 を区別し、202 単独で成功扱いしない。Location / azure-asyncoperation の destination と subscription を検証し、Retry-After / timeout / terminal failure を扱う |
+| Effective release | exact owned SWA への upload、frontend + `/api` readiness、runtime identity、Unicode CRUD、known-revision recovery、artifact expiry / deletion を実測する |
+| Tooling decision | used tool inventory / public provenance / audit criteria を合意し、既存 CLI audit failure を削除・skip・suppression で隠さない |
+
+本段階では ARM upload helper / hosted artifact / live trial は未実装・未実行。baseline を自動で変更せず、storage/cost/ownership と第 18 節の permission gate を解決してから end-to-end route を採用する。documented operation の発見を #15 完了や Contributor-only fresh deployment の解決とはしない。

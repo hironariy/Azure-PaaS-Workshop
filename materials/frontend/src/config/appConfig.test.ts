@@ -53,4 +53,37 @@ describe('runtime configuration', () => {
     expect(createApiRequest().scopes).toEqual(['api://fixture-backend/access_as_user']);
     expect(createLoginRequest().scopes).toContain('api://fixture-backend/access_as_user');
   });
+
+  it('never caches failed inline validation and can retry after the identity is corrected', async () => {
+    window.__APP_CONFIG__!.ENTRA_BACKEND_CLIENT_ID = '<backend-client-id>';
+    const { loadConfig, getConfig, isConfigLoaded } = await import('./appConfig');
+    await expect(loadConfig()).rejects.toThrow('ENTRA_BACKEND_CLIENT_ID');
+    expect(isConfigLoaded()).toBe(false);
+    expect(() => getConfig()).toThrow('Configuration not loaded');
+    window.__APP_CONFIG__!.ENTRA_BACKEND_CLIENT_ID = 'fixture-backend';
+    expect((await loadConfig()).entraBackendClientId).toBe('fixture-backend');
+    expect(getConfig().entraBackendClientId).toBe('fixture-backend');
+  });
+
+  it('never caches failed fallback validation and retries the corrected JSON source', async () => {
+    const source = { ...window.__APP_CONFIG__ };
+    window.__APP_CONFIG__ = null;
+    for (const name of ['VITE_ENTRA_TENANT_ID', 'VITE_ENTRA_CLIENT_ID', 'VITE_API_CLIENT_ID']) {
+      vi.stubEnv(name, '');
+    }
+    const response = (body: object): Response => new Response(JSON.stringify(body), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const fetchFixture = vi.fn(async () => response({
+      ...source, ENTRA_BACKEND_CLIENT_ID: '<backend-client-id>',
+    }));
+    vi.stubGlobal('fetch', fetchFixture);
+    const { loadConfig, getConfig, isConfigLoaded } = await import('./appConfig');
+    await expect(loadConfig()).rejects.toThrow('Missing required runtime configuration');
+    expect(isConfigLoaded()).toBe(false);
+    expect(() => getConfig()).toThrow('Configuration not loaded');
+    fetchFixture.mockResolvedValueOnce(response(source));
+    expect((await loadConfig()).entraBackendClientId).toBe('fixture-backend');
+    expect(fetchFixture).toHaveBeenCalledTimes(2);
+  });
 });
