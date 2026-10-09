@@ -67,6 +67,10 @@ az ad app update \
 
 `access_as_user` スコープを追加します。
 
+Backend は `api://$BACKEND_CLIENT_ID/access_as_user` を要求した **user access token** を検証します。token の `aud` は v1 では Backend の GUID または `api://$BACKEND_CLIENT_ID`、v2 では Backend の GUID です。scope を要求する URI と、token に返る audience の表現は同じとは限りません。Frontend の ID token、app-only role token、別 API の token は代替にしません。
+
+API は signature / tenant issuer / expiry / Backend audience と、`scp` の `access_as_user`、user identity を検査します。無効な token は 401、正しい user resource token でも必要 scope がなければ 403 です。403 の場合は Frontend の API permission 要求と実際の consent/grant を確認し、tenant policy を無断で変更しません。token 本文を教材・ログ・Issue に貼り付けないでください。
+
 > `az ad app update --set api.oauth2PermissionScopes=...` は、新規 app registration の `api` プロパティがまだ初期化されていない場合に `Couldn't find 'api' in ''` で失敗することがあります。この手順では Microsoft Graph の application object ID (`BACKEND_OBJECT_ID`) に対して `az rest` で PATCH します。`BACKEND_OBJECT_ID` が空だと `/applications/` への PATCH になり `Method Not Allowed` になるため、PATCH 直前に再取得して確認します。
 
 ```bash

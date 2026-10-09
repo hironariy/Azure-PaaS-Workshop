@@ -24,6 +24,25 @@ and isolated HTTP tests do not connect to Azure or MongoDB. They do not prove re
 Entra consent, database persistence, Key Vault access, or Static Web Apps routing.
 Use the learner validation and authorized Azure rehearsal for those checks.
 
+## Signed API token contracts
+
+The database-free suite separately exercises the production identity middleware
+with locally generated RSA signatures and fixture public JWKs. Only JWKS key
+retrieval is mocked; JWT decoding, key selection/conversion, signature, issuer,
+audience, expiry and delegated permission checks are real.
+
+The Backend API accepts its own GUID audience (v1/v2) and resource URI (v1),
+never the separate SPA application's audience. A delegated user token must
+include `access_as_user` in `scp` and nonempty `oid`/`sub`. ID tokens and
+app-only role tokens are not substitutes. Invalid tokens return 401; a valid
+user resource token missing the required delegated permission returns 403.
+Optional authentication remains anonymous for invalid/insufficient tokens;
+it cannot make draft ownership visible.
+
+These signatures prove middleware contracts, not real Microsoft-issued keys,
+tenant registration/consent, MSAL interaction or live browser/API acceptance.
+No production verification bypass or reusable signing secret is introduced.
+
 ## Isolated database HTTP contracts
 
 `test:integration` exercises the full Express application with real Mongoose
