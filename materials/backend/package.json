@@ -9,10 +9,10 @@
     "start": "node dist/src/app.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit && tsc -p tsconfig.test.json",
     "seed": "ts-node scripts/seed.ts",
-    "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test": "node --require ts-node/register --require ./test/setup.cjs --test test/*.test.ts",
+    "test:coverage": "node --require ts-node/register --require ./test/setup.cjs --experimental-test-coverage --test test/*.test.ts"
   },
   "keywords": [
     "azure",
