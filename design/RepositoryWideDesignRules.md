@@ -6,6 +6,37 @@ This document defines the **design rules and patterns** that apply across all ma
 
 **Purpose**: Serve as the authoritative reference for architectural decisions and coding standards specific to PaaS deployment patterns.
 
+## Current baseline contract
+
+The [Bicep README](../materials/bicep/README.md) and Japanese
+[learner path](../materials/docs/learner/cloud-shell-quickstart.ja.md) define
+the current executable baseline: Cloud Shell Bash, Bicep standard mode,
+Node.js 24 production ZIP, React build with public runtime IDs, **SWA Standard
+Linked Backend**, public HTTPS App Service **B1**, DocumentDB **M25 / HA=false**,
+private DB/Key Vault endpoints, outbound VNet integration, MI/Key Vault RBAC,
+NAT, Application Insights and Log Analytics.
+
+App Gateway, private inbound App Service and mandatory GitHub deployment
+are **not** baseline requirements. B1 has no slots or zone redundancy; M25 has
+no in-region HA. Entra protects authenticated operations but does not replace
+WAF, input validation or authorization. Published reads/health are deliberately
+public. Private endpoint creation alone is not proof of effective network
+isolation; inspect the deployed data-service firewall/DNS/route behavior.
+
+Infrastructure ownership: `keyvault.bicep` writes the vault/endpoint/DNS group
+once; `keyvault-rbac.bicep` only assigns the existing vault's Secrets User role
+to the App Service MI. The deterministic assignment identity is preserved.
+Contributor still cannot perform this required assignment, and Entra consent
+is a separate policy plane. Do not remove RBAC or substitute organizer setup.
+
+**The numbered sections below are preserved historical design proposals and
+examples, not normative learner commands.** Their private-App-Service/App
+Gateway, Free-SWA, fixed-price, callback and CI-only assumptions are superseded
+by this contract. Reuse application patterns only after checking actual source.
+Secrets/raw diagnostic bodies must not be copied into logs, Issues or PRs.
+The component-by-component historical synchronization remains tracked in #23;
+these old samples must not be mistaken for verified cloud acceptance.
+
 ---
 
 ## 1. Network Security Patterns

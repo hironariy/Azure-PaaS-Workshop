@@ -4,7 +4,25 @@
 
 This document defines the technical architecture requirements for the Azure PaaS Workshop. This serves as the specification that guides Bicep template creation, documentation, and workshop materials.
 
-**Reference**: This workshop uses the same blog application as the [IaaS Workshop](../iaas/design/AzureArchitectureDesign.md) to enable direct comparison of architectural approaches.
+**Current implementation contract:** use the [Bicep README](../materials/bicep/README.md)
+and [current repository rules](RepositoryWideDesignRules.md#current-baseline-contract).
+Baseline is Cloud Shell standard/ZIP deployment, SWA **Standard**, public App
+Service **B1**, outbound VNet integration, DocumentDB **M25 / HA=false**, private
+data endpoints, Key Vault RBAC/MI and telemetry. Slots/zone redundancy/DB HA/DR
+are not automatically provided by this baseline.
+
+**Historical material below:** the detailed proposals retain older Free-SWA,
+M30, HA, private-inbound/gateway and CI-first examples. They are not executable
+learner prerequisites and do not override current IaC. Component-level
+synchronization remains in #23. The current raster image was inspected: it
+already depicts SWA/App Service/DocumentDB with B1/Dev-Test non-HA warnings;
+its three-zone backdrop must not be interpreted as enabled baseline redundancy.
+
+**IaaS comparison revision:** [sister README at 5aa79ac](https://github.com/hironariy/Azure-IaaS-Workshop/blob/5aa79ac5969e551f08295ad660f6b1ec6856eda6/README.md)
+uses MongoDB 8.0 with **three data-bearing members across zones 1/2/3, no arbiter**.
+The old two-VM comparison below is historical. Managed DocumentDB removes
+learner replica-set/OS management; it does not make M25 highly available.
+Do not add VM/Bastion/ASR operations to the PaaS learner path.
 
 ## Target Architecture
 
