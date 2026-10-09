@@ -338,3 +338,17 @@ catalog 成功後に現在の caller の permission を再確認したが、専�
 講師の organizer-prepared registration と固定所要時間を本線成功の代替としない。quick reference は actual hostname / deployed JSON / exact subscription / bounded public contracts / absolute script paths / secret-safe logs を使う。changed Bash / added links / Pages build を確認した documentation-only slice で、#37 の actual native CI と live Azure acceptance を混同しない。
 
 旧 architecture / migration / validation と長い reference の詳細 proposals は保持しており、全例を executable に刷新したとは言わない。#23 の残りはその個別 modernization と live idempotence / network 検証。PR は #38 まで公開したが、merge / Issue close はしていない。
+
+## 16. 運用 reference と公開依存の検証経路を進める
+
+#40（base: #38 branch）で JA/EN の Bicep / monitoring / BCDR reference を同期した。single-writer / role-only、SWA Standard、B1/M25/HA=false、scoped JSON state / parameter / compiled ARM、actual public contracts、aggregate telemetry を反映。secret value / constructed hostname / unexplained placeholder commands を除き、secondary / restore / fixed RPO-RTO を未承認の baseline 成功条件にしない。six pages の Bash / added links / Pages を確認した。
+
+### 公開依存に関する新しい証拠を過去の仮説から分離する
+
+この環境の public npm lookup は引き続き Axios latest 1.18.1 と compression transport failure を返したが、**official GitHub の Axios v1.20.0（2026-08-24 published）と compression v1.8.2 tag は存在**した。したがって、この環境の E404 / stale metadata だけで upstream release 不在と一般化しない。過去の draft 判断はその時点の証拠であり、mirror tarball の正当性を無検証で追認するものでもない。
+
+#39（base: draft #30 branch）で、credential-free Ubuntu/Node 24 runner が candidate manifest から explicit public npm の clean lock を生成する evidence job を追加した。既存 mirror lock は読まず、lifecycle scripts は実行せず、全 tarball の URL / credentials / sha512 を検査し、成功後だけ artifact を保存する。app source guard は維持する。
+
+初回 actual run `37951156347` は **backend public lock 成功（358 packages）**。frontend は public resolution / audit 0 を報告したが、verifier が oxide WASM 内の bundled dependency を拒否して停止した。npm の `inBundle` entry は独立 tarball でなく parent tarball に含まれるため、shared guard に **verified public parent を必須**とする追跡と regression tests を追加した。unbundled missing source / missing parent / mirror / credential URL / malformed integrity を拒否する。これは provenance guard の除去ではない。
+
+候補 source は自動で URL 書換・version/integrity 再利用しない。外部生成 artifact の source/manifest/version/integrity を確認してから follow-up へ取り込み、clean install / type/lint/test/build / installed/production/lock/ZIP audits を実行する。generation success や audit-only は installed app / Azure deploy / SWA CLI 完成の代替ではない。新しい証拠による public blocker の再評価は進行中で、tenant/RBAC と real consent/DB/telemetry/recovery gate は維持する。
