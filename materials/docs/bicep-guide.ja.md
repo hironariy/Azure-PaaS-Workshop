@@ -16,6 +16,7 @@ materials/bicep/
     ├── network.bicep
     ├── monitoring.bicep
     ├── keyvault.bicep
+    ├── keyvault-rbac.bicep
     ├── cosmosdb.bicep
     ├── appservice.bicep
     ├── appservice-auth.bicep
@@ -32,8 +33,8 @@ materials/bicep/
 2. 監視基盤（Log Analytics + Application Insights）
 3. Key Vault（Private Endpoint 付き）
 4. Cosmos DB for MongoDB vCore（Private Endpoint 付き）
-5. App Service（Linux、VNet Integration、Managed Identity）
-6. Static Web Apps（必要に応じて Linked Backend）
+5. App Service（public HTTPS、Linux、outbound VNet Integration、Managed Identity）
+6. Static Web Apps Standard + Linked Backend（本線の必須 routing）
 7. API 向け EasyAuth 上書き（`Return401`、除外パス定義）
 
 エントリポイント:
@@ -56,6 +57,8 @@ materials/bicep/
 - `appServiceSku`, `cosmosDbTier`, `cosmosDbEnableHa`
 - `staticWebAppSku`, `staticWebAppLocation`
 
+本線は **B1 / M25 / HA=false / SWA Standard**。B1 の slots / zone redundancy と M25 の HA はありません。`environment='prod'` だけで production-ready にはなりません。既存 M30+ は実 tier を明示して保持し、新しい M25 default を downgrade として使いません。M30+→M25 は不可で、upgrade は可逆的な演習 toggle ではありません。
+
 ---
 
 ## 3. モジュール別の解説
@@ -71,7 +74,7 @@ materials/bicep/
 設計意図:
 
 - App Service の外向き通信を安定化
-- データプレーンの到達をプライベートネットワーク経由に限定
+- DB / KV 向けの private endpoint / DNS / route を構成。effective isolation は実際の firewall・名前解決・接続で別途検証
 
 ## 3.2 `monitoring.bicep`
 
@@ -89,11 +92,15 @@ materials/bicep/
 作成対象:
 
 - Key Vault（Private Endpoint）
-- App Service Managed Identity によるシークレット読み取り権限
+- endpoint / DNS group。vault と network resources の writer はこの module のみ
 
 設計意図:
 
 - シークレットをソース/平文設定に置かない
+
+### `keyvault-rbac.bicep`
+
+既存 vault に App Service MI の **Key Vault Secrets User** を付与します。vault / endpoint を再作成しません。assignment は同じ vault scope / principal / role の deterministic GUID を保持します。Contributor は必要な `Microsoft.Authorization/roleAssignments/write` を持たないため、Contributor-only / 主催者準備なしの新規 deploy はここでブロックです。role を省略したり access policy へ降格したりしません。
 
 ## 3.4 `cosmosdb.bicep`
 
@@ -106,6 +113,8 @@ materials/bicep/
 設計意図:
 
 - バックエンドは平文ではなく Key Vault reference 経由で DB 接続
+
+pinned `Microsoft.DocumentDB/mongoClusters@2024-02-15-preview` は `publicNetworkAccess` property を持ちません。「Disabled を設定済み」と断定せず、private DNS / endpoint / effective firewall / app connectivity を検証します。RU Cosmos DB の quota と混同しません。
 
 ## 3.5 `appservice.bicep`
 
@@ -130,7 +139,7 @@ materials/bicep/
 
 設計意図:
 
-- フロントエンド配信を簡潔化し、条件付きで SWA→App Service 連携を活用
+- orchestrator は Standard を必須にして SWA→App Service 連携を作成。standalone module の Free は linked backend なしの別用途
 
 ## 3.7 `appservice-auth.bicep`
 
@@ -160,36 +169,49 @@ SWA/Backend 連携後に App Service `authsettingsV2` を設定:
 3. 受講者本線では `deploymentMode = 'standard'` のままにする。
 4. ローカル上書き値は非コミットのローカルパラメータに保持する。
 
+本線の PARAM_FILE は JSON state と同じ専用ディレクトリに置き、実 clone への `using` を生成します。初回だけ password をファイルへ直接生成し、再実行で既存 secret を保持します。JSON / terminal / Git に秘密値を保存しません。詳細は [Day 1](learner/day-1-deploy-infrastructure.ja.html) を参照してください。
+
 ---
 
 ## 5. デプロイコマンド（参照）
 
-デプロイ前検証:
+Day 0 の permissions / consent / catalog / quota / tier / capacity / 費用条件を満たした場合だけ実行します。catalog success は deploymentReady ではありません。先に state をロードし、保存した context と target を検証します。
 
 ```bash
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load identity || exit 1
+
 az deployment group validate \
-  --resource-group <resource-group-name> \
-  --template-file materials/bicep/main.bicep \
-  --parameters materials/bicep/dev.local.bicepparam
+  --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" \
+  --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
+  --parameters "$PARAM_FILE" || exit 1
 ```
 
 デプロイ実行:
 
 ```bash
 az deployment group create \
-  --resource-group <resource-group-name> \
-  --template-file materials/bicep/main.bicep \
-  --parameters materials/bicep/dev.local.bicepparam
+  --subscription "$SUBSCRIPTION_ID" --name main \
+  --resource-group "$RESOURCE_GROUP" \
+  --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
+  --parameters "$PARAM_FILE" || exit 1
 ```
 
 出力確認:
 
 ```bash
 az deployment group show \
-  --resource-group <resource-group-name> \
+  --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query properties.outputs
+  --query '{state:properties.provisioningState,started:properties.timestamp,outputs:properties.outputs}' \
+  -o jsonc || exit 1
 ```
+
+今回の start / correlation ID / Succeeded を確認し、前回成功の outputs と取り違えません。Failed / Canceled / quota / capacity error なら保存・app deploy へ進みません。main.json は Bicep 0.44.1 で再生成し、[配布 ARM の parity](../bicep/README.md#maintain-the-compiled-arm-artifact) を保ちます。local compilation は live validation / idempotence の証拠ではありません。
 
 ---
 
@@ -217,9 +239,9 @@ az deployment group show \
 
 ## 8. デプロイ後タスク（運用）
 
-- 必要に応じて SWA デプロイトークンを取得
+- state-scoped deploy script が SWA token を取得し環境渡し。値は表示しない
 - App Service へバックエンド成果物を ZIP deploy
-- `/health` と `/api/health` を検証
+- actual hostname の直接 / SWA 公開契約と browser consent / CRUD を [検証](learner/day-1-validation.ja.html)
 - App Service で Key Vault secret 解決を確認
 - Application Insights / Log Analytics へのテレメトリ流入を確認
 

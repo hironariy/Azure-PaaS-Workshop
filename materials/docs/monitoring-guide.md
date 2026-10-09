@@ -2,6 +2,11 @@
 
 This guide explains how to monitor and troubleshoot the Azure PaaS Workshop blog application.
 
+The [Japanese learner operations path](learner/day-2-operations.ja.html) is
+authoritative for the B1/M25/HA=false/SWA Standard baseline. Configured settings
+do not prove ingestion, release completion or recovery. Never share raw logs,
+tokens, connection strings, bodies or personal data; use scoped aggregate evidence.
+
 - **Frontend**: Azure Static Web Apps
 - **Backend**: Azure App Service (`/health`, `/api/health`)
 - **Database**: Azure Cosmos DB for MongoDB vCore
@@ -79,7 +84,7 @@ For production-like observability, route platform logs/metrics to Log Analytics 
 ### 4.3 Standardize Application Logging
 
 - keep structured logs (JSON-friendly)
-- include correlation-friendly fields when possible (request id, user id, operation)
+- include non-secret request/operation correlation IDs, not user IDs or payloads in diagnostic evidence
 - avoid logging secrets / tokens / PII
 
 ---
@@ -103,7 +108,8 @@ search *
 AppRequests
 | where TimeGenerated > ago(1h)
 | where Success == false or ResultCode startswith "5"
-| project TimeGenerated, Name, ResultCode, DurationMs, OperationId, AppRoleName
+| summarize Failures=count(), P95DurationMs=percentile(DurationMs, 95)
+    by ResultCode, bin(TimeGenerated, 5m)
 | order by TimeGenerated desc
 ```
 
@@ -112,7 +118,7 @@ AppRequests
 ```kusto
 AppRequests
 | where TimeGenerated > ago(24h)
-| summarize P95DurationMs=percentile(DurationMs, 95) by Name
+| summarize P95DurationMs=percentile(DurationMs, 95) by bin(TimeGenerated, 5m)
 | order by P95DurationMs desc
 ```
 
@@ -130,27 +136,38 @@ AppExceptions
 If `AppRequests` / `AppExceptions` do not appear, first generate backend traffic so Application Insights has telemetry to ingest.
 
 ```bash
-curl -fsS "https://${APP_SERVICE_NAME}.azurewebsites.net/health" | jq .
-curl -fsS "https://${SWA_HOSTNAME}/api/health" | jq .
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
+node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
 ```
 
-If `AppRequests` still does not appear after a few minutes, confirm that the App Service `APPLICATIONINSIGHTS_CONNECTION_STRING` app setting is not empty.
+After a few minutes with no records, check resource/time range/SDK startup and
+instrumentation in Portal. Zero records are not success. Display setting names
+only, never their values:
 
 ```bash
 az webapp config appsettings list \
+	--subscription "$SUBSCRIPTION_ID" \
 	--resource-group "$RESOURCE_GROUP" \
 	--name "$APP_SERVICE_NAME" \
-	--query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].{name:name,value:value}" \
+	--query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].name" \
 	-o table
 ```
 
-After adding or updating the connection string, restart App Service and call `/health` again.
+Change settings/restart only after confirming cause and authorization. Follow
+Resource Health -> startup -> MI/Key Vault -> private DB, then UTC/monotonic
+[recovery observation](learner/day-2-reliability.ja.html). Do not publish settings
+dumps or raw logs ZIPs.
 
 ---
 
 ## 6. Alerting Baseline (Minimum)
 
-Create alert rules for:
+These are optional design proposals, not baseline resources already created or
+tested. Verify traffic/minimum sample count/window/ingestion delay/cost and
+authorized notification targets before creating alerts:
 
 - HTTP 5xx ratio above threshold (e.g., 5% for 5 minutes)
 - health check failures (`/health`) consecutive threshold

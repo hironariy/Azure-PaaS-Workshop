@@ -10,6 +10,14 @@ This guide explains a practical **Business Continuity and Disaster Recovery (BCD
 
 > Scope note: The current Bicep templates deploy a **single-region primary environment**. This guide provides workshop-friendly continuity and DR runbooks on top of that baseline.
 
+**Execution boundary:** B1/M25/HA=false provides no slots, compute zone
+redundancy, DB HA or secondary region. The required exercise is the
+[baseline restart/redeploy/known-revision rebuild rollback/content check](learner/day-2-reliability.ja.html).
+Secondary-region/backup restore below are **optional, unverified designs**:
+require additional approval, supported tier/region/quota/restore point, cost
+and owned cleanup before execution. Do not bypass Contributor/consent/public
+dependency blockers with organizer preparation, public DB or weakened RBAC.
+
 ---
 
 ## 1. Define Continuity Targets (RPO / RTO)
@@ -19,10 +27,10 @@ Before implementing DR procedures, define:
 - **RPO (Recovery Point Objective)**: acceptable data loss window
 - **RTO (Recovery Time Objective)**: acceptable service downtime
 
-Suggested workshop defaults:
-
-- RPO: 1-24 hours (depends on backup frequency)
-- RTO: 1-4 hours (depends on failover automation level)
+Set workload-specific objectives, then measure restore point/content/cutover.
+The old 1-24 hour RPO/1-4 hour RTO estimates are not achieved baseline values.
+Probe-observed recovery is not actual downtime or DB failover RTO; unobserved
+downtime is null, not zero success. Distinguish HTTP 429 throttling.
 
 ---
 
@@ -32,7 +40,7 @@ Suggested workshop defaults:
 
 - App Service instance issues
 - temporary Cosmos DB connectivity failures
-- Key Vault access policy / RBAC misconfiguration
+- Key Vault RBAC/reference misconfiguration (baseline uses RBAC, not access policies)
 - application-level defects after deployment
 
 Primary controls:
@@ -65,7 +73,8 @@ BCDR actions:
 
 1. Keep source and CI workflow in GitHub (or equivalent source control).
 2. Maintain environment variables / app settings as code or documented checklist.
-3. For DR, deploy SWA in the secondary region and repoint user traffic.
+3. Only after optional DR approval, deploy SWA Standard with separate state/RG.
+   Verify new origin/MSAL redirect, IDs/consent, runtime config and linked backend before traffic cutover.
 
 ## 3.2 App Service (Backend)
 
@@ -85,13 +94,18 @@ Recovery principle:
 
 - data tier drives RPO; treat it as the most critical recovery dependency
 
-BCDR actions (workshop-friendly):
+BCDR actions (optional design prerequisites):
 
-1. Schedule logical backups (`mongodump`) and verify restore (`mongorestore`) regularly.
+1. Verify supported managed restore/retention. For logical export, define an authorized private-network path, compatible tooling, safe authentication/encrypted storage and restore destination. Cloud Shell is not assumed to reach the private DB.
 2. Keep backup retention policy aligned with RPO.
 3. Consider enabling higher resiliency features (for example HA and geo strategy) based on production requirements.
 
 > Use current Microsoft service documentation to confirm feature availability and restore options for your selected Cosmos DB for MongoDB vCore tier.
+
+M25 has no HA, and M30+ cannot downgrade to M25. Upgrade is not a reversible
+workshop toggle. Export/restore has not been rehearsed; destructive commands
+are intentionally absent while access/storage/destination are unverified.
+Do not overwrite/delete the primary DB or introduce VM replica-set/ASR steps.
 
 ## 3.4 Key Vault (Secrets)
 
@@ -103,15 +117,16 @@ BCDR actions:
 
 1. Store secret creation/update steps in scripts or runbooks.
 2. Keep a secure escrow process for critical bootstrap secrets.
-3. Rehydrate secrets in secondary region during failover runbook.
+3. Restore optional secondary secrets/MI/RBAC securely and verify reference status.
+   Do not print primary secrets, store them in JSON/Git/raw logs or rotate passwords on repeat.
 
 ---
 
-## 4. Workshop DR Runbook (Recommended)
+## 4. Optional DR Runbook Design (Additional Approval Required)
 
 ### Phase A: Preparation (Normal Operations)
 
-1. Keep Bicep parameter files for primary and secondary region.
+1. Use separate dedicated RGs/JSON states/private parameters; never overwrite immutable primary targets.
 2. Test backend and frontend deployment pipelines regularly.
 3. Execute periodic data backup and restore drills.
 4. Maintain an operational checklist (owners, commands, validation steps).
@@ -152,9 +167,10 @@ BCDR actions:
 
 ---
 
-## 6. Minimum Quarterly DR Exercise
+## 6. Optional Production DR Exercise Frequency
 
-Run at least one simulation each quarter:
+Plan the following only in a supported approved environment; they are not
+required/verified baseline exercises. Set frequency from requirements and cost:
 
 1. Simulate primary unavailability.
 2. Execute secondary deployment from Bicep.
