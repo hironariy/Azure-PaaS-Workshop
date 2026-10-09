@@ -4,6 +4,8 @@
 
 状態: 実装計画承認済み・段階的に実施
 
+最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#43 で残る旧設計案の位置付けを同期し、#44 で application / operational stack を統合して検証した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–18 節を参照する。
+
 対象: [Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop) の Issue #13–#23
 
 本計画は、姉妹 IaaS リポジトリの改善内容と PaaS の現行実装を比較した結果に基づく。**既存の #13・#14・#15 を最優先の解決対象に含め、#16–#23 と一体のリリース計画として扱う。** 文書の作成や Issue の登録は、各不具合の解決・Azure 上の動作確認を意味しない。
@@ -40,7 +42,7 @@ Contributor は `Microsoft.Authorization/roleAssignments/write` を持たない�
 
 ## 2. 現状と未検証事項を区別する
 
-2026-10-09 時点で #13–#23 はすべて open、open PR はない。調査基準の PaaS main は `005cc191d970b7ee3374ad73452270ebacb98eef`。着手時には最新の状態と差分を再確認する。
+初回調査時（2026-10-09）は #13–#23 がすべて open、open PR はなかった。以降の PR / 検証記録は第 12 節以降に記載する。調査基準の PaaS main は `005cc191d970b7ee3374ad73452270ebacb98eef`。着手時には最新の状態と差分を再確認する。
 
 ソースで確認した重要な事項:
 
@@ -352,3 +354,56 @@ catalog 成功後に現在の caller の permission を再確認したが、専�
 初回 actual run `37951156347` は **backend public lock 成功（358 packages）**。frontend は public resolution / audit 0 を報告したが、verifier が oxide WASM 内の bundled dependency を拒否して停止した。npm の `inBundle` entry は独立 tarball でなく parent tarball に含まれるため、shared guard に **verified public parent を必須**とする追跡と regression tests を追加した。unbundled missing source / missing parent / mirror / credential URL / malformed integrity を拒否する。これは provenance guard の除去ではない。
 
 候補 source は自動で URL 書換・version/integrity 再利用しない。外部生成 artifact の source/manifest/version/integrity を確認してから follow-up へ取り込み、clean install / type/lint/test/build / installed/production/lock/ZIP audits を実行する。generation success や audit-only は installed app / Azure deploy / SWA CLI 完成の代替ではない。新しい証拠による public blocker の再評価は進行中で、tenant/RBAC と real consent/DB/telemetry/recovery gate は維持する。
+
+## 17. 公開 application と統合検証の実結果を反映する
+
+以下は初回の仮説を更新する最新の証拠である。第 12–16 節の失敗は当時の記録として保持し、現在も application source が未検証だという意味では使わない。
+
+| 対象 | PR / actual evidence | 現在の判定 |
+|---|---|---|
+| Public lock generation | #39 / run `37951887919` | backend/frontend の clean public generation・guard・regressions と Bicep 成功。backend 358 public tarballs、frontend 266 public tarballs + verified parent 内の 6 bundled entries |
+| Public application acceptance | #41 / run `37952822043` | exact generated locks を取り込み、public clean install・type/lint・各 8 tests・build、installed/production/lockfile audit=0。backend extracted production ZIP の integrity / production audit=0 / compiled sanitizer/app loading / DB 未接続時の両 health=503 を確認。全 5 jobs 成功 |
+| Deployment tooling | #42 / run `37954852679` | `@azure/static-web-apps-cli@2.0.10` の 374 public tarballs / clean install / 実 CLI version は成功。zero-advisory audit は **high 5 / low 1、計 6 package-level findings** で失敗 |
+| Historical design boundaries | #43 | MaterialsValidationStrategy、IaaS-to-PaaS-Migration-Changes、LocalDevelopmentEnvironmentDesign に現行 contract / acceptance gates を設け、旧例を非実行・参考用途として保持。JA/EN 比較の案内も同期。Pages / added links 成功 |
+| Combined operational source | Draft #44 / native run `37954999882` | 全 **41 native tests** 成功。local Bicep 0.44.1 exact ARM parity、4 actual parameter templates、Pages build 成功 |
+| Combined app / workflow / IaC | #44 / quality run `37954999868` | public evidence 2 jobs、application 2 jobs、Bicep parity、GitHub workflow expression validation の 6 jobs 成功。**SWA tooling job だけ audit 6 件で失敗し、overall run は failure** |
+
+combined actual runs の source は `15884ea0770edafe61996308b48285f096f4d42e`。run は reviewed candidate stack の根拠であり、unmerged main / live Azure / workshop-ready の証明ではない。
+
+### Public provenance を実 install まで追跡する
+
+- #39 の生成 artifact と候補 manifest は deepEqual。source merge revision は `58cd42b4666e2917bd0f4c8f0c6820f17faf795c`。#41 は exact npm-generated lock を取り込み、mirror URL だけを書き換えたり未知の integrity を再利用したりしていない。
+- public guard は HTTPS npm origin、credential 不在、SHA512、safe package path を確認し、独立 provenance のない entry は verified enclosing tarball の `inBundle` だけ認める。
+- #41 の install / audit / ZIP smoke は生成成功とは別の actual checks。DB 未接続の 503 は正しい否定結果であり、DB acceptance と読み替えない。
+- #27/#30 は旧 mirror lock を含む単独 PR として portable ではない。review は #39/#41 を含む stack で行い、古い draft を自動 ready / merge にしない。
+
+### 統合で見つかった競合を意味的に解決する
+
+application stack と operational stack は別々に green の部分があっても、そのまま組み合わせられるとは仮定しなかった。#44 の統合では backend/frontend deploy scripts と Day 1 の 3 pages、計 5 files に conflict があった。
+
+新しい JSON state/context・scoped target・owned one-run package・cleanup・token 完全非表示を維持し、古い env execution / `[0]` target selection / token suffix / shared artifact deletion は復活させない。build は explicit public `npm ci --include=dev`、production package は `--omit=dev` を使う。`NODE_ENV=production` でも build tools を復元する native regressions と actual app CI install を追加した。Unicode / draft ownership / public contracts / runtime config も保持する。
+
+#44 は issue-focused slices の review 後に使う **draft integration evidence**。GitHub の元 PR を自動 merge / close したものではない。複数 stack の review/merge 順序は reviewer が判断し、競合解決なしの順次 merge を正常な release とみなさない。
+
+### Tooling の失敗を正しく分類する
+
+#42 初回の job-level runner context は workflow scheduling 前に失敗し、次の誤った `@microsoft` package name は public npm E404 となった。両方を修正し、upstream v2.0.10 manifest の正式名 **`@azure/static-web-apps-cli`** を確認した。誤名 E404 を public release 不在の根拠にしない。checksum-pinned actionlint を追加し、GitHub expression context を恒久 CI で検査する。
+
+正しい package の actual audit は CLI / adm-zip / devcert / selfsigned / node-forge / tmp の tree に 6 package-level findings を報告した。これは unique CVE 数・実 exploitability の判定ではない。audit の fixAvailable は CLI **1.1.3 への semver-major downgrade** を提示するが採用しない。force fix、severity suppression、continue-on-error、非互換 override、tooling の黙示的な対象外扱いで zero 条件を変更しない。
+
+## 18. 残る完成条件と次の判断を明示する
+
+| 残る gate | 必要な次の根拠 / 方針 | 現時点で行わないこと |
+|---|---|---|
+| #15 tooling zero-advisory | supported upstream release で clean public install / CLI behavior / audit=0 を実証する、または別途合意した supported deployment route を検証する | 古い CLI への force downgrade、非互換 override、application green で tooling 完了扱い |
+| #16 strict Contributor-only | `roleAssignments/write` が必要な fresh MI/Key Vault RBAC deployment と Contributor 権限の非両立を解消する、明示的な architecture/permission 方針の意思決定 | organizer preparation、受講者自動昇格、RBAC/access-policy 置換、必要 role assignment の省略 |
+| #13 real identity | policy が許可する owned registration / browser self-consent / Principal grant / token/API の実証 | tenant-wide policy / AllPrincipals grant / 共有 grant の削除 |
+| #22 live platform | exact subscription の quota / capacity / tier eligibility / parameter validation と progress 成功 | unsupported quota lookup を 0 に変換、自動 region/SKU 変更 |
+| #14 / #18 / #20 / #21 live learner path | Fresh Cloud Shell と途中再接続、release completion、Unicode CRUD/drafts/既存 URL、private DB/KV effective path、telemetry と owned cleanup | mock / healthy public response / private endpoint 存在だけを完了証拠にする |
+| #17 / #23 live operations | measured restart/redeploy/known-revision rebuild、stable dual-path health と content integrity、IaC redeploy/idempotence、actual baseline に一致する説明 | paid HA/secondary-region/DB destructive exercise の無承認実行、未観測 downtime=0 |
+
+最後に実行した read-only permission / RG 検査では、必要な `roleAssignments/write` は許可として報告されず、指定 RG は未作成だった。こちらから Azure resources / app registrations / provider registrations / quota increases / paid optional resilience は作成・実行していない。これまでの成果は local / credential-free CI の改善であり、Milestone A/B のチェックを完了にはしない。
+
+Contributor-only / organizer preparation なし / MI と Key Vault RBAC の維持は、現行の fresh deployment では同時に満たせない platform constraint である。コードで権限を生み出す解決策はない。tooling にも supported zero-advisory release の外部条件が残る。この 2 つを意思決定・upstream remediation の gate として保持し、許可や条件の変更なしに Azure rehearsal を開始しない。
+
+Review の入口は #24（saved strategy）、#41（public application evidence）、#42（tooling の正しい failure）、#43（historical proposal boundaries）、#44（combined source / conflict resolution）。自動 GitHub merge / issue close / branch protection 変更はせず、実 cloud と人間のブラウザー操作が必要な acceptance を勝手に承認しない。
