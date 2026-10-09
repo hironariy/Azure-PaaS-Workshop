@@ -55,6 +55,31 @@ export GROUP_ID="A"
 export RESOURCE_GROUP="rg-${BASE_NAME}-${GROUP_ID}-workshop"
 ```
 
+### 3.1 新規デプロイに必要なロール割り当て権限を確認する
+
+手順 2 で対象サブスクリプションを選択し、表示された ID と tenant が意図した環境であることを確認してから実行します。Node.js 24 と Azure CLI を使います。リソースは作成せず、CLI の既定サブスクリプションも変更しません。
+
+```bash
+export SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+export TENANT_ID="$(az account show --query tenantId -o tsv)"
+cd "$WORKSHOP_REPO_DIR"
+
+node scripts/check-role-assignment-permission.cjs \
+  "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP" || exit "$?"
+```
+
+期待値と停止条件:
+
+| 結果 | 意味 | 次の行動 |
+|---|---|---|
+| 終了コード `3` / `BLOCKED` | 調査スコープで `Microsoft.Authorization/roleAssignments/write` が許可として報告されていない | Contributor のみでは現行構成を完了できないため、費用の発生する操作前に停止する |
+| 終了コード `1` | tenant 不一致、CLI/API エラー、または応答不正 | 原因を確認する。権限不足の証明や成功として扱わない |
+| 終了コード `0` | 必要な management action が permission API 上で許可されている | 新規デプロイの必要条件の一つのみ確認。以下の前提を別途確認する |
+
+既存 RG は RG スコープ、未作成 RG は親サブスクリプションの permission API を確認します。ロールの `NotActions` はそのロールからの除外で、他ロールへの deny ではありません。deny assignment、条件付きロール、Azure Policy、既存リソース固有の追加権限、Entra 同意、Key Vault のデータ権限、Provider・SKU・quota はこの結果だけでは確定しません。管理者での成功は Contributor-only の成功証拠になりません。
+
+Key Vault の RBAC 無効化、access policy への切り替え、必要な割り当てを省略しての「成功」は行いません。主催者事前準備なしという条件では、この制約を未解決として記録します。
+
 ## 4. Resource Provider を登録する
 
 このワークショップでは、App Service、Static Web Apps、Cosmos DB/DocumentDB、Key Vault、Monitor/Alerts Management、Network を使います。
