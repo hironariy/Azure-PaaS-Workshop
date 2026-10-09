@@ -15,3 +15,5 @@ Cloud Shell 本線では、バックエンドはリポジトリ内ソースか�
 現行スクリプトは JSON state と現在の subscription/tenant/対象を照合し、`npm ci` で build します。backend は実行ごとの一時ディレクトリを使い、HTTP 200 と healthy JSON の両方を上限付きで検査します。Frontend token は環境で渡し、引数・ログ・末尾表示には使いません。CLI の失敗を未作成・削除済み・成功へ読み替えません。
 
 旧実装の詳細を残した `docs/deployment-scripts-guide.ja.md` は履歴の参照用です。実行には上記の Day 1 ページを使います。ローカル回帰テストは `node --test scripts/test/*.test.cjs` で実行でき、Azure CLI・npm・SWA の stub を使用するため実クラウドへ書き込みません。これは実際の Azure deployment の証拠ではありません。
+
+`.github/workflows/scripts-quality.yml` は Node.js 24 / Ubuntu 24.04 で script 構文と native 回帰テストを実行します。アプリの依存 package をインストールせず、Azure credentials・SWA token も使いません。公開 npm の供給元問題で止まっているアプリ側 CI とは独立した gate で、script CI の成功はアプリ audit・Bicep・実クラウド検証の成功を意味しません。
