@@ -37,6 +37,14 @@
 
 ## ワークショップ概要
 
+### 本線の成功条件を確認する
+
+本線は **Cloud Shell standard / ZIP、SWA Standard、App Service B1、DocumentDB M25 / HA=false** です。B1 の slots / zone redundancy、M25 の HA を有効と説明しません。Entra 認証は WAF 代替ではなく、published read / health と認証付き write の責任分界を説明します。IaaS 比較は [現行 revision](../design/IaaS-PaaS-ComparisonMatrix.md) の 3 data-bearing members / no arbiter を基準にし、PaaS baseline が同等の可用性を保証すると教えません。
+
+開始前に RBAC・tenant registration/自己同意・公開依存/CLI・provider/region/SKU/quota と費用を確認します。**Contributor-only / 主催者準備なし** で必要な role assignment を完了できない現状を、講師が事前に補って成功扱いにしません。文書 / mock / catalog / template build の成功は live readiness ではありません。
+
+各グループの到達点は [Day 1 の公開契約・browser CRUD・telemetry](../materials/docs/learner/day-1-validation.ja.md)、[Day 2 の時刻・復旧・data integrity](../materials/docs/learner/day-2-reliability.ja.md)、[owned cleanup](../materials/docs/learner/cleanup.ja.md) の証拠で判断します。復旧未観測は 0 秒成功でなく null、429 は DB failover でなく throttling、記事 viewCount は content integrity と別です。秘密値・token・本文・未加工 logs を収集しません。
+
 ### 任意例外: 管理者が組織全体同意を行う
 
 本線は各グループの所有アプリと、ポリシーで許可されたブラウザー自己同意です。登録・同意が禁止されている環境では自己完結を保証しません。**以下は別途承認した管理者支援の例外**で、Contributor のみ・主催者の事前準備なしという条件を満たす手順ではありません。
@@ -96,6 +104,8 @@ az ad app permission grant \
 
 ### 推奨タイムライン（4時間想定）
 
+以下は進行案で、fresh Cloud Shell rehearsal の実測ではありません。起点は各グループの Day 0 context / permissions / consent / catalog 確認完了とし、待ち時間・telemetry delay・復旧・cleanup を含む実測で更新します。ブロックを時間内成功へ置き換えず、費用も 4 時間固定額として保証しません。
+
 | 時刻 | 目安 | 内容 |
 |------|------|------|
 | 0:00 | 20分 | イントロ + 全体像 |
@@ -127,8 +137,8 @@ Day 1 を終えている参加者が多い場合は、比較ポイント（責�
 
 2. **運用負荷の削減**
    - OS パッチ適用が不要
-   - 高可用性が標準で組み込まれている
-   - オートスケールの機能が使いやすい
+   - 高可用性は採用 SKU / region / 明示設定に依存し、本線 M25 は HA=false
+   - オートスケールは対応 tier の任意設計であり、B1 本線で有効ではない
 
 3. **PaaS / IaaS の使い分け**
    - PaaS: ステートレスな Web アプリ / API、モダンアプリ
@@ -174,20 +184,18 @@ Day 1 を終えている参加者が多い場合は、比較ポイント（責�
    - 症状: “Invalid scope”
    - 対処: Backend API → “Expose an API” でスコープ作成
 
-**時短のヒント:** 参加者が Entra ID で詰まる場合、事前にアプリ登録を作って Client ID を配布する運用も検討してください。
+**権限境界:** 登録・自己同意が policy で禁止されている場合は本線の block と記録します。主催者が事前にアプリを作って配布した場合は別の管理者支援方式であり、Contributor-only / 事前準備なしの成功と数えません。
 
 ### Bicep デプロイ
 
-**目安時間:**
-- 初回: 約 10-15 分（DB が最も時間がかかりやすい）
-- 2回目以降: 約 3-5 分（差分更新）
+**時間の記録:** catalog / permissions / consent 完了後の create 開始から、今回の Succeeded と outputs 確認までを測定します。DB / endpoint / RBAC の provisioning と app readiness は別です。旧 10-15 分 / 3-5 分という目安を、新しい baseline の実測や保証として使いません。
 
 **待ち時間に説明するとよい内容:**
 1. VNet とサブネット（appservice / privateendpoint）
-2. DB と Private Endpoint（Public からアクセス不可）
+2. DB と Private Endpoint / DNS（effective public firewall / private route は実環境で別途確認）
 3. Key Vault と Private Endpoint（シークレット保管）
 4. App Service + VNet Integration（プライベートリソースへ接続）
-5. Static Web Apps（空で作成され、後でフロントをデプロイ）
+5. Static Web Apps Standard（空で作成され、後でフロントをデプロイ）
 
 **よくあるエラー:**
 
@@ -200,9 +208,9 @@ Day 1 を終えている参加者が多い場合は、比較ポイント（責�
 ### アプリデプロイ
 
 **バックエンド:**
-- スクリプト自体は ~2-3分
-- 初回起動は 60-90 秒かかることがある（VNet + Key Vault 参照の解決）
-- ヘルスチェックが落ちても、少し待って再試行で回復することが多い
+- build / upload acceptance / 今回の release 完了 / readiness を別時刻で確認する
+- bounded probe 後も失敗なら startup → MI / Key Vault → private DB を診断する
+- 旧 instance の health や固定 60-90 秒待機を新 release 成功の証拠としない
 
 **フロントエンド:**
 - デプロイ時に runtime config を `index.html` へ注入（セキュリティ上の設計）

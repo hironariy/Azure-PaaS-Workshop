@@ -4,7 +4,12 @@
 
 This document defines the backend API requirements for the Azure PaaS Workshop blog application. The application runs on Azure App Service and connects to Cosmos DB for MongoDB vCore.
 
-**Reference**: This specification maintains API compatibility with the [IaaS Workshop Backend](../iaas/design/BackendApplicationDesign.md) while adapting deployment patterns for PaaS.
+**Current deployment reference**: [learner backend guide](../materials/docs/learner/day-1-deploy-backend.ja.md)
+and [baseline comparison](IaaS-PaaS-ComparisonMatrix.md). Actual source,
+manifest/lockfile and tests are authoritative for API/library/model behavior.
+The detailed code/workflow examples below are retained proposals, not validated
+deploy commands. Baseline is B1, Node.js 24, production ZIP startup
+`node dist/src/app.js`, KV references/MI, public reads and protected writes.
 
 ## Application Overview
 
@@ -709,12 +714,12 @@ jobs:
 
 | Aspect | IaaS | PaaS |
 |--------|------|------|
-| **Deployment** | SCP files → PM2 restart | Git push → GitHub Actions |
-| **Scaling** | Add VMs, configure LB | Auto-scale rules |
-| **Monitoring** | Azure Monitor Agent | App Insights (built-in) |
+| **Deployment** | SCP files → PM2 restart | Cloud Shell production ZIP; GitHub Actions optional |
+| **Scaling** | Add VMs, configure LB | B1 baseline; autoscale only on supported higher tier |
+| **Monitoring** | Azure Monitor Agent | App Insights integration; verify actual telemetry ingestion |
 | **Logs** | SSH → view files | Log stream in portal |
-| **Updates** | SSH → pull → restart | Redeploy via CI/CD |
-| **SSL** | App Gateway | App Gateway (same) |
+| **Updates** | SSH → pull → restart | Rebuild/redeploy; known-revision rollback; no B1 slots |
+| **SSL** | App Gateway | SWA/App Service managed HTTPS; no App Gateway |
 | **Health Checks** | Custom script | App Service health probe |
 | **Secrets** | Key Vault + VM MI | Key Vault + App MI |
 
@@ -731,4 +736,4 @@ jobs:
 - [ ] Set up Key Vault reference for connection string
 - [ ] Configure health check path in App Service
 - [ ] Set up CORS for Static Web Apps URL
-- [ ] Deploy via GitHub Actions
+- [ ] Deploy via current Cloud Shell scripts; GitHub Actions is optional
