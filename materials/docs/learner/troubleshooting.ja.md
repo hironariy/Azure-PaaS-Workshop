@@ -110,11 +110,21 @@ az webapp config show \
   -o jsonc
 
 az webapp config appsettings list \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name "$APP_SERVICE_NAME" \
-  --query "[?name=='SCM_DO_BUILD_DURING_DEPLOYMENT' || name=='COSMOS_CONNECTION_STRING'].{name:name,value:value}" \
+  --query "[?name=='SCM_DO_BUILD_DURING_DEPLOYMENT'].{name:name,value:value}" \
+  -o table
+
+az webapp config appsettings list \
+  --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$APP_SERVICE_NAME" \
+  --query "[?name=='COSMOS_CONNECTION_STRING'].{name:name}" \
   -o table
 ```
+
+DB connection string は値を表示しません。Key Vault reference の解決状態・MI・private network・DB readiness は [アプリ検証の診断順序](day-1-validation.ja.html) に従います。未加工ログや app settings を Issue に貼らないでください。
 
 ### `Cannot find module '/home/site/wwwroot/src/app.js'`
 
