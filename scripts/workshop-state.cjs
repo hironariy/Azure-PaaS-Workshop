@@ -10,6 +10,12 @@ const DEPLOYED = ['APP_SERVICE_NAME', 'SWA_NAME', 'SWA_HOSTNAME'];
 const KEYS = [...BASE, ...IDENTITY, ...DEPLOYED];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function isAzureHostname(hostname, suffix) {
+  return typeof hostname === 'string' && hostname.length <= 253 && hostname.endsWith(`.${suffix}`) &&
+    hostname.split('.').every((label) => label.length <= 63 &&
+      /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label));
+}
+
 function canonicalPath(value) {
   let current = path.resolve(value);
   const missing = [];
@@ -78,9 +84,7 @@ function validate(values, directory, stage = 'base') {
   for (const key of ['APP_SERVICE_NAME', 'SWA_NAME']) {
     if (values[key] && !/^[A-Za-z0-9-]{1,60}$/.test(values[key])) throw new Error(`Invalid resource name: ${key}`);
   }
-  if (values.SWA_HOSTNAME && (!values.SWA_HOSTNAME.endsWith('.azurestaticapps.net') ||
-      values.SWA_HOSTNAME.length > 253 ||
-      !values.SWA_HOSTNAME.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)))) {
+  if (values.SWA_HOSTNAME && !isAzureHostname(values.SWA_HOSTNAME, 'azurestaticapps.net')) {
     throw new Error('Invalid SWA_HOSTNAME');
   }
   return values;
@@ -154,4 +158,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { validate, readState, writeState };
+module.exports = { validate, readState, writeState, isAzureHostname };
