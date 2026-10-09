@@ -110,7 +110,7 @@ jobs:
       - name: Require portable public npm package sources
         run: node ../../scripts/check-public-lock.cjs package-lock.json
       - name: Restore locked build dependencies
-        run: npm ci --include=dev --no-fund
+        run: npm ci --include=dev --no-fund --registry=https://registry.npmjs.org
       - name: Type-check application and tests
         run: npm run type-check
       - name: Lint
@@ -121,9 +121,51 @@ jobs:
         run: npm run build
       - name: Audit installed, production, and lockfile scopes
         run: |
-          npm audit --audit-level=low
-          npm audit --omit=dev --audit-level=low
-          npm audit --package-lock-only --audit-level=low
+          npm audit --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --package-lock-only --audit-level=low --registry=https://registry.npmjs.org
+      - name: Verify extracted backend production ZIP without build dependencies or Azure
+        if: matrix.application == 'backend'
+        shell: bash
+        run: |
+          package="$RUNNER_TEMP/backend-production"
+          extracted="$RUNNER_TEMP/backend-extracted"
+          mkdir "$package" "$extracted"
+          cp -R dist "$package/dist"
+          cp package.json package-lock.json "$package/"
+          cd "$package"
+          npm ci --omit=dev --no-fund --registry=https://registry.npmjs.org
+          test -f dist/src/app.js
+          test ! -d test
+          test ! -d node_modules/typescript
+          test ! -d node_modules/ts-node
+          zip -qr "$RUNNER_TEMP/backend-production.zip" .
+          unzip -tq "$RUNNER_TEMP/backend-production.zip"
+          unzip -q "$RUNNER_TEMP/backend-production.zip" -d "$extracted"
+          cd "$extracted"
+          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
+          NODE_ENV=production node <<'NODE'
+          const assert = require('node:assert/strict');
+          const { once } = require('node:events');
+          const { sanitizeHtml } = require('./dist/src/utils/sanitize.js');
+          const { createApp } = require('./dist/src/app.js');
+          assert.equal(sanitizeHtml('<script>alert(1)</script><p>safe</p>'), '<p>safe</p>');
+          (async () => {
+            const server = createApp().listen(0, '127.0.0.1');
+            try {
+              await once(server, 'listening');
+              const url = `http://127.0.0.1:${server.address().port}`;
+              for (const route of ['/health', '/api/health']) {
+                const response = await fetch(url + route, { signal: AbortSignal.timeout(5000) });
+                assert.equal(response.status, 503);
+                assert.equal((await response.json()).status, 'unhealthy');
+              }
+              console.log('Extracted production ZIP loads app/sanitizer; absent DB stays 503, not healthy.');
+            } finally {
+              await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+            }
+          })().catch((error) => { console.error(error); process.exitCode = 1; });
+          NODE
 
   bicep:
     name: Bicep artifact parity
