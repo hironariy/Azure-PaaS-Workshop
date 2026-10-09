@@ -48,6 +48,9 @@ test('missing, corrupt, unsupported, executable, and stale-path state fail expli
   assert.throws(() => validate({ ...values, WORKSHOP_REPO_DIR: '/nonexistent-fixture' }, directory), /missing/);
   assert.throws(() => validate({ ...values, PARAM_FILE: '/outside-fixture/file' }, directory), /mismatch/);
   assert.throws(() => validate({ ...values, TENANT_ID: 'placeholder' }, directory), /UUID/);
+  assert.throws(() => validate({ ...values, PARAM_FILE: path.join(directory, 'paas-workshop.json') }, directory), /bicepparam/);
+  assert.throws(() => validate({ ...values, BACKEND_CLIENT_ID: values.SUBSCRIPTION_ID,
+    FRONTEND_CLIENT_ID: values.SUBSCRIPTION_ID }, directory), /distinct/);
 });
 
 test('stages require identity/deployment values and reject unsafe hostnames', (t) => {
@@ -79,6 +82,11 @@ test('legacy state, lock contention, unsafe directories and foreign checkouts ar
     assert.throws(() => validate({ ...values, WORKSHOP_STATE_DIR: unsafe,
       PARAM_FILE: path.join(unsafe, 'dev.local.bicepparam') }, unsafe), /dedicated state directory/);
   }
+  const alias = path.join(directory, 'repository-alias');
+  fs.symlinkSync(repository, alias, 'dir');
+  const aliasedState = path.join(alias, 'new-state-fixture');
+  assert.throws(() => validate({ ...values, WORKSHOP_STATE_DIR: aliasedState,
+    PARAM_FILE: path.join(aliasedState, 'dev.local.bicepparam') }, aliasedState), /dedicated state directory/);
   const foreign = path.join(directory, 'foreign-checkout');
   for (const file of ['README.md', 'materials/bicep/main.bicep', 'scripts/workshop-state.sh']) {
     fs.mkdirSync(path.dirname(path.join(foreign, file)), { recursive: true });

@@ -1,224 +1,105 @@
 #!/bin/bash
-# =============================================================================
-# Backend Deployment Script with Retry Logic
-# =============================================================================
-# This script deploys the backend to Azure App Service with proper handling
-# for the expected 60-90 second startup time (VNet + Key Vault initialization).
-#
-# Usage:
-#   ./scripts/deploy-backend.sh <resource-group> <app-service-name>
-#
-# Example:
-#   ./scripts/deploy-backend.sh rg-blogapp-dev app-blogapp-abc123
-# =============================================================================
+# Usage: ./scripts/deploy-backend.sh <saved-resource-group> <saved-app-service-name>
 
-set -e
+set +x
+set -euo pipefail
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Configuration
 RESOURCE_GROUP="${1:-}"
 APP_SERVICE_NAME="${2:-}"
-MAX_RETRIES=30
-RETRY_INTERVAL=15
-INITIAL_HEALTH_DELAY=20
-DEPLOY_PACKAGE_DIR="deploy-package"
-
-# Validate arguments
-if [ -z "$RESOURCE_GROUP" ] || [ -z "$APP_SERVICE_NAME" ]; then
-    echo -e "${RED}Usage: $0 <resource-group> <app-service-name>${NC}"
-    echo "Example: $0 rg-blogapp-dev app-blogapp-abc123"
+if [ -z "$RESOURCE_GROUP" ] || [ -z "$APP_SERVICE_NAME" ] || [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <saved-resource-group> <saved-app-service-name>" >&2
     exit 1
 fi
 
-echo "=============================================="
-echo "Backend Deployment Script"
-echo "=============================================="
-echo "Resource Group: $RESOURCE_GROUP"
-echo "App Service: $APP_SERVICE_NAME"
-echo "=============================================="
-
-# Ensure we're in the backend directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$(dirname "$SCRIPT_DIR")/materials/backend"
+source "$SCRIPT_DIR/workshop-deploy-common.sh"
+workshop_deploy_load_target "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
+BACKEND_DIR="$WORKSHOP_REPO_DIR/materials/backend"
+cd "$BACKEND_DIR"
 
-if [ ! -f "$BACKEND_DIR/package.json" ]; then
-    echo -e "${RED}Error: Cannot find backend directory at $BACKEND_DIR${NC}"
+HOSTNAME="$(az webapp show --subscription "$SUBSCRIPTION_ID" \
+    --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" --query defaultHostName -o tsv)"
+if ! [[ "$HOSTNAME" =~ ^[a-z0-9.-]+\.azurewebsites\.net$ ]]; then
+    echo "App Service did not return an expected public hostname." >&2
     exit 1
 fi
 
-cd "$BACKEND_DIR"
-echo "Working directory: $(pwd)"
-
+ARTIFACT_DIR="$(mktemp -d "$BACKEND_DIR/.deploy-XXXXXX")"
 cleanup_artifacts() {
-    rm -rf "$BACKEND_DIR/deploy.zip" "$BACKEND_DIR/$DEPLOY_PACKAGE_DIR"
+    local status=$?
+    trap - EXIT
+    case "$ARTIFACT_DIR" in
+        "$BACKEND_DIR"/.deploy-??????)
+            if ! rm -rf -- "$ARTIFACT_DIR"; then
+                echo "Failed to remove owned deployment artifacts: $ARTIFACT_DIR" >&2
+                exit 1
+            fi ;;
+        *) echo "Refusing unsafe artifact cleanup." >&2; exit 1 ;;
+    esac
+    exit "$status"
 }
-
 trap cleanup_artifacts EXIT
+PACKAGE_DIR="$ARTIFACT_DIR/package"
+DEPLOY_ZIP="$ARTIFACT_DIR/deploy.zip"
+mkdir "$PACKAGE_DIR"
 
-# Step 1: Build the application
-echo ""
-echo -e "${YELLOW}Step 1: Building application...${NC}"
-npm install
-rm -rf dist
-npm run build
-echo -e "${GREEN}✅ Build complete${NC}"
-
-# Step 2: Create deployment package
-echo ""
-echo -e "${YELLOW}Step 2: Creating deployment package...${NC}"
-rm -rf "$DEPLOY_PACKAGE_DIR" deploy.zip
-mkdir -p "$DEPLOY_PACKAGE_DIR"
-cp package.json package-lock.json "$DEPLOY_PACKAGE_DIR/"
-cp -R dist "$DEPLOY_PACKAGE_DIR/"
-
-cd "$DEPLOY_PACKAGE_DIR"
+echo "Building backend and creating an isolated production package..."
+npm ci
+npm run build -- --outDir "$PACKAGE_DIR/dist"
+cp package.json package-lock.json "$PACKAGE_DIR/"
+cd "$PACKAGE_DIR"
 npm ci --omit=dev
+if [ ! -f dist/src/app.js ]; then
+    echo "Build did not produce the required dist/src/app.js." >&2
+    exit 1
+fi
 
-# Create zip: prefer 'zip', then 7-Zip
-# (Git Bash on Windows often does not include zip)
-rm -f ../deploy.zip
-
-ZIP_TOOL=""
-if command -v zip >/dev/null 2>&1; then ZIP_TOOL="zip"; fi
-if [ -z "$ZIP_TOOL" ] && command -v 7z >/dev/null 2>&1; then ZIP_TOOL="7z"; fi
-if [ -z "$ZIP_TOOL" ] && command -v 7za >/dev/null 2>&1; then ZIP_TOOL="7za"; fi
-if [ -z "$ZIP_TOOL" ] && command -v 7zz >/dev/null 2>&1; then ZIP_TOOL="7zz"; fi
-if [ -z "$ZIP_TOOL" ] && command -v 7z.exe >/dev/null 2>&1; then ZIP_TOOL="7z.exe"; fi
-
-if [ "$ZIP_TOOL" = "zip" ]; then
-    zip -r ../deploy.zip .
+if command -v zip >/dev/null 2>&1; then
+    zip -qr "$DEPLOY_ZIP" .
 else
-    if [ -n "$ZIP_TOOL" ]; then
-        echo "  (zip not found — using $ZIP_TOOL)"
-        "$ZIP_TOOL" a -tzip ../deploy.zip ./* >/dev/null
-    else
-        echo -e "${RED}Error: No ZIP tool found (zip/7z).${NC}"
-        echo "Install zip or 7-Zip, then retry deployment."
-        exit 1
-    fi
+    ZIP_TOOL=""
+    for candidate in 7z 7za 7zz 7z.exe; do
+        if command -v "$candidate" >/dev/null 2>&1; then ZIP_TOOL="$candidate"; break; fi
+    done
+    if [ -z "$ZIP_TOOL" ]; then echo "Install zip or 7-Zip before deployment." >&2; exit 1; fi
+    "$ZIP_TOOL" a -tzip "$DEPLOY_ZIP" ./* >/dev/null
 fi
-
-# Validate archive and detect Windows-style separators when possible
 if command -v unzip >/dev/null 2>&1; then
-    if ! unzip -t ../deploy.zip >/dev/null 2>&1; then
-        echo -e "${RED}Error: deploy.zip is invalid (archive test failed).${NC}"
+    unzip -t "$DEPLOY_ZIP" >/dev/null
+    ZIP_ENTRIES="$(unzip -Z1 "$DEPLOY_ZIP")"
+    if printf '%s\n' "$ZIP_ENTRIES" | grep -F '\'; then
+        echo "ZIP contains unsupported Windows-style path separators." >&2
         exit 1
     fi
-
-    ZIP_ENTRIES="$(unzip -Z1 ../deploy.zip)"
-
-    if printf '%s\n' "$ZIP_ENTRIES" | awk 'index($0,"\\"){found=1; exit 0} END{exit(found?0:1)}'; then
-        echo -e "${RED}Error: deploy.zip contains Windows-style path separators (\\).${NC}"
-        echo "Repackage using zip or 7-Zip, then retry deployment."
-        exit 1
-    fi
-
-    if ! printf '%s\n' "$ZIP_ENTRIES" | grep -qx 'dist/src/app.js'; then
-        echo -e "${RED}Error: deploy.zip does not contain dist/src/app.js.${NC}"
-        echo "The App Service startup command expects node dist/src/app.js."
+    if ! grep -qx 'dist/src/app.js' <<< "$ZIP_ENTRIES"; then
+        echo "ZIP is missing the startup file." >&2
         exit 1
     fi
 fi
 
-cd ..
-echo -e "${GREEN}✅ Deployment package created (deploy.zip)${NC}"
+echo "Configuring the saved App Service target..."
+az webapp config appsettings set --subscription "$SUBSCRIPTION_ID" \
+    --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" \
+    --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false" --output none
+az webapp config set --subscription "$SUBSCRIPTION_ID" \
+    --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" \
+    --startup-file "node dist/src/app.js" --output none
 
-# Step 3: Configure App Service build & startup
-echo ""
-echo -e "${YELLOW}Step 3: Configuring App Service...${NC}"
+DEPLOY_HELP="$(az webapp deploy --help)"
+set --
+if [[ "$DEPLOY_HELP" == *"--track-status"* ]]; then set -- --track-status false; fi
+echo "Uploading ZIP asynchronously; upload acceptance is not deployment completion."
+az webapp deploy --subscription "$SUBSCRIPTION_ID" \
+    --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" \
+    --src-path "$DEPLOY_ZIP" --type zip --clean true --restart true \
+    --async true "$@"
 
-# Disable remote build (prevents tsc not found on server)
-az webapp config appsettings set \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_SERVICE_NAME" \
-    --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false" \
-    >/dev/null
-
-# Set startup command (pre-built package has dist/src/app.js at root)
-az webapp config set \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_SERVICE_NAME" \
-    --startup-file "node dist/src/app.js" \
-    >/dev/null
-
-echo -e "${GREEN}✅ App Service configured${NC}"
-
-# Step 4: Deploy to App Service
-echo ""
-echo -e "${YELLOW}Step 4: Deploying to App Service...${NC}"
-echo "Note: Using async deployment - will poll health endpoint separately"
-echo "Note: After Kudu warmup, uploading deploy.zip from Cloud Shell can take several minutes without additional progress output"
-
-TRACK_STATUS_FLAG=""
-if az webapp deploy -h 2>/dev/null | grep -q "track-status"; then
-    TRACK_STATUS_FLAG="--track-status false"
+echo "Waiting 20s before bounded readiness checks..."
+sleep 20
+if ! workshop_wait_for_health "https://$HOSTNAME/health"; then
+    echo "Inspect deployment status, startup, Managed Identity/Key Vault references and DB connectivity." >&2
+    echo "Do not publish app settings, connection strings, tokens or unsanitized logs." >&2
+    exit 1
 fi
-
-# Deploy asynchronously (exits after upload, doesn't wait for site startup)
-# This avoids the timeout issue when site startup takes 60-90 seconds
-az webapp deploy \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_SERVICE_NAME" \
-    --src-path deploy.zip \
-    --type zip \
-    --clean true \
-    --restart true \
-    --async true \
-    $TRACK_STATUS_FLAG
-
-echo -e "${GREEN}✅ Deployment package uploaded${NC}"
-
-# Step 5: Wait for app to be healthy
-echo ""
-echo -e "${YELLOW}Step 5: Waiting for app to start (this may take 60-90 seconds)...${NC}"
-
-HEALTH_URL="https://$APP_SERVICE_NAME.azurewebsites.net/health"
-echo "Health endpoint: $HEALTH_URL"
-
-echo "Initial wait: ${INITIAL_HEALTH_DELAY}s"
-sleep "$INITIAL_HEALTH_DELAY"
-
-for i in $(seq 1 $MAX_RETRIES); do
-    echo "Attempt $i/$MAX_RETRIES..."
-    
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" 2>/dev/null || echo "000")
-    
-    if [ "$HTTP_CODE" = "200" ]; then
-        echo ""
-        echo -e "${GREEN}✅ App is healthy! (HTTP $HTTP_CODE)${NC}"
-        echo ""
-        echo "Health check response:"
-        curl -s "$HEALTH_URL" | jq .
-        echo ""
-        echo "=============================================="
-        echo -e "${GREEN}Deployment successful!${NC}"
-        echo "App URL: https://$APP_SERVICE_NAME.azurewebsites.net"
-        echo "=============================================="
-        
-        exit 0
-    fi
-    
-    echo "  Status: HTTP $HTTP_CODE (waiting ${RETRY_INTERVAL}s...)"
-    sleep "$RETRY_INTERVAL"
-done
-
-# Deployment failed
-echo ""
-echo -e "${RED}❌ App failed to start after $((MAX_RETRIES * RETRY_INTERVAL)) seconds${NC}"
-echo ""
-echo "Troubleshooting steps:"
-echo "1. Check application logs:"
-echo "   az webapp log tail --resource-group $RESOURCE_GROUP --name $APP_SERVICE_NAME"
-echo ""
-echo "2. Download logs for analysis:"
-echo "   az webapp log download --resource-group $RESOURCE_GROUP --name $APP_SERVICE_NAME --log-file /tmp/app-logs.zip"
-echo ""
-echo "3. Check Key Vault RBAC:"
-echo "   az role assignment list --assignee \$(az webapp identity show --resource-group $RESOURCE_GROUP --name $APP_SERVICE_NAME --query principalId -o tsv) --query '[].roleDefinitionName'"
-
-exit 1
+echo "Upload and readiness checks passed: https://$HOSTNAME"
+echo "Separately verify this deployment's completion and new application content; old-instance health is not release proof."

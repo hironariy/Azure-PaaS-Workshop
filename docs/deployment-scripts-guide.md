@@ -2,6 +2,8 @@
 
 This document explains the deployment scripts used in the Azure PaaS Workshop. These scripts automate the deployment of the backend API to Azure App Service and the frontend to Azure Static Web Apps.
 
+> **Legacy reference:** The implementation has moved to versioned JSON state. The `.env` / token-argument examples and fixed artifact cleanup below describe the previous implementation, not commands to run with the current scripts. Use the current [backend](../materials/docs/learner/day-1-deploy-backend.ja.md), [frontend](../materials/docs/learner/day-1-deploy-frontend.ja.md) and [cleanup](../materials/docs/learner/cleanup.ja.md) guides. Both deploy scripts now require saved subscription/tenant/RG/resource identities, run `npm ci`, preserve unrelated artifacts, and fail explicitly on CLI errors. Frontend tokens are passed only in the SWA process environment and are never printed. Backend readiness is bounded and requires HTTP 200 with `status: healthy`; it is not proof of a new release.
+
 ---
 
 ## Table of Contents

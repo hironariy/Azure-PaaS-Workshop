@@ -10,6 +10,18 @@ const DEPLOYED = ['APP_SERVICE_NAME', 'SWA_NAME', 'SWA_HOSTNAME'];
 const KEYS = [...BASE, ...IDENTITY, ...DEPLOYED];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function canonicalPath(value) {
+  let current = path.resolve(value);
+  const missing = [];
+  while (!fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) throw new Error('Cannot resolve state path');
+    missing.unshift(path.basename(current));
+    current = parent;
+  }
+  return path.join(fs.realpathSync(current), ...missing);
+}
+
 function validate(values, directory, stage = 'base') {
   if (!['base', 'identity', 'deployed'].includes(stage)) throw new Error('Unknown state stage');
   for (const key of KEYS) {
@@ -27,6 +39,10 @@ function validate(values, directory, stage = 'base') {
   for (const key of ['SUBSCRIPTION_ID', 'TENANT_ID', ...IDENTITY]) {
     if (values[key] && !UUID.test(values[key])) throw new Error(`Invalid UUID: ${key}`);
   }
+  if (values.BACKEND_CLIENT_ID && values.FRONTEND_CLIENT_ID &&
+      values.BACKEND_CLIENT_ID.toLowerCase() === values.FRONTEND_CLIENT_ID.toLowerCase()) {
+    throw new Error('Backend and frontend must use distinct application IDs');
+  }
   for (const key of ['LOCATION', 'SWA_LOCATION']) {
     if (!/^[a-z0-9]{2,40}$/.test(values[key])) throw new Error(`Invalid region: ${key}`);
   }
@@ -41,10 +57,13 @@ function validate(values, directory, stage = 'base') {
       path.dirname(path.resolve(values.PARAM_FILE)) !== path.resolve(directory)) {
     throw new Error('State/parameter directory mismatch');
   }
-  const statePath = path.resolve(directory);
-  const repositoryPath = path.resolve(values.WORKSHOP_REPO_DIR);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.bicepparam$/.test(path.basename(values.PARAM_FILE))) {
+    throw new Error('PARAM_FILE must name a .bicepparam file in the dedicated state directory');
+  }
+  const statePath = canonicalPath(directory);
+  const repositoryPath = canonicalPath(values.WORKSHOP_REPO_DIR);
   const insideRepository = path.relative(repositoryPath, statePath);
-  if (statePath === path.parse(statePath).root || statePath === path.resolve(homedir()) ||
+  if (statePath === path.parse(statePath).root || statePath === canonicalPath(homedir()) ||
       (!insideRepository.startsWith(`..${path.sep}`) && insideRepository !== '..' && !path.isAbsolute(insideRepository))) {
     throw new Error('Use a dedicated state directory outside the repository, not root or home');
   }

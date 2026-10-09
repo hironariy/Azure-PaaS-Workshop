@@ -75,11 +75,6 @@ export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
 export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
 source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
 workshop_state_load deployed || exit 1
-cat > "$WORKSHOP_STATE_DIR/deploy-frontend.local.env" <<EOF
-ENTRA_TENANT_ID="$TENANT_ID"
-ENTRA_FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
-ENTRA_BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
-EOF
 ./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
 ```
 
@@ -103,7 +98,7 @@ az ad app show \
 ## Cleanup
 
 ```bash
-az group delete --name "$RESOURCE_GROUP" --yes --no-wait
-az ad app delete --id "$FRONTEND_CLIENT_ID"
-az ad app delete --id "$BACKEND_CLIENT_ID"
+bash scripts/cleanup-workshop.sh
 ```
+
+対象・タグ・所有アプリを確認し、専用 RG 全体の削除を明示的に承認します。詳細は [Cleanup](../learner/cleanup.ja.html)。JSON state とパラメータは削除確認後まで保持します。
