@@ -32,6 +32,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  workflow-lint:
+    name: GitHub workflow expression validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Verify pinned actionlint and validate workflow contexts
+        shell: bash
+        run: |
+          curl --fail --location --retry 2 --max-time 60 \
+            --output "$RUNNER_TEMP/actionlint.tar.gz" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
+          printf '%s  %s\n' \
+            023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757 \
+            "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -shellcheck= .github/workflows/*.yml
+
   deployment-tool:
     name: Public SWA deployment-tool audit
     runs-on: ubuntu-24.04
@@ -51,10 +72,10 @@ jobs:
           mkdir "$RUNNER_TEMP/public-swa-cli"
           cd "$RUNNER_TEMP/public-swa-cli"
           npm init --yes >/dev/null
-          npm view @microsoft/static-web-apps-cli@2.0.10 version engines dist.tarball dist.integrity \
+          npm view @azure/static-web-apps-cli@2.0.10 version engines dist.tarball dist.integrity \
             --json --registry=https://registry.npmjs.org > release.json
           npm install --save-exact --package-lock-only --ignore-scripts --no-fund \
-            --registry=https://registry.npmjs.org @microsoft/static-web-apps-cli@2.0.10
+            --registry=https://registry.npmjs.org @azure/static-web-apps-cli@2.0.10
           node "$GITHUB_WORKSPACE/scripts/check-public-lock.cjs" package-lock.json
       - name: Verify clean public installation and CLI loading without Azure
         shell: bash
@@ -159,7 +180,7 @@ jobs:
       - name: Require portable public npm package sources
         run: node ../../scripts/check-public-lock.cjs package-lock.json
       - name: Restore locked build dependencies
-        run: npm ci --include=dev --no-fund --registry=https://registry.npmjs.org
+        run: NODE_ENV=production npm ci --include=dev --no-fund --registry=https://registry.npmjs.org
       - name: Type-check application and tests
         run: npm run type-check
       - name: Lint
