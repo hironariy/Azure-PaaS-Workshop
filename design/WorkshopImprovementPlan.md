@@ -1,0 +1,515 @@
+# Azure PaaS Workshop 改善計画と Issue 解決戦略
+
+作成日: 2026-10-09
+
+状態: 実装計画承認済み・段階的に実施
+
+最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#46 の実 MongoDB persistence に続き、#47 で署名付き API token の audience/permission 判定、#48 で runtime API routing と failed-config cache を修正した。documented ARM ZIP deployment も代替候補へ追加した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–23 節を参照する。
+
+対象: [Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop) の Issue #13–#23
+
+本計画は、姉妹 IaaS リポジトリの改善内容と PaaS の現行実装を比較した結果に基づく。**既存の #13・#14・#15 を最優先の解決対象に含め、#16–#23 と一体のリリース計画として扱う。** 文書の作成や Issue の登録は、各不具合の解決・Azure 上の動作確認を意味しない。
+
+## 1. 改善の目的と対象範囲を固定する
+
+最初の目標は機能追加ではなく、受講者が既存のワークショップを確実に完了できる状態にすること。
+
+- Cloud Shell Bash で Day 0 → Day 1 → Day 2 → Cleanup を連続して実行できる。
+- Contributor のみ・講師の事前準備なしで進められる範囲と、Azure / Entra の権限制約で実施できない範囲を開始前に区別する。
+- 日本語の投稿、認証、CRUD、再接続、再デプロイが正常に動作する。
+- 失敗を成功と表示せず、原因を調査でき、秘密値を出力しない。
+- 実際の SKU・設定・費用に一致する説明で PaaS の責任分界と復旧を学べる。
+
+本線は **Cloud Shell Bash → Bicep standard mode → App Service の ZIP deploy → Static Web Apps Linked Backend → managed database** とする。日本語 learner pages を本線とし、GitHub Actions、fastpath-container、追加の HA/DR は任意の経路として区別する。
+
+### 承認された実装上の選択
+
+- 新規記事は Unicode の文字・数字を保持する slug を使い、空の場合は URL-safe な識別子へ fallback する。既存記事の URL は変更しない。
+- Backend は Node.js built-in test runner と既存 TypeScript support、frontend は Vitest を使う。
+- Issue ごとの branch / commit / PR で実施し、自動 merge・Issue closure・branch protection 変更は行わない。
+- 実 Azure 検証は指定された隔離環境で baseline SKU に限定する。環境識別子・秘密値を教材の既定値として保存しない。
+- Tenant-wide policy 変更と、追加費用を伴う optional HA / secondary-region 検証は別途承認を得る。
+
+### Contributor-only 本線の制約
+
+Contributor は `Microsoft.Authorization/roleAssignments/write` を持たない。現行 Bicep が App Service の Managed Identity に Key Vault Secrets User を割り当てる操作は、Contributor のみ・事前準備なしでは実行できない。また、Contributor は Entra のアプリ登録作成・ユーザー同意権限を意味しない。
+
+この条件で Key Vault reference を含む fresh deployment 全体が完了できるとは説明しない。RBAC を無効にする、access policy へ置き換える、秘密値を公開する、必要な割り当てを省略して成功とする、受講者を自動昇格する、といった回避策は採用しない。正確な preflight・明示的な失敗・権限別の検証結果を成果物とし、未達の acceptance criteria を残す。
+
+管理者権限による positive deployment はアプリ・IaC の検証として区別し、Contributor-only 完了の証拠にしない。自己同意は per-group app と browser/MSAL flow を使い、tenant policy が許可する場合に限る。制限を解消する architecture / permission 方針の変更が必要なら、別の意思決定として扱う。
+
+この安定化計画では、新たな Container Apps / Functions / database の導入、VM / SSH / Bastion / ASR の導入、大規模な framework 移行、姉妹リポジトリとの共通パッケージ化は行わない。依存関係の修正で必要となる互換性対応は #15 の範囲で判断する。
+
+## 2. 現状と未検証事項を区別する
+
+初回調査時（2026-10-09）は #13–#23 がすべて open、open PR はなかった。以降の PR / 検証記録は第 12 節以降に記載する。調査基準の PaaS main は `005cc191d970b7ee3374ad73452270ebacb98eef`。着手時には最新の状態と差分を再確認する。
+
+ソースで確認した重要な事項:
+
+- Backend の slug 生成は ASCII 中心で、日本語などのタイトルを扱えない経路がある（#14）。
+- Day 0 の Entra permission grant とアプリ登録作成では必要権限が異なる（#13）。
+- Bicep が Key Vault role assignment を作成するため、Contributor 単独では必要な Azure RBAC 操作を満たさない（#16）。
+- Cloud Shell の RG 名と保存 state に不整合がある（#20）。
+- Active root workflow は Pages 公開で、application / Bicep の PR 品質 gate がない（#19）。
+- Backend は `test: jest` を定義するが、manifest に Jest の依存宣言がない。調査時に application test files は見つからなかった。既存 test commands を CI に追加するだけではテスト基盤にならない。
+- Baseline は database HA=false。PaaS の採用だけでアプリ全体の HA を保証するものではない。
+
+本計画作成時に新たな npm audit、build、lint、application tests、Azure deployment、権限別の実証は実行していない。#15 に記録された監査件数を現在の件数として転用しない。ソース確認、ローカル検証、Azure 実証の結果を別々に記録する。
+
+## 3. Issue ごとの成果物と優先度を明確にする
+
+High は受講者の完了を妨げる問題、依存関係の是正、失敗・秘密値の扱いを優先する区分。Medium は再現性、教材の整合性、運用学習を改善する区分であり、脆弱性の severity を表すものではない。
+
+| Issue | 優先度 | 主な成果物 | 完了判断 |
+|---|---|---|---|
+| [#13](https://github.com/hironariy/Azure-PaaS-Workshop/issues/13) | High | App ownership・permission request・自己同意・管理者同意を分けた Day 0 | Policy が許可する自己同意を実証し、blocked な条件を明記 |
+| [#14](https://github.com/hironariy/Azure-PaaS-Workshop/issues/14) | High | Unicode 対応の slug、互換性維持、モデル/API 回帰テスト | 日本語などの draft/published CRUD と既存 URL が正常 |
+| [#15](https://github.com/hironariy/Azure-PaaS-Workshop/issues/15) | High | 依存修正、lockfile install、deploy tooling の整理、継続監査 | Issue が要求する全監査範囲で検出ゼロと機能維持 |
+| [#16](https://github.com/hironariy/Azure-PaaS-Workshop/issues/16) | High | 必要権限の preflight と Contributor-only の platform limitation | Contributor denial と authorized deployment を分けて記録。未達条件を完了扱いしない |
+| [#18](https://github.com/hironariy/Azure-PaaS-Workshop/issues/18) | High | 明確な失敗通知、秘密値を出さない診断、安全な Cleanup | 権限・通信・state エラーを誤った成功に置き換えない |
+| [#20](https://github.com/hironariy/Azure-PaaS-Workshop/issues/20) | High | RG / tenant / subscription / cwd / state の統一 | 順次実行とセッション再接続で同じ対象を操作 |
+| [#19](https://github.com/hironariy/Azure-PaaS-Workshop/issues/19) | Medium・早期着手 | 動作する test harness と deploy-independent 品質 CI | 意図した失敗を検知し、対象 checks が正常終了 |
+| [#21](https://github.com/hironariy/Azure-PaaS-Workshop/issues/21) | Medium | API / UI / startup logs / Key Vault / DB の検証手順 | 健全性だけでなく認証と実データ CRUD を検証 |
+| [#22](https://github.com/hironariy/Azure-PaaS-Workshop/issues/22) | Medium | Region / SKU / quota preflight と deployment 進捗確認 | 利用不可・Running・Failed を区別し、次の対処が分かる |
+| [#23](https://github.com/hironariy/Azure-PaaS-Workshop/issues/23) | Medium・早期着手 | 設計・図・費用・比較・配布 artifact の整合 | Baseline と optional の説明が実装と一致 |
+| [#17](https://github.com/hironariy/Azure-PaaS-Workshop/issues/17) | Medium | 計測可能な restart / redeploy / recovery 演習 | 復旧・data integrity・元に戻す操作を実証 |
+
+## 4. #13 の Entra 権限と管理者同意を解決する
+
+### 実装方針
+
+- アプリ登録作成、所有アプリの設定、API permission 要求、実際の同意付与を別操作として説明する。
+- 本線は per-group owned app と browser/MSAL の自己同意を使えるか確認する。現行の無条件 AllPrincipals grant は受講者手順から外す。
+- 対象 tenant、Frontend / Backend client ID、service principal object ID、scope、実行担当を確認してから同意を付与する。
+- 管理者支援は明示的な代替経路に限定する。Contributor-only 本線が成功した証拠として扱わず、受講者全員への Global Administrator / Application Administrator 付与を標準にしない。
+- 自己同意経路は tenant policy と CLI の挙動を確認して設計する。共有アプリの grant を壊し得るため、単に Principal に変更して繰り返す回避策は採用しない。
+- Azure resource の Owner / Contributor と Entra の同意権限を混同しない。Azure RBAC 側は #16 と合わせて説明する。
+
+### 検証と完了条件
+
+- [ ] 隔離した検証用アプリで、learner の登録・設定と管理者の同意を役割別に確認する。
+- [ ] 必要ロール不足の失敗と PIM / tenant 違いを区別し、依頼する値と対処を説明する。
+- [ ] Grant の resource、scope、consentType、principalId を確認する。
+- [ ] Frontend の sign-in と Backend への認証付き API 呼び出しまで成立する。
+- [ ] 既存 grant を意図せず削除・置換せず、共有アプリの他受講者を壊さない。
+
+## 5. #14 の Unicode 投稿と URL 互換性を解決する
+
+### 実装方針
+
+- 日本語・中国語・韓国語・accented Latin などを扱える slug 方針を決める。Unicode slug と文字種非依存の識別子のどちらでも、URL・一意性・既存互換性を優先する。
+- Emoji / 記号だけでも、空文字やハイフンだけの slug にしない。
+- 既存の記事 URL と編集時に slug を維持する挙動を保持する。既存データの一括書き換えは既定にしない。
+- 同名タイトルと同時作成の競合を確認し、DB の unique 制約を含めて一意性を維持する。重複の事前照会だけで競合が防げるとみなさない。
+- 必要に応じて API の安全なエラー分類を画面へ伝え、入力を保持する。秘密値・内部スタックを利用者へ公開しない。
+- #19 の Node.js built-in backend test runner / frontend Vitest を使い、同じ目的の別 runner を独自に導入しない。
+
+### 検証と完了条件
+
+- [ ] Unicode-only / mixed / emoji / 記号 / 同名タイトルの model・API tests を用意する。
+- [ ] Draft / published 作成が正常終了し、詳細表示・編集・削除まで確認する。
+- [ ] 日本語本文・要約・tags が保存・再取得後も保持される。
+- [ ] URL encoding、duplicate key の扱い、既存英語 URL を確認する。
+- [ ] Day 1 の日本語 CRUD smoke-check に反映し、#21 と同じ入力・期待結果を使う。
+
+## 6. #15 の依存関係と deployment tooling をクリーンにする
+
+### 実装方針
+
+- 着手時に frontend/backend の全依存・production 依存と、lockfile・配置 package の監査を取得する。Advisory、依存経路、修正版、実行環境と日時を記録する。
+- Compatible な上位パッケージ更新を優先する。`npm audit fix --force` の一括適用や理由のない downgrade / override をしない。
+- Major 更新が必要な場合は、根拠、移行内容、既存機能への影響を明記し、必要範囲だけ変更する。
+- Build と deploy の install を lockfile-based にそろえ、frontend/backend と ZIP 内の production dependencies を整合させる。
+- SWA CLI の install / execution 警告は application dependencies と分けて調査する。未解消なら安全な対応版や deploy 経路を検討する。
+- #19 の test tooling を含む manifest / lockfile 変更は同じ担当へ集約するか順番に merge する。独立 PR の lockfile 再生成を同時に進めない。
+- Continuous audit は #19 の CI と統合する。通信失敗や警告抑制を監査成功として扱わない。
+
+### 検証と完了条件
+
+- [ ] サポートする Node.js 環境で clean `npm ci` が成功し、lockfile に意図しない差分が出ない。
+- [ ] Issue #15 が要求する全依存・production・lockfile・配置 package の監査が正常終了し、すべての severity がゼロ。
+- [ ] SWA CLI 等の受講者 tooling も確認し、application audit と混同しない。
+- [ ] Build / type-check / lint / tests と HTML sanitization の回帰を確認する。
+- [ ] MSAL sign-in、SPA routing、runtime config、Linked Backend、startup、CRUD を維持する。
+- [ ] 未修正の Advisory が残る場合は影響・緩和策・解消計画を記録し、検出ゼロの条件を満たしたとして閉じない。
+
+## 7. 実装を段階化し、並行作業の境界を決める
+
+| 段階 | 作業 | 終了条件 |
+|---|---|---|
+| 0: Baseline 固定 | #23 の本線／optional 定義、#19 の baseline failures と test harness 方針整理 | 実装対象と既存失敗が明確。見かけ上の green CI を作らない |
+| 1: 完了ブロッカー解消 | Identity track: #13 / #16。Learner track: #20 / #18。Application track: #14 / #15 と必要な test foundation | 日本語 CRUD と安全な learner flow。権限上実施できない deploy / consent を明記 |
+| 2: 再現性の確立 | #19 の品質 gate 完成、#21 の smoke-check、#22 の preflight、#23 の文書同期 | Clean checkout と Cloud Shell 再接続を含む rehearsal が成功 |
+| 3: 信頼性学習の拡充 | #17 の baseline 演習、検証できる optional HA/DR | 計測・data integrity・回復操作・費用制約を実証 |
+
+段階は作業開始の絶対的な直列順序ではない。独立した track は並行してよいが、次の実際の前提を守る。
+
+- #14 のテストと #15 の依存更新は、test harness と manifest / lockfile の管理方針を共有する。
+- #19 は早期に着手するが、既存失敗を隠したまま完了にしない。依存 remediation とテスト追加の結果を取り込んでから gate を完成する。
+- #21 の最終受講者検証は #13 / #16 の権限経路、#20 の state、#14 の Unicode 修正、#15 の配置成果物を前提とする。手順作成は先行してよい。
+- #17 の復旧後検証には #21 の smoke-check を再利用し、#18 の安全な操作・失敗通知と #22 の対応 region / tier 条件を使う。
+- 各 functional PR で直接関連する文書を更新する。すべての文書修正を #23 の最後へ延期しない。
+
+## 8. アプリの追加改善は受講者価値に絞る
+
+安定化中は、新しいブログ機能より次の品質を優先する。
+
+| 領域 | 改善方針 | 検証する結果 |
+|---|---|---|
+| 入力・エラー UX | Validation / authentication / authorization / network / server failure を安全に区別し、投稿入力を保持 | 原因不明の再試行を減らし、秘密値を表示しない |
+| Testability | Model/API tests、重要 frontend flows、Azure の実 identity/routing 確認を分離 | Mocks の成功を Azure 実証と取り違えない |
+| Operational behavior | Startup、graceful shutdown、再接続、readiness、redeploy を確認 | Restart / redeploy 前後で記事と認証が維持される |
+| Observability | 必要なログと telemetry の実流入を確認し、時刻・操作・エラーを対応づける | 設定値の存在だけで監視成功としない |
+| 教育的な比較 | IaaS の現行構成との差分を責任分界で説明 | OS / replica-set 管理を省いた分、identity・data・application 運用を学べる |
+
+App Service slots / autoscale / zone redundancy / database HA / secondary-region recovery は、利用 SKU と region の条件、費用、backup、元に戻す操作を確認して optional にする。Baseline の B1 / database HA=false で利用できると仮定しない。
+
+復旧演習では rate-limited な `/api` の 429、transport errors、5xx、control-plane 操作時間、アプリ復旧時間を区別する。Health 200 のほか、認証付き CRUD と障害前のデータ保持を確認する。
+
+## 9. PR の粒度と検証証拠を決める
+
+原則として **1 PR = 1 つの主要 Issue または独立した成果物**。#17 / #19 / #23 のような広い Issue は段階 PR に分け、未達の acceptance criteria がある間は parent Issue を閉じない。
+
+各 PR に次を記録する。
+
+- 対象 Issue、変更した挙動、維持する API / URL / learner workflow。
+- Automated checks の結果と、必要な Azure / browser / Portal 検証の結果。
+- 満たした acceptance criteria、未検証事項、既存失敗、optional 制約。
+- 権限・費用・data への影響と rollback / recovery の方法。
+- 変更した learner docs、troubleshooting、必要な講師準備。
+
+検証は、小さいチェックから実経路へ段階的に広げる。
+
+1. Unit / model / isolated API / focused frontend tests と targeted lint / type-check。
+2. Clean install、build、ZIP / SWA artifacts、Bicep diagnostics と relevant parameter surface。
+3. Fresh Cloud Shell で Day 0 → Day 1 → Day 2 → Cleanup を実行する Azure rehearsal。
+4. 別の実施者による learner-level permissions と documented instructor support の独立 rehearsal。
+
+Azure grant、Managed Identity / Key Vault references、SWA Linked Backend、regional capacity はローカル mock だけでは実証できない。明示的なスキップや baseline failure は記録し、成功へ置き換えない。テスト不在を無条件の `passWithNoTests` で完了としない。
+
+## 10. リリースの完成条件を決める
+
+### Milestone A: 受講者 pilot に進める
+
+- [ ] #13 / #16 の Contributor-only 制約と自己同意の policy 条件が実証され、必要な条件を満たせない場合は pilot-ready としない。
+- [ ] #14 の日本語 CRUD と既存 URL の互換性が確認されている。
+- [ ] #15 の監査条件と clean install / deploy 条件を満たしている。
+- [ ] #18 / #20 の状態復元、失敗通知、秘密値を出さない診断、Cleanup が成立する。
+- [ ] #19 の relevant checks が enforced で、既存失敗を隠していない。Required checks は repository settings でも確認する。
+- [ ] #21 / #22 の本線検証・preflight と #23 の利用者に影響する説明が整合する。
+- [ ] Fresh Cloud Shell で少なくとも 1 回、途中再接続を含む本線 rehearsal が成功する。
+
+### Milestone B: ワークショップ実施に進める
+
+- [ ] Pilot feedback を記録し、完了ブロッカーを解消する。
+- [ ] 別の実施者が、選択した learner-level permissions で独立 rehearsal を完了する。管理者が補った操作や権限上の未達を隠さない。
+- [ ] #17 の必須 baseline recovery exercises が実証され、optional exercises の利用条件と未対応範囲が明確。
+- [ ] 日本語 learner flow、portal navigation、internal links、Pages preview/build を必要な範囲で確認する。
+- [ ] 進捗保存、copy buttons、狭い画面の表示を、portal 変更がある場合に確認する。
+- [ ] Architecture、費用、Instructor preparation、troubleshooting、rollback、Cleanup がリリース対象と一致する。
+
+日付や所要時間は実証結果から決める。Build の成功、文書の追加、Issue の登録だけをリリース判断にしない。
+
+## 11. 姉妹リポジトリの改善を継続的に取り込む
+
+IaaS の Issue を「共通 application」「learner workflow」「PaaS へ適応する運用原則」「IaaS 専用」に分類し、既存 PaaS Issue への重複登録を避ける。
+
+- 共通 application fixes は差分と tests を比較して取り込み、source comment の「IDENTICAL」だけで互換性を判断しない。
+- IaaS の修正を参考にしても、PaaS の auth、runtime config、deployment artifacts、database、telemetry を再確認する。
+- VM kernel、Run Command、MongoDB keyFile、ASR の実装は移さず、責任分界の説明に活用する。
+- IaaS 比較と対応記録を更新し、次回の workshop release 前に新しい relevant Issues を確認する。
+
+参考: [Azure-IaaS-Workshop Issues](https://github.com/hironariy/Azure-IaaS-Workshop/issues)、[Materials Validation Strategy](MaterialsValidationStrategy.md)、[受講者ポータル](../materials/docs/index.md)。
+
+## 12. 初回実装の証拠と未解決事項を反映する
+
+初回の実装は Issue ごとの PR に分けて開始した。以下は全 Issue の解決宣言ではなく、次の実装・レビューのための到達点である。PR は自動 merge せず、Issue も閉じていない。
+
+| 対象 | 成果物 | 現時点で言えること | 未達の検証・条件 |
+|---|---|---|---|
+| #19 foundation | #25: Node / Vitest の回帰テスト基盤 | 実行可能な model / HTTP / runtime-config tests | 全体 CI と Azure の実証は別 |
+| #14 | #26: Unicode slug、競合 retry、URL encode、作成エラー表示 | 日本語・記号 fallback、draft/published、競合と安全なエラーをローカル検証 | 実 DB とブラウザー CRUD / ownership / 既存 URL |
+| #15 | **Draft #27:** 依存更新 candidate と再現可能な build | 設定済み registry 内では clean install / audit / production ZIP smoke が成功 | public release / package provenance、通常の Cloud Shell 再現性、SWA CLI |
+| #13 | #28: 自己同意と管理者例外の分離 | learner の暗黙 AllPrincipals grant を除き、所有者・request・grant の確認を明記 | 実ユーザーの policy / consent / token / 認証付き API |
+| #16 | #29: read-only RBAC preflight | 承認された環境の tenant/subscription を確認。RG は未作成で、呼び出し元には必要な roleAssignments/write が許可として報告されず停止 | isolated Contributor principal の実証、権限を保持した新規 deploy |
+| #19 gate | **Draft #30:** app / Bicep CI | 実 GitHub run で Bicep artifact parity は成功。app jobs は package-source guard で停止 | public-source の依存解決後の green CI と手動 required-check 設定 |
+
+### 依存更新は registry の結果だけで完成にしない
+
+初回環境の registry は package mirror を使用しており、更新後の lockfile もその artifact URL を参照した。そこでの audit 0 件は public npm 上の公開版・upstream provenance の証明ではない。Axios 1.20.0 は public npm の確認で E404、latest は 1.18.1 だった。他パッケージの public metadata 取得で生じた transport error も成功と解釈しない。
+
+このため #27 は draft とし、#30 は非 public npm の package source をインストール前に拒否する。URL だけを置換して未公開 version / integrity を残したり、組織固有 registry を説明なしの前提にしたりしない。公開済みの supported versions と source を再確認し、通常の Cloud Shell で clean install / audit / build が成立するまで #15 は未解決である。
+
+別途インストールして確認した SWA CLI 2.0.10 は、互換範囲の `npm audit fix` 後も 6 件（high 5、low 1）の package-level 指摘が残った。これは unique CVE 数や exploitability の実証ではない。古い CLI への強制 downgrade、非互換 override、警告抑制で解決扱いにしない。
+
+### Azure の停止は失敗を隠すためのスキップではない
+
+承認された環境で read-only permission check は実行したが、必要な `Microsoft.Authorization/roleAssignments/write` が許可として報告されなかったため、リソースは作成していない。これは現在の呼び出し元の結果であり、isolated principal に Contributor だけを割り当てた試験の代用とはしない。Contributor-only / 主催者事前準備なしという条件を、受講者の権限昇格や Key Vault RBAC 無効化で変更しない。
+
+### 次の実装は独立した作業とブロックされた実証を分ける
+
+#20 の state / naming と #18 の失敗通知・秘密値・Cleanup、#22 の preflight、#21 の diagnostics、#23 の文書同期は、可能なローカル実装を継続できる。一方、public-source 依存の確認、必要権限、実ユーザー consent、実 DB / browser の証拠がないまま、#17 の有料・復旧演習や workshop-ready 判定へ進まない。環境 ID と認証情報は repository の既定値にせず、検証用の非公開設定に保持する。
+
+## 13. 第 2 段階の実装結果と次の判定
+
+| 対象 | PR / base | 実装・証拠 | 未完了 |
+|---|---|---|---|
+| #20 Cloud Shell state | #31 / #29 の branch | version 1 JSON、atomic rename / lock、対象変更拒否、context 検証、グループ / clone / パラメータパス統一、Entra 再利用・所有者確認・既存 redirect 保持 | 実 Cloud Shell / Azure Files / Entra 再接続・グループ別リハーサル |
+| #18 明示的な失敗・秘密値・cleanup | #32 / #31 の branch | explicit subscription/resource、`npm ci`、所有する一時 ZIP のみ削除、bounded healthy JSON、token 非表示・環境渡し、password 非表示・再実行保持、所有対象の削除待機 / 空一覧確認 | 実 App Service / SWA / Entra delete、DB 起動、release 完了の証拠 |
+| #19 native script CI | #33 / #32 の branch | Ubuntu 24.04 / Node.js 24、Bash/CJS syntax、22 isolated regression tests。Actions run `37942050776` が **success** | アプリの公開 package source / audit / build CI は #30 でブロックのまま |
+
+PR は積み重ねであり、自動 merge・Issue close はしていない。#31/#32 の Azure/npm/SWA/curl テストは隔離した stub を使用し、実クラウドに書き込まない。`scripts-quality.yml` には Azure credentials・本物の token・アプリ package install を与えない。script CI 成功は app CI や workshop-ready の代用ではない。
+
+### 失敗を成功へ読み替えない実装
+
+- RG・Entra・token の lookup error は不存在と扱わない。optional GitHub setup の role assignment / secret 設定失敗は停止し、既存 federation は subject / issuer / audience を照合する。
+- health は最大 30 回、各要求最大 10 秒（接続最大 5 秒）、失敗間隔 15 秒。最後に余分な待機をせず、実経過時間を表示する。HTTP 200 の HTML、unhealthy JSON、通信失敗では成功しない。
+- upload acceptance / readiness / release 完了を区別する。古いインスタンスの healthy は新しいコードの配信証拠ではなく、#21/#17 の追加検証が必要。
+- cleanup は saved subscription / dedicated tag / current app owner / 完全な対象入力を確認し、RG 削除待機と正常な空 app 一覧まで確認する。タグだけで所有を証明したとはしない。timeout 時は app と state を保持する。
+- checkout や state ディレクトリ全体は再帰削除しない。Azure 削除確認後に、明示したパラメータと JSON の 2 ファイルだけを任意で削除する。
+
+### 再確認したブロックと残りの順序
+
+公開 npm の再確認でも Axios latest は 1.18.1、compression metadata は transport error となった。別の取得方法でも compression の transport が失敗した。候補 mirror の version を公開済みと扱わず、#15/#30 の gate を緩めない。
+
+次は #22 の provider / region / SKU / quota と #21 の secret-safe diagnostics を実装し、#23 の現行 baseline / optional material / 費用説明を同期する。#17 は baseline restart / 再 deploy / data integrity / rollback の測定仕様を先に整える。実 consent / DB / browser / recovery は、必要な権限・公開依存・ツールの根拠が揃うまで未検証として保持する。Contributor-only 制約を解消したことにせず、管理者や主催者の事前準備へ置き換えない。
+
+### #22 catalog / quota / progress の実装後
+
+#34（base: #33 の branch）で read-only PaaS catalog checker、registration error / bounded wait、quota・tier・physical capacity の区別、deployment progress の安全な表示を公開した。承認済み環境で **18 catalog checks が通過**し、実際の native CI `37944250145` も **26 tests / success**。installed CLI の `account list-locations` は subscription selector が無かったため、context を勝手に変更せず、明示した subscription の locations API を使って再実行した。
+
+出力は catalog 成功時も **`deploymentReady: false`**。subscription quota、物理容量、M25 の eligibility、SWA Standard / Linked Backend eligibility、RBAC / deny / Policy、tenant consent、実 parameter / deployment validation は未確認であり、自動で region / SKU / HA を変えない。M25 は Dev/Test で HA 不可、M30 以上から M25 への downgrade 不可という制約も教材へ追加した。
+
+catalog 成功後に現在の caller の permission を再確認したが、専用 RG はまだ未作成で、必要な roleAssignments/write は許可として報告されなかった。リソース・app registration・provider 登録・quota increase は実行していない。この caller 結果を isolated Contributor-only principal の試験とは扱わない。
+
+#33 の optional setup test は public-cloud fixture と failure-path 到達 assert を強化し、更新後の run `37942734034` も success。次の実装は #21 の public response contract / secret-safe startup・KV・DB・telemetry diagnostics と #23/#17 の文書・測定仕様である。catalog や native CI の成功で残る Azure / dependency blocker を解決済みにしない。
+
+### #21 の公開経路検証を配布する
+
+#35（base: #34 の branch）で、saved context / scoped target lookup、直接・SWA health / published pagination / Frontend runtime config の 5 contracts、timeout / payload 上限 / 本文非表示、browser CRUD と secret-safe diagnostics を公開した。native **31 tests** と Pages build が成功し、実 Actions run `37947506964` も success。記事詳細 GET は view count を更新するため自動 probe に含めない。
+
+成功出力は **`workshopReady: false`**。実 resource がないため HTTP は injected fixture であり、MSAL / consent / DB / telemetry / release / recovery は未検証である。#21 は閉じない。
+
+## 14. #23 の gap analysis と同期先を決める
+
+広い文書改訂の前に、現行実装と以下の差分を確認した。削除で片付けず、現行の normative reference と過去の設計案を分離する。
+
+| 確認した差分 | 改善する surface | 同期後の基準 |
+|---|---|---|
+| main / production parameter の SWA Free と実際の Linked Backend が矛盾 | main.bicep、配布 parameters、main.json | orchestrator は Standard を必須とする。standalone module の Free 利用は linked backend なしに限定 |
+| keyvault module を resource 作成と role assignment のため 2 回実行 | Key Vault / RBAC module、compiled ARM、native regression | vault / endpoint / DNS group の writer は 1 module。既存 vault へ同じ deterministic assignment ID / Secrets User を付与 |
+| design rules が App Gateway / private App Service / GitHub Actions を必須としている | RepositoryWideDesignRules、Bicep README | Cloud Shell / ZIP / SWA Standard、public authenticated App Service、private data dependencies を normative にする |
+| architecture / database / comparison に Free / M30 HA / 2 DB VM の旧前提が残る | component design、comparison、README、講師・reference | B1 / M25 / HA=false と optional paid resilience を分離。IaaS は現行 README の 3 data-bearing members、比較 revision を記録 |
+| 既存 raster 図の内容をまだ確認していない | assets の実画像と元データ | 内容を確認してから表示を更新。未確認の画像を古いと断定しない |
+| 月額固定価格が SKU / region / telemetry / NAT / storage / 税を反映しない | README、cost tables、baseline reference | 見積時点・地域・通貨・稼働時間を示す。SWA Standard、NAT / public IP / private endpoints / storage / logs を漏らさない |
+| 過去の guide / FastPath と現行手順が混在 | learner / reference / development 入口 | 日本語 learner を実行本線、英語 README は対応する入口へ。過去資料は歴史・任意であり copy-and-run 本線ではないと明示 |
+
+実装順は **IaC ownership / SKU → normative baseline reference / diagram → component・comparison・cost → 教材リンク / build**。main.json は Bicep **0.44.1** で再生成して parity を検証する。resource 名 / role GUID / secret reference / private DNS / public API routing は維持し、権限不足を回避する変更はしない。
+
+#17 はこれと並行して、B1 で可能な restart / 既知 revision の rebuild・redeploy と content integrity の計測手順を配布する。slots / HA / backup restore / multi-region は追加承認・対応 SKU・実証が揃わなければ実行済みとしない。依存・権限・consent の block は文書同期や template build の成功では解消しない。
+
+## 15. #23 / #17 のローカル実装と実証待ちを記録する
+
+| 対象 | 成果物 | 確認した結果 | 未確認 |
+|---|---|---|---|
+| #23 第 1 slice | #36 / base #35 branch | SWA Standard 必須、B1/M25/HA=false、新規 default と既存 M30 の区別、Key Vault single writer / role-only module、既存 role GUID/RBAC 維持、main.json parity（0.44.1）、4 parameter templates、33 native tests。実 CI `37948591435` success | 実 redeploy / role idempotence / effective DB network isolation、全 component / comparison / reference / instructor の個別同期 |
+| #17 baseline | #37 / base #36 branch | read-only recovery observer、2 経路の stable healthy、初期 healthy で観測終了しない、未観測 downtime は null、429 区別、UTC / monotonic、restart / redeploy / known revision rebuild rollback / content integrity の具体手順。38 native tests、実 CI `37949511461` success | 実 restart / release / rollback / DB persistence / browser CRUD / telemetry |
+| #21 Day 2 同期 | #37 内 | exact subscription、real hostname helper、connection value / raw logs ZIP 表示の除去、exception aggregate、0 件は成功でない説明 | 実 SDK / reference status / sanitized incident の診断 |
+
+両 slice は Pages build と changed Bash / relative links を確認した。stdout と outfile の末尾 newline の差を ARM 差分と取り違えず、同じ compiler の **outfile 同士**で配布 artifact の exact parity を検証した。既存の unused environment warnings は残している。
+
+### 互換性と歴史資料を扱う
+
+- role assignment は同じ vault scope / MI principal / Secrets User role / deterministic GUID を使い、resource 名・secret reference を変えない。resource writer の分離だけで Contributor-only の不足権限を解消したとはしない。
+- 以前の implicit M30 deployment は actual tier を明示して保持する。fresh baseline の M25 default を既存 cluster の downgrade として使わない。
+- Bicep README の App Gateway / certificate / Free / callback / token 表示 / F1 回避策を現行本線へ同期。両 README の価格は未検証 fixed total ではなく、実 region / quote date / currency / storage / NAT / public IP / telemetry を含む見積へ変更した。
+- 現行 raster 図を確認し、既存 B1 / Dev-Test の非 HA 警告を保持した。3 zone backdrop を有効な冗長性の保証とは解釈しない。
+- IaaS 比較は sister README revision `5aa79ac5969e551f08295ad660f6b1ec6856eda6` の **3 data-bearing members / no arbiter** を基準とする。旧 2 DB VM / Free / HA / gateway 設計は normative でない境界を設け、内容を削除して解決扱いにはしない。
+- pinned mongoClusters `2024-02-15-preview` schema には publicNetworkAccess property が無い。private endpoint 作成だけで effective isolation が検証済みとは言わず、実 firewall / DNS / route の確認を残す。無承認の API migration や public DB 回避策を追加しない。
+
+### 残る完成条件
+
+公開依存 provenance / SWA CLI audit と app CI、必須 RBAC、実ユーザー consent がブロックのまま、Azure resource は作成していない。#17 observer は probe のみで restart を自動実行せず、paid HA / secondary region / DB destructive injection も実行していない。#23 の歴史資料区分は個別同期の代替ではない。これらの local PR / CI の成功を全 Issue 解決・workshop-ready・Contributor-only rehearsal 成功へ読み替えない。
+
+次の作業は #23 の残る component / comparison / reference / instructor synchronization と、ブロック解消後の実 Cloud Shell → Entra → PaaS deploy → CRUD / telemetry → recovery → owned cleanup である。PR は #24〜#37 を公開したが、自動 merge / Issue close はしていない。#27/#30 は public-source / audit の制約を保持した draft である。
+
+### #23 component / comparison / instructor / reference の追加同期
+
+#38（base: #37 branch）で、比較表・DB/Frontend/Backend component・講師ガイド・quick reference を追加同期した。3 data-bearing member の比較基準、B1/M25/HA=false、SWA Standard、Cloud Shell deployment と runtime config、Actions optional、tier-dependent slots/scaling/HA、Entra は WAF/firewall 代替でない責任分界を反映。DB の未実証 concurrent-user count、M30 HA-enabled、M30+→M25 を cost reduction とする説明、Free-SWA/fixed savings の比較を除いた。
+
+講師の organizer-prepared registration と固定所要時間を本線成功の代替としない。quick reference は actual hostname / deployed JSON / exact subscription / bounded public contracts / absolute script paths / secret-safe logs を使う。changed Bash / added links / Pages build を確認した documentation-only slice で、#37 の actual native CI と live Azure acceptance を混同しない。
+
+旧 architecture / migration / validation と長い reference の詳細 proposals は保持しており、全例を executable に刷新したとは言わない。#23 の残りはその個別 modernization と live idempotence / network 検証。PR は #38 まで公開したが、merge / Issue close はしていない。
+
+## 16. 運用 reference と公開依存の検証経路を進める
+
+#40（base: #38 branch）で JA/EN の Bicep / monitoring / BCDR reference を同期した。single-writer / role-only、SWA Standard、B1/M25/HA=false、scoped JSON state / parameter / compiled ARM、actual public contracts、aggregate telemetry を反映。secret value / constructed hostname / unexplained placeholder commands を除き、secondary / restore / fixed RPO-RTO を未承認の baseline 成功条件にしない。six pages の Bash / added links / Pages を確認した。
+
+### 公開依存に関する新しい証拠を過去の仮説から分離する
+
+この環境の public npm lookup は引き続き Axios latest 1.18.1 と compression transport failure を返したが、**official GitHub の Axios v1.20.0（2026-08-24 published）と compression v1.8.2 tag は存在**した。したがって、この環境の E404 / stale metadata だけで upstream release 不在と一般化しない。過去の draft 判断はその時点の証拠であり、mirror tarball の正当性を無検証で追認するものでもない。
+
+#39（base: draft #30 branch）で、credential-free Ubuntu/Node 24 runner が candidate manifest から explicit public npm の clean lock を生成する evidence job を追加した。既存 mirror lock は読まず、lifecycle scripts は実行せず、全 tarball の URL / credentials / sha512 を検査し、成功後だけ artifact を保存する。app source guard は維持する。
+
+初回 actual run `37951156347` は **backend public lock 成功（358 packages）**。frontend は public resolution / audit 0 を報告したが、verifier が oxide WASM 内の bundled dependency を拒否して停止した。npm の `inBundle` entry は独立 tarball でなく parent tarball に含まれるため、shared guard に **verified public parent を必須**とする追跡と regression tests を追加した。unbundled missing source / missing parent / mirror / credential URL / malformed integrity を拒否する。これは provenance guard の除去ではない。
+
+候補 source は自動で URL 書換・version/integrity 再利用しない。外部生成 artifact の source/manifest/version/integrity を確認してから follow-up へ取り込み、clean install / type/lint/test/build / installed/production/lock/ZIP audits を実行する。generation success や audit-only は installed app / Azure deploy / SWA CLI 完成の代替ではない。新しい証拠による public blocker の再評価は進行中で、tenant/RBAC と real consent/DB/telemetry/recovery gate は維持する。
+
+## 17. 公開 application と統合検証の実結果を反映する
+
+以下は初回の仮説を更新する最新の証拠である。第 12–16 節の失敗は当時の記録として保持し、現在も application source が未検証だという意味では使わない。
+
+| 対象 | PR / actual evidence | 現在の判定 |
+|---|---|---|
+| Public lock generation | #39 / run `37951887919` | backend/frontend の clean public generation・guard・regressions と Bicep 成功。backend 358 public tarballs、frontend 266 public tarballs + verified parent 内の 6 bundled entries |
+| Public application acceptance | #41 / run `37952822043` | exact generated locks を取り込み、public clean install・type/lint・各 8 tests・build、installed/production/lockfile audit=0。backend extracted production ZIP の integrity / production audit=0 / compiled sanitizer/app loading / DB 未接続時の両 health=503 を確認。全 5 jobs 成功 |
+| Deployment tooling | #42 / run `37954852679` | `@azure/static-web-apps-cli@2.0.10` の 374 public tarballs / clean install / 実 CLI version は成功。zero-advisory audit は **high 5 / low 1、計 6 package-level findings** で失敗 |
+| Historical design boundaries | #43 | MaterialsValidationStrategy、IaaS-to-PaaS-Migration-Changes、LocalDevelopmentEnvironmentDesign に現行 contract / acceptance gates を設け、旧例を非実行・参考用途として保持。JA/EN 比較の案内も同期。Pages / added links 成功 |
+| Combined operational source | Draft #44 / native run `37954999882` | 全 **41 native tests** 成功。local Bicep 0.44.1 exact ARM parity、4 actual parameter templates、Pages build 成功 |
+| Combined app / workflow / IaC | #44 / quality run `37954999868` | public evidence 2 jobs、application 2 jobs、Bicep parity、GitHub workflow expression validation の 6 jobs 成功。**SWA tooling job だけ audit 6 件で失敗し、overall run は failure** |
+
+combined actual runs の source は `15884ea0770edafe61996308b48285f096f4d42e`。run は reviewed candidate stack の根拠であり、unmerged main / live Azure / workshop-ready の証明ではない。
+
+### Public provenance を実 install まで追跡する
+
+- #39 の生成 artifact と候補 manifest は deepEqual。source merge revision は `58cd42b4666e2917bd0f4c8f0c6820f17faf795c`。#41 は exact npm-generated lock を取り込み、mirror URL だけを書き換えたり未知の integrity を再利用したりしていない。
+- public guard は HTTPS npm origin、credential 不在、SHA512、safe package path を確認し、独立 provenance のない entry は verified enclosing tarball の `inBundle` だけ認める。
+- #41 の install / audit / ZIP smoke は生成成功とは別の actual checks。DB 未接続の 503 は正しい否定結果であり、DB acceptance と読み替えない。
+- #27/#30 は旧 mirror lock を含む単独 PR として portable ではない。review は #39/#41 を含む stack で行い、古い draft を自動 ready / merge にしない。
+
+### 統合で見つかった競合を意味的に解決する
+
+application stack と operational stack は別々に green の部分があっても、そのまま組み合わせられるとは仮定しなかった。#44 の統合では backend/frontend deploy scripts と Day 1 の 3 pages、計 5 files に conflict があった。
+
+新しい JSON state/context・scoped target・owned one-run package・cleanup・token 完全非表示を維持し、古い env execution / `[0]` target selection / token suffix / shared artifact deletion は復活させない。build は explicit public `npm ci --include=dev`、production package は `--omit=dev` を使う。`NODE_ENV=production` でも build tools を復元する native regressions と actual app CI install を追加した。Unicode / draft ownership / public contracts / runtime config も保持する。
+
+#44 は issue-focused slices の review 後に使う **draft integration evidence**。GitHub の元 PR を自動 merge / close したものではない。複数 stack の review/merge 順序は reviewer が判断し、競合解決なしの順次 merge を正常な release とみなさない。
+
+### Tooling の失敗を正しく分類する
+
+#42 初回の job-level runner context は workflow scheduling 前に失敗し、次の誤った `@microsoft` package name は public npm E404 となった。両方を修正し、upstream v2.0.10 manifest の正式名 **`@azure/static-web-apps-cli`** を確認した。誤名 E404 を public release 不在の根拠にしない。checksum-pinned actionlint を追加し、GitHub expression context を恒久 CI で検査する。
+
+正しい package の actual audit は CLI / adm-zip / devcert / selfsigned / node-forge / tmp の tree に 6 package-level findings を報告した。これは unique CVE 数・実 exploitability の判定ではない。audit の fixAvailable は CLI **1.1.3 への semver-major downgrade** を提示するが採用しない。force fix、severity suppression、continue-on-error、非互換 override、tooling の黙示的な対象外扱いで zero 条件を変更しない。
+
+## 18. 残る完成条件と次の判断を明示する
+
+| 残る gate | 必要な次の根拠 / 方針 | 現時点で行わないこと |
+|---|---|---|
+| #15 tooling zero-advisory | supported upstream release で clean public install / CLI behavior / audit=0 を実証する、または別途合意した supported deployment route を検証する | 古い CLI への force downgrade、非互換 override、application green で tooling 完了扱い |
+| #16 strict Contributor-only | `roleAssignments/write` が必要な fresh MI/Key Vault RBAC deployment と Contributor 権限の非両立を解消する、明示的な architecture/permission 方針の意思決定 | organizer preparation、受講者自動昇格、RBAC/access-policy 置換、必要 role assignment の省略 |
+| #13 real identity | policy が許可する owned registration / browser self-consent / Principal grant / token/API の実証 | tenant-wide policy / AllPrincipals grant / 共有 grant の削除 |
+| #22 live platform | exact subscription の quota / capacity / tier eligibility / parameter validation と progress 成功 | unsupported quota lookup を 0 に変換、自動 region/SKU 変更 |
+| #14 / #18 / #20 / #21 live learner path | Fresh Cloud Shell と途中再接続、release completion、Unicode CRUD/drafts/既存 URL、private DB/KV effective path、telemetry と owned cleanup | mock / healthy public response / private endpoint 存在だけを完了証拠にする |
+| #17 / #23 live operations | measured restart/redeploy/known-revision rebuild、stable dual-path health と content integrity、IaC redeploy/idempotence、actual baseline に一致する説明 | paid HA/secondary-region/DB destructive exercise の無承認実行、未観測 downtime=0 |
+
+最後に実行した read-only permission / RG 検査では、必要な `roleAssignments/write` は許可として報告されず、指定 RG は未作成だった。こちらから Azure resources / app registrations / provider registrations / quota increases / paid optional resilience は作成・実行していない。これまでの成果は local / credential-free CI の改善であり、Milestone A/B のチェックを完了にはしない。
+
+Contributor-only / organizer preparation なし / MI と Key Vault RBAC の維持は、現行の fresh deployment では同時に満たせない platform constraint である。コードで権限を生み出す解決策はない。tooling にも supported zero-advisory release の外部条件が残る。この 2 つを意思決定・upstream remediation の gate として保持し、許可や条件の変更なしに Azure rehearsal を開始しない。
+
+Review の入口は #24（saved strategy）、#41（public application evidence）、#42（tooling の正しい failure）、#43（historical proposal boundaries）、#44（combined source / conflict resolution）。自動 GitHub merge / issue close / branch protection 変更はせず、実 cloud と人間のブラウザー操作が必要な acceptance を勝手に承認しない。
+
+## 19. 既存の任意 Actions 経路を安全な supported alternative に整える
+
+「ブロックを報告して止まる」だけでなく、Microsoft Learn と upstream source を確認し、CLI を使わない supported interface を検討した。低レベル StaticSitesClient を直接起動する内部 interface の独自 wrapper は、公開・サポート契約が確認できないため採用しない。Microsoft の公式 `Azure/static-web-apps-deploy` と documented prebuilt configuration を使う **既存の任意経路**を #45 で修正した。Cloud Shell baseline や Contributor-only 条件は変更しない。
+
+### 追加で見つかった gap と実装
+
+| Gap | #45 の修正 |
+|---|---|
+| Frontend template の unsafe expression interpolation / sed、runtime writer の重複 | shared `configure-frontend.cjs` を Cloud Shell / Actions で使う。3 UUID、1 個だけの placeholder、公開 `/api` contract を検証。追加の token 環境値を artifact に含めない |
+| profile の SWA CLI silly verbosity で token を表示し得る | CLI の debug / explicit verbose を log に固定し、token は当該 process の env にだけ渡す。inherited silly の regression を追加 |
+| Backend template の secret fallback / install と OIDC credentials の混在 | build job は credentials/OIDC mint 権限なし。isolated production ZIP だけを別 deploy job に渡し、OIDC-only とする。旧 AZURE_CREDENTIALS は使用しない |
+| ZIP / startup が Cloud Shell と不一致、constructed hostname、HTTP 200 のみの成功 | `dist/src/app.js` と production-only deps、explicit subscription/target、actual hostname、shared bounded healthy-JSON checker に統一 |
+| public OIDC IDs を setup helper が Secrets に保存し、template は Variables を参照 | 3 IDs を public Variables に設定。GitHub failure は停止。target Variables は実 baseline の値を別途設定 |
+| guide の無条件 role grant と token stdout、古い README fallback | frontend-only は新規 Entra identity/grant 不要と分離。backend OIDC は追加権限が必要な任意経路。saved context / owned repository / token stdin transfer / no overwrite を説明し、README entry と旧 fallback 説明を同期 |
+| copied templates が active workflow lint の対象外 | actionlint / path filters に templates を含める。main-only、serial deployment、timeouts、immutable action SHA、missing config の明示的な failure を検査 |
+
+Frontend の公式 action は prebuilt dist を扱い、SWA npm CLI はインストールしない。ただし、upstream Dockerfile は `mcr.microsoft.com/appsvc/staticappsclient:stable` を使う。**action commit の固定だけで native client の完全な immutable inventory / audit=0 を実証したことにはならない**。正式な deployment alternative を実装したことと、#15 の全 release 条件の変更・達成は別である。
+
+### 追加の actual evidence と継続する停止条件
+
+#45 source `65437f393899cbef741e3e3fe654836f1d96804a` の actual native run `37958746897` は **47 tests / success**。quality run `37958746932` は public evidence / application / Bicep / workflow-expression の 6 jobs が成功した。実 frontend build に共通 helper を適用して runtime/routing config shape を確認し、実 isolated outDir backend ZIP の compiled sanitizer/app loading と production audit=0 も成功した。**SWA CLI job は audit 6 件で失敗し、overall は failure** のまま。
+
+README 同期と token-shaped input が public HTML に混入しない regression を追加した source `19270a756e4c42577119730ed22b186f902801d7` も、native run `37959558713` は **47 tests / success**、quality run `37959558766` は同じ 6 jobs 成功 / SWA CLI audit のみ failure だった。latest runner artifact の audit JSON は high 5 / low 1、計 6 package-level findings を確認した。全体 green や実 cloud release と読み替えない。
+
+Changed learner Bash / links / Pages build、active/copied template actionlint、targeted regressions は成功。README は旧 OIDC samples を reference と明記して保持し、現在使わない client-secret 作成・JSON stdout の fallback 手順を除いた。旧 Secret を自動削除・移行はしない。
+
+追加の authorized read-only permission check でも exit 3、required `roleAssignments/write` は許可として報告されず、対象 RG は未作成だった。新しい実 deploy / app registration / grant / tenant policy / provider / quota / paid resilience の操作は実行していない。isolated Contributor-only principal、real OIDC / upload / browser / DB / telemetry / recovery / cleanup の実証は残る。Frontend の任意経路ができても、存在しない baseline や不足権限を自動で生み出すものではない。
+
+## 20. Mock の成功から独立した database HTTP contract を追加する
+
+外部 gate を報告するだけでなく、#14 / #19 / #21 の repository 内で改善可能な検証 gap を調べた。従来の HTTP regression は query/create を mock しており、本物の persistence、unique index、所有者別 CRUD を証明しない。#46（base: #45）で **独立した credential-free database job** を追加した。別 test framework、production auth bypass、Cloud Shell の Docker 必須化は導入しない。
+
+### Fixture と実証範囲
+
+official MongoDB 8 image を multi-architecture digest に固定し、health readiness / random local port / memory bound を設定する。test preload は explicit numeric port を要求し、接続先を loopback と新しい `workshop-integration-<UUID>` DB に固定する。inherited cloud URI は使わず、missing / invalid port を接続前に拒否し、skip / success-shaped fallback はしない。2 native regressions でこの境界を確認する。
+
+7 scenarios（Node summary は parent を含め **8 tests**）は本物の Express application / Mongoose / MongoDB を使う。identity middleware だけ fixture actors で置き換え、DB / model / health は mock しない。
+
+- 日本語・中国語・韓国語・accented / mixed title の作成・URL encoding・詳細取得、日本語本文・要約・tags の保存／再取得。
+- Draft を public / 別 author に公開せず、author の `/my` と詳細にだけ返す。
+- 同名 Unicode title の同時作成が distinct URLs になることと、本物の unique index が duplicate slug を E11000 で拒否すること。
+- exact public / private pagination shape、unauthenticated / 他 author / sanitized-empty edit の拒否と内容維持。
+- Historical ASCII permalink の title/content edit で URL を変更しないこと。
+- DB disconnect で両 health=503、reconnect で両 health=200、publish/content の persistence、author-only deletion と DB 上の absence。
+- First-time profile の保存と emoji-only title の URL-safe fallback。
+
+### テストで見つかった production contract の修正
+
+未知の author を指定した public list の early return は `totalPages` を欠いていた。新しい integration は修正前に exact-shape assertion で失敗し、`totalPages: 0` の補完後に成功した。通常の DB-free suite にも page/limit を含めた regression を追加した。既存 slug / routing / owner semantics は変更しない。
+
+Local backend type/lint/build、**9 DB-free tests / 8 integration tests / 49 native tests**、active/template actionlint は成功。developer guide の exact Docker recipe を実行し、readiness、dynamic port、test success、当該 container だけの owned teardown を確認した。使用した local fixtures は停止・自動削除済みで、既存 container / DB / global prune を操作していない。
+
+| Actual public source | Evidence | 結果 |
+|---|---|---|
+| `b5b864c8d5dd9e8e197290e17c7acb5e91f18855` | quality `37961964564` / native `37961964393` | 新しい Database HTTP contracts を含む 7 jobs 成功。backend unit9 / database8 / native49 成功。CLI audit のみ failure |
+| `1075d325652d0aaceb1d886aef6ab4b6b4804663` | quality `37962658482` / native `37962658457` | multilingual fields を含め、同じ 7 jobs / unit9 / database8 / native49 成功。CLI audit のみ failure、overall failure |
+
+**MongoDB fixture actors は actual Entra/JWT/consent、Azure DocumentDB compatibility/TLS、Key Vault/private networking、SWA routing、browser、telemetry、live recovery の実証ではない。** Release gates を消さず、これらは第 18 節の停止条件として残す。公開 version を再確認しても official SWA CLI latest は v2.0.10。current official `az staticwebapp` command reference に content upload/deploy command はなく、未文書化 native interface を Cloud Shell の supported solution として追加しない。
+
+## 21. 署名付き API token で audience と delegated permission を検証する
+
+#47（base: #46）は #13 / #19 の authentication gap を扱う。従来の HTTP identity mock から独立して ephemeral RSA key / public JWK を作り、本物の JWT signature / issuer / audience / expiry 検証を通す。mock は JWKS key retrieval だけで、middleware / JWT verifier は置き換えない。新規 dependency、production bypass、再利用できる signing secret は導入しない。
+
+回帰テストは、正しい Backend API GUID audience が拒否される問題と、必要な delegated permission がない token が受理される問題を再現した。
+
+| Contract | 修正と維持する境界 |
+|---|---|
+| v1 resource token | 当該 tenant の v1 issuer と Backend GUID / resource URI audience を受け付ける |
+| v2 resource token | 当該 tenant の v2 issuer と Backend GUID audience のみを受け付ける。scope URI と audience を混同しない |
+| user permission | 非空の `oid` / `sub` と `scp` 中の exact `access_as_user` を要求する |
+| rejection | invalid / ID / app-only / malformed token は 401、有効な user resource token の delegated permission 不足は 403 |
+| optional authentication | invalid / insufficient token の anonymous fallback を維持し、private draft ownership は与えない |
+
+source `1ff83418b1a7d55f2124c7cb31a902062a36e129` の actual native run `37965407765` は **49 tests / success**。quality run `37965407777` は **backend15 / database8** と application / public provenance / Bicep / workflow validation の 7 jobs が成功した。SWA CLI の audit artifact は **high5 / low1 / total6 package-level findings**、当該 job と overall は failure。local type/lint/build / Pages build も成功した。
+
+これは locally signed contract と public clean-install CI の証拠であり、Microsoft-issued keys、real tenant registration / browser consent / MSAL interaction の証拠ではない。learner の Day 0 と developer testing guide に audience / scope / 401–403 の区別を反映し、第 18 節の real identity gate は残す。
+
+## 22. Runtime API の接続先と失敗後の再試行を一致させる
+
+#48（base: #47）は #13 / #19 / #21 の実行時設定を扱う。prepared artifact は `API_BASE_URL: "/api"` を注入していたが、Axios は stale build-time `VITE_API_BASE_URL` を使っていた。また production config は validation 前に cache へ代入され、最初の load が拒否されても次の呼出しで不正値を成功として返していた。追加した 6 regressions は修正前に失敗した。
+
+- Request interceptor で loaded `AppConfig.apiBaseUrl` を取得する。module import 時の eager getter と build-time host の優先を除く。
+- pathname の terminal `/api` だけを正規化し、same-origin `/api/posts`、localhost backend、gateway prefix、`https://api` hostname、Unicode permalink encoding を維持する。
+- API root は HTTP(S) に限定し、credentials / query / fragment を token acquisition / transport 前に拒否する。エラーに URL 値を出さない。
+- Inline / JSON / build-env の production candidate は検証後だけ cache に保存する。修正した inline / JSON source を再試行でき、既存 development warning / fallback は維持する。
+
+Tests は real Axios interceptor / URL joining と real Backend scope builder を通す。MSAL response / transport だけ fixture とし、network access は不要。developer guide と Day 1 frontend に exact request destination / saved-state recovery / token を公開しない確認を追加した。
+
+source `9e01ed0d06fca0f9b32bf973d1dbc39081be65fb` の local frontend type/lint/build / **14 tests**、Pages build は成功。actual native run `37966845009` は success、quality run `37966845313` は **frontend14 / backend15 / database8** を含む 7 jobs 成功。CLI audit は **high5 / low1 / total6** のみ失敗し、overall は failure。実ブラウザー、CORS、SWA Linked Backend routing、Azure upload、private data path の acceptance と読み替えない。
+
+## 23. Documented ARM ZIP deployment を supported alternative の候補へ追加する
+
+`az staticwebapp` に upload subcommand がないことは、supported REST operation がないことを意味しない。第 19–20 節の検討を補完し、Microsoft の [Create Zip Deployment For Static Site](https://learn.microsoft.com/en-us/rest/api/appservice/static-sites/create-zip-deployment-for-static-site?view=rest-appservice-2025-05-01) を正式な候補に追加する。公式 Actions だけを唯一の supported alternative としない。
+
+API version `2025-05-01` の `POST .../Microsoft.Web/staticSites/{name}/zipdeploy` は Azure OAuth の ARM interface であり、JSON の `properties.appZipUrl` に **remote ZIP URL** を渡す。未文書化 native client wrapper、inline ZIP / base64 body、SWA deployment token を必須とする operation ではない。ただし文書の存在だけで、Cloud Shell から local dist を直接送れることや actual acceptance を実証したことにはならない。
+
+| 次の設計・検証 | 完成に必要な根拠 |
+|---|---|
+| Owned hosted artifact | approved owner / target、prepared runtime/routing ZIP、checksum、短い公開期限と owned cleanup。新規有料 Storage・共有 Cloud Shell storage・他者の artifact を無承認で利用しない |
+| Authentication / redaction | explicit subscription/tenant、ARM permission、token/SAS を stdout・command trace・reflective error に出さない。GitHub や client secret を Cloud Shell の必須条件へ追加しない |
+| Bounded completion | 200 / 202 を区別し、202 単独で成功扱いしない。Location / azure-asyncoperation の destination と subscription を検証し、Retry-After / timeout / terminal failure を扱う |
+| Effective release | exact owned SWA への upload、frontend + `/api` readiness、runtime identity、Unicode CRUD、known-revision recovery、artifact expiry / deletion を実測する |
+| Tooling decision | used tool inventory / public provenance / audit criteria を合意し、既存 CLI audit failure を削除・skip・suppression で隠さない |
+
+本段階では ARM upload helper / hosted artifact / live trial は未実装・未実行。baseline を自動で変更せず、storage/cost/ownership と第 18 節の permission gate を解決してから end-to-end route を採用する。documented operation の発見を #15 完了や Contributor-only fresh deployment の解決とはしない。
