@@ -19,12 +19,18 @@ echo "$RESOURCE_GROUP"
 対処:
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cat "$WORKSHOP_STATE_DIR/paas-workshop.env"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load base || exit 1
+printf 'State: %s / Subscription: %s / RG: %s\n' "$ENV_FILE" "$SUBSCRIPTION_ID" "$RESOURCE_GROUP"
 ```
 
 ファイルが無い場合は [受講者クイックスタート](cloud-shell-quickstart.ja.html) から変数を再設定します。
+
+JSON 不正・version 不一致・clone 先の消失は明示的に停止します。旧 `.env` を代わりに `source` したり、破損 state を空の値で成功扱いにしたりしません。context 不一致なら保存済み subscription を確認し、`az account set --subscription "$SUBSCRIPTION_ID"` 後に再度ロードします。別グループへの変更は別の state ディレクトリで行います。
+
+`.paas-workshop.lock` が存在して保存できない場合は、同じ state を使う別セッションの保存処理が終わるまで待ちます。異常終了後も残った場合、すべての保存処理が停止していることと専用ディレクトリを確認してから、その lock ファイルだけを削除します。保存中に lock を削除したり、JSON を削除して初期化を強行したりしません。
 
 ## Provider 登録で失敗する
 
@@ -56,20 +62,9 @@ Insufficient privileges
 
 対処:
 
-- 講師から `TENANT_ID`、`BACKEND_CLIENT_ID`、`FRONTEND_CLIENT_ID` を受け取ります。
-- 受け取った値を Azure Files 側の state ファイルに保存します。
-
-```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-mkdir -p "$WORKSHOP_STATE_DIR"
-
-cat >> "$WORKSHOP_STATE_DIR/paas-workshop.env" <<EOF
-export TENANT_ID="<tenant-id>"
-export BACKEND_CLIENT_ID="<backend-client-id>"
-export FRONTEND_CLIENT_ID="<frontend-client-id>"
-EOF
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-```
+- Azure Contributor と Entra の作成権限は別です。[Day 0 の権限と自己同意](day-0-entra-id.ja.html) を確認します。
+- テナントポリシーで禁止されている場合、本線はブロックとして記録します。管理者支援の例外は本線の自己完結の証明ではありません。
+- 明示的に承認した専用アプリの値を保存する場合も、tenant を変更せず、Client ID / scope ID を確認して `workshop_state_save identity` を使います。state へ文字列を追記しません。
 
 ## Bicep デプロイが失敗する
 
@@ -176,7 +171,9 @@ az ad app show \
 `https://<swa-hostname>` が無い場合は追加します。
 
 ```bash
-REDIRECT_URIS="$(jq -nc --arg swa "https://$SWA_HOSTNAME" '["http://localhost:4280", $swa, ($swa + "/")]')"
+EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)" || exit 1
+REDIRECT_URIS="$(jq -nc --argjson existing "$EXISTING_REDIRECTS" --arg swa "https://$SWA_HOSTNAME" \
+  '(($existing // []) + ["http://localhost:4280", $swa, ($swa + "/")]) | unique')" || exit 1
 
 FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
@@ -273,8 +270,10 @@ EOF
 ## フロントエンド build が失敗する
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
 cd "$WORKSHOP_REPO_DIR/materials/frontend"
 node --version
 npm --version
@@ -287,9 +286,10 @@ Node.js が古い場合、Cloud Shell 環境差異の可能性があります。
 ## バックエンド build / ZIP deploy が失敗する
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
 node --version
 npm --version
 zip -v | head -1

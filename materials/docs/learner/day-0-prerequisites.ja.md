@@ -30,14 +30,18 @@ AWS に慣れている場合は、アプリ実行基盤を EC2 ではなく、El
 ## 2. サブスクリプションを確認する
 
 ```bash
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load base || exit 1
 az account show --query "{name:name,id:id,tenantId:tenantId}" --output table
 ```
 
-講師指定のサブスクリプションと異なる場合は切り替えます。
+helper が context 不一致で停止した場合は、保存済みの対象を確認してから明示的に選択します。
 
 ```bash
-az account set --subscription "<subscription-id-or-name>"
-az account show --output table
+az account set --subscription "$SUBSCRIPTION_ID"
+workshop_state_load base || exit 1
 ```
 
 ## 3. リソースグループ名を確認する
@@ -48,11 +52,10 @@ echo "Primary region: $LOCATION"
 echo "Static Web Apps region: $SWA_LOCATION"
 ```
 
-グループ演習では、`GROUP_ID` をチームごとに変えてリソース名の衝突を避けます。
+名前はクイックスタートで保存した値を使い、このページで `GROUP_ID` / RG 名を再定義しません。別グループは別の state ディレクトリで開始します。
 
 ```bash
-export GROUP_ID="A"
-export RESOURCE_GROUP="rg-${BASE_NAME}-${GROUP_ID}-workshop"
+printf 'Group: %s / Resource group: %s\n' "$GROUP_ID" "$RESOURCE_GROUP"
 ```
 
 ### 3.1 新規デプロイに必要なロール割り当て権限を確認する
@@ -60,10 +63,6 @@ export RESOURCE_GROUP="rg-${BASE_NAME}-${GROUP_ID}-workshop"
 手順 2 で対象サブスクリプションを選択し、表示された ID と tenant が意図した環境であることを確認してから実行します。Node.js 24 と Azure CLI を使います。リソースは作成せず、CLI の既定サブスクリプションも変更しません。
 
 ```bash
-export SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
-export TENANT_ID="$(az account show --query tenantId -o tsv)"
-cd "$WORKSHOP_REPO_DIR"
-
 node scripts/check-role-assignment-permission.cjs \
   "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP" || exit "$?"
 ```

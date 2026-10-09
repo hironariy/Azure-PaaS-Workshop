@@ -16,9 +16,10 @@ GitHub Actions を使うと、GitHub-hosted runner が backend/frontend をソ�
 - Entra ID の `TENANT_ID`、`BACKEND_CLIENT_ID`、`FRONTEND_CLIENT_ID` が分かっている。
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
 
 echo "$RESOURCE_GROUP"
 echo "$APP_SERVICE_NAME"

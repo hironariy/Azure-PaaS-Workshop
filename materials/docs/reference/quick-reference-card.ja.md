@@ -9,9 +9,10 @@ Cloud Shell セッションが切れたときや、値を確認したいとき�
 ## 変数の復元
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load base || exit 1
 ```
 
 ## 主要変数
@@ -20,7 +21,8 @@ cd "$WORKSHOP_REPO_DIR"
 |---|---|
 | `WORKSHOP_REPO_DIR` | build/deploy 用のリポジトリ。通常は `~/Azure-PaaS-Workshop` |
 | `WORKSHOP_STATE_DIR` | 永続化 state。通常は `~/clouddrive/paas-workshop` |
-| `ENV_FILE` | 共通変数を保存するファイル |
+| `ENV_FILE` | version 付き JSON。保存値を `source` しない |
+| `SUBSCRIPTION_ID` | 保存した Azure subscription。実行時の CLI context と比較する |
 | `RESOURCE_GROUP` | ワークショップ用リソースグループ |
 | `LOCATION` | App Service / Cosmos DB / Key Vault のリージョン |
 | `SWA_LOCATION` | Static Web Apps のリージョン |
@@ -59,18 +61,20 @@ az deployment group show \
 ## Backend deploy
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
 ./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
 ```
 
 ## Frontend deploy
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
 cat > "$WORKSHOP_STATE_DIR/deploy-frontend.local.env" <<EOF
 ENTRA_TENANT_ID="$TENANT_ID"
 ENTRA_FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
