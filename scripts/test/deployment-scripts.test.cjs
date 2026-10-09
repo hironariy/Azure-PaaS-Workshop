@@ -144,8 +144,9 @@ fail('Unexpected Azure mock command: '+args.join(' '));
   return { checkout, env, run, calls };
 }
 
-test('backend isolates its package, uses explicit subscription and retains unrelated artifacts', (t) => {
-  const { checkout, run, calls } = fixture(t);
+test('backend restores public build dependencies under NODE_ENV=production and retains unrelated artifacts', (t) => {
+  const { checkout, env, run, calls } = fixture(t);
+  env.NODE_ENV = 'production';
   const backendDir = path.join(checkout, 'materials/backend');
   fs.writeFileSync(path.join(backendDir, 'deploy.zip'), 'pre-existing fixture');
   fs.mkdirSync(path.join(backendDir, 'deploy-package'));
@@ -158,7 +159,10 @@ test('backend isolates its package, uses explicit subscription and retains unrel
   for (const call of calls().filter((call) => call.tool === 'az' && call.args[0] === 'webapp' && !call.args.includes('--help'))) {
     assert.equal(call.args[call.args.indexOf('--subscription') + 1], subscription);
   }
-  assert(calls().some((call) => call.tool === 'npm' && call.args.join(' ') === 'ci --omit=dev'));
+  assert.deepEqual(calls().filter((call) => call.tool === 'npm' && call.args[0] === 'ci').map((call) => call.args), [
+    ['ci', '--include=dev', '--registry=https://registry.npmjs.org'],
+    ['ci', '--omit=dev', '--registry=https://registry.npmjs.org'],
+  ]);
 });
 
 test('backend target mismatch, build failure and rejected upload cannot report success', (t) => {
@@ -190,7 +194,8 @@ test('health requires bounded transport and healthy JSON, not merely HTTP 200', 
 });
 
 test('frontend injects saved public IDs and never prints or passes a token as an argument', (t) => {
-  const { checkout, run, calls } = fixture(t);
+  const { checkout, env, run, calls } = fixture(t);
+  env.NODE_ENV = 'production';
   const result = run('deploy-frontend.sh', [group]);
   assert.equal(result.status, 0, result.stderr);
   assert.doesNotMatch(result.stdout + result.stderr, /SENTINEL_DEPLOYMENT_TOKEN_FIXTURE/);
@@ -199,6 +204,8 @@ test('frontend injects saved public IDs and never prints or passes a token as an
   assert.equal(deploy.hasToken, true);
   assert.deepEqual(deploy.args, ['deploy', './dist', '--env', 'production']);
   assert(calls().filter((call) => call.tool !== 'swa').every((call) => !call.hasToken));
+  assert.deepEqual(calls().find((call) => call.tool === 'npm' && call.args[0] === 'ci').args,
+    ['ci', '--include=dev', '--registry=https://registry.npmjs.org']);
 });
 
 test('backend unhealthy responses exhaust exactly 30 attempts without a success message', (t) => {

@@ -1,0 +1,254 @@
+name: Workshop quality
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/quality.yml"
+      - "materials/backend/**"
+      - "materials/frontend/**"
+      - "materials/bicep/**"
+      - "scripts/deploy-backend.sh"
+      - "scripts/deploy-frontend.sh"
+      - "scripts/check-public-lock.cjs"
+      - "scripts/test/public-lock.test.cjs"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/quality.yml"
+      - "materials/backend/**"
+      - "materials/frontend/**"
+      - "materials/bicep/**"
+      - "scripts/deploy-backend.sh"
+      - "scripts/deploy-frontend.sh"
+      - "scripts/check-public-lock.cjs"
+      - "scripts/test/public-lock.test.cjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflow-lint:
+    name: GitHub workflow expression validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Verify pinned actionlint and validate workflow contexts
+        shell: bash
+        run: |
+          curl --fail --location --retry 2 --max-time 60 \
+            --output "$RUNNER_TEMP/actionlint.tar.gz" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
+          printf '%s  %s\n' \
+            023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757 \
+            "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -shellcheck= .github/workflows/*.yml
+
+  deployment-tool:
+    name: Public SWA deployment-tool audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout provenance verifier without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - name: Resolve the pinned upstream CLI from public npm without lifecycle scripts
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/public-swa-cli"
+          cd "$RUNNER_TEMP/public-swa-cli"
+          npm init --yes >/dev/null
+          npm view @azure/static-web-apps-cli@2.0.10 version engines dist.tarball dist.integrity \
+            --json --registry=https://registry.npmjs.org > release.json
+          npm install --save-exact --package-lock-only --ignore-scripts --no-fund \
+            --registry=https://registry.npmjs.org @azure/static-web-apps-cli@2.0.10
+          node "$GITHUB_WORKSPACE/scripts/check-public-lock.cjs" package-lock.json
+      - name: Verify clean public installation and CLI loading without Azure
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/public-swa-cli"
+          npm ci --ignore-scripts --no-fund --registry=https://registry.npmjs.org
+          ./node_modules/.bin/swa --version
+      - name: Require zero deployment-tool advisories
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/public-swa-cli"
+          npm audit --package-lock-only --audit-level=low --json \
+            --registry=https://registry.npmjs.org > audit.json
+      - name: Preserve public tooling evidence even when its audit fails
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: public-swa-cli
+          path: |
+            ${{ runner.temp }}/public-swa-cli/package.json
+            ${{ runner.temp }}/public-swa-cli/package-lock.json
+            ${{ runner.temp }}/public-swa-cli/release.json
+            ${{ runner.temp }}/public-swa-cli/audit.json
+          if-no-files-found: error
+          retention-days: 1
+
+  public-package-evidence:
+    name: Public npm evidence (${{ matrix.application }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        application: [backend, frontend]
+    steps:
+      - name: Checkout candidate manifests without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - name: Resolve clean lockfile from public npm without lifecycle scripts
+        env:
+          APPLICATION: ${{ matrix.application }}
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/public-npm/${{ matrix.application }}
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE_DIRECTORY"
+          cp "materials/$APPLICATION/package.json" "$EVIDENCE_DIRECTORY/package.json"
+          cd "$EVIDENCE_DIRECTORY"
+          npm install --package-lock-only --ignore-scripts --no-fund \
+            --registry=https://registry.npmjs.org --fetch-retries=0 --fetch-timeout=30000
+          node "$GITHUB_WORKSPACE/scripts/check-public-lock.cjs" package-lock.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          fs.writeFileSync('provenance.json', JSON.stringify({
+            sourceRevision: process.env.GITHUB_SHA,
+            registry: 'https://registry.npmjs.org',
+            lifecycleScriptsExecuted: false,
+            installedApplicationValidated: false,
+            packages: Object.keys(lock.packages).length - 1,
+          }, null, 2) + '\n');
+          NODE
+      - name: Verify public source guard regressions
+        run: node --test scripts/test/public-lock.test.cjs
+      - name: Preserve generated public evidence for review, never rewrite the candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: public-npm-${{ matrix.application }}
+          path: |
+            ${{ runner.temp }}/public-npm/${{ matrix.application }}/package.json
+            ${{ runner.temp }}/public-npm/${{ matrix.application }}/package-lock.json
+            ${{ runner.temp }}/public-npm/${{ matrix.application }}/provenance.json
+          if-no-files-found: error
+          retention-days: 1
+
+  application:
+    name: Application (${{ matrix.application }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        application: [backend, frontend]
+    defaults:
+      run:
+        working-directory: materials/${{ matrix.application }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: materials/${{ matrix.application }}/package-lock.json
+      - name: Require portable public npm package sources
+        run: node ../../scripts/check-public-lock.cjs package-lock.json
+      - name: Restore locked build dependencies
+        run: NODE_ENV=production npm ci --include=dev --no-fund --registry=https://registry.npmjs.org
+      - name: Type-check application and tests
+        run: npm run type-check
+      - name: Lint
+        run: npm run lint
+      - name: Run regression tests
+        run: npm test
+      - name: Build production artifact
+        run: npm run build
+      - name: Audit installed, production, and lockfile scopes
+        run: |
+          npm audit --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --package-lock-only --audit-level=low --registry=https://registry.npmjs.org
+      - name: Verify extracted backend production ZIP without build dependencies or Azure
+        if: matrix.application == 'backend'
+        shell: bash
+        run: |
+          package="$RUNNER_TEMP/backend-production"
+          extracted="$RUNNER_TEMP/backend-extracted"
+          mkdir "$package" "$extracted"
+          cp -R dist "$package/dist"
+          cp package.json package-lock.json "$package/"
+          cd "$package"
+          npm ci --omit=dev --no-fund --registry=https://registry.npmjs.org
+          test -f dist/src/app.js
+          test ! -d test
+          test ! -d node_modules/typescript
+          test ! -d node_modules/ts-node
+          zip -qr "$RUNNER_TEMP/backend-production.zip" .
+          unzip -tq "$RUNNER_TEMP/backend-production.zip"
+          unzip -q "$RUNNER_TEMP/backend-production.zip" -d "$extracted"
+          cd "$extracted"
+          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
+          NODE_ENV=production node <<'NODE'
+          const assert = require('node:assert/strict');
+          const { once } = require('node:events');
+          const { sanitizeHtml } = require('./dist/src/utils/sanitize.js');
+          const { createApp } = require('./dist/src/app.js');
+          assert.equal(sanitizeHtml('<script>alert(1)</script><p>safe</p>'), '<p>safe</p>');
+          (async () => {
+            const server = createApp().listen(0, '127.0.0.1');
+            try {
+              await once(server, 'listening');
+              const url = `http://127.0.0.1:${server.address().port}`;
+              for (const route of ['/health', '/api/health']) {
+                const response = await fetch(url + route, { signal: AbortSignal.timeout(5000) });
+                assert.equal(response.status, 503);
+                assert.equal((await response.json()).status, 'unhealthy');
+              }
+              console.log('Extracted production ZIP loads app/sanitizer; absent DB stays 503, not healthy.');
+            } finally {
+              await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+            }
+          })().catch((error) => { console.error(error); process.exitCode = 1; });
+          NODE
+
+  bicep:
+    name: Bicep artifact parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Compile with the distributed artifact's Bicep version
+        run: |
+          az bicep install --version v0.44.1
+          az bicep build --file materials/bicep/main.bicep --outfile "$RUNNER_TEMP/main.json"
+      - name: Require the distributed ARM template to match source
+        run: diff -u materials/bicep/main.json "$RUNNER_TEMP/main.json"

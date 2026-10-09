@@ -142,7 +142,7 @@ function MyPostsPage() {
             >
               <div className="flex-1">
                 <div className="flex items-center gap-3">
-                  <Link to={`/posts/${post.slug}`}>
+                  <Link to={`/posts/${encodeURIComponent(post.slug)}`}>
                     <h2 className="text-lg font-semibold text-gray-900 hover:text-azure-600">
                       {post.title}
                     </h2>
@@ -168,13 +168,13 @@ function MyPostsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Link
-                  to={`/posts/${post.slug}/edit`}
+                  to={`/posts/${encodeURIComponent(post.slug)}/edit`}
                   className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
                 >
                   Edit
                 </Link>
                 <Link
-                  to={`/posts/${post.slug}`}
+                  to={`/posts/${encodeURIComponent(post.slug)}`}
                   className="rounded-lg bg-azure-100 px-3 py-2 text-sm font-medium text-azure-700 hover:bg-azure-200"
                 >
                   View

@@ -10,11 +10,19 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.middleware';
 import { ApiError } from '../middleware/error.middleware';
-import { Post, generateSlug, User } from '../models';
+import { Post, IPost, generateSlug, User } from '../models';
 import { logger } from '../utils/logger';
 import { sanitizeHtml, sanitizePlain, sanitizeTagValue } from '../utils/sanitize';
 
 const router = Router();
+const MAX_SLUG_ATTEMPTS = 20;
+
+function isSlugConflict(error: unknown): boolean {
+  return typeof error === 'object' && error !== null &&
+    'code' in error && error.code === 11000 &&
+    'keyPattern' in error && typeof error.keyPattern === 'object' &&
+    error.keyPattern !== null && 'slug' in error.keyPattern;
+}
 
 /**
  * Validation error handler
@@ -224,33 +232,13 @@ router.post(
         });
       }
 
-      // Generate unique slug with username-aware collision handling
-      // 1. Try base slug (from title)
-      // 2. If exists → try {base-slug}-by-{username}
-      // 3. If still exists → try {base-slug}-by-{username}-{counter}
-      const baseSlug = generateSlug(req.body.title);
-      let slug = baseSlug;
-      let slugExists = await Post.exists({ slug });
-
-      if (slugExists) {
-        // Collision - add username
-        slug = `${baseSlug}-by-${user.username}`;
-        slugExists = await Post.exists({ slug });
-
-        if (slugExists) {
-          // Same user has duplicate titles - add counter
-          let counter = 2;
-          while (slugExists) {
-            slug = `${baseSlug}-by-${user.username}-${counter}`;
-            slugExists = await Post.exists({ slug });
-            counter++;
-          }
-        }
+      const title = sanitizePlain(req.body.title).trim();
+      if (!title) {
+        throw ApiError.badRequest('Title must contain text after sanitization');
       }
-
+      const baseSlug = generateSlug(title);
       const postData = {
-        title: sanitizePlain(req.body.title),
-        slug,
+        title,
         content: sanitizeHtml(req.body.content),
         excerpt: sanitizePlain(req.body.excerpt),
         author: user._id,
@@ -260,7 +248,24 @@ router.post(
         publishedAt: req.body.status === 'published' ? new Date() : undefined,
       };
 
-      const post = await Post.create(postData);
+      let post: IPost | undefined;
+      for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
+        const slug = attempt === 0
+          ? baseSlug
+          : `${baseSlug}-by-${user.username}${attempt === 1 ? '' : `-${attempt}`}`;
+        if (await Post.exists({ slug })) continue;
+        try {
+          post = await Post.create({ ...postData, slug });
+          break;
+        } catch (error) {
+          // The unique index arbitrates simultaneous inserts after the existence check.
+          if (!isSlugConflict(error)) throw error;
+          logger.warn('Retrying concurrent post slug collision');
+        }
+      }
+      if (!post) {
+        throw ApiError.conflict('Could not allocate a unique article URL. Please retry.');
+      }
       const populatedPost = await Post.findById(post._id)
         .populate('author', 'displayName username avatarUrl')
         .lean();
