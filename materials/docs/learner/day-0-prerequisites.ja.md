@@ -94,11 +94,30 @@ for ns in \
   Microsoft.Network \
   Microsoft.Authorization
 do
-  state=$(az provider show --namespace "$ns" --query registrationState -o tsv 2>/dev/null || echo NotRegistered)
-  echo "$ns: $state"
-  if [ "$state" != "Registered" ]; then
-    az provider register --namespace "$ns"
-  fi
+  info="$(az provider show --subscription "$SUBSCRIPTION_ID" --namespace "$ns" \
+    --query '{state:registrationState,policy:registrationPolicy}' -o json)" || exit 1
+  state="$(printf '%s' "$info" | jq -er '.state')" || exit 1
+  policy="$(printf '%s' "$info" | jq -r '.policy')" || exit 1
+  printf '%s: %s / %s\n' "$ns" "$state" "$policy"
+  if [ "$state" = Registered ] || [ "$policy" = RegistrationFree ]; then continue; fi
+  case "$state" in
+    NotRegistered)
+      az provider register --subscription "$SUBSCRIPTION_ID" --namespace "$ns" --output none || exit 1 ;;
+    Registering) ;;
+    *) echo "想定外の provider 状態です。"; exit 1 ;;
+  esac
+  for attempt in $(seq 1 20); do
+    state="$(az provider show --subscription "$SUBSCRIPTION_ID" --namespace "$ns" \
+      --query registrationState -o tsv)" || exit 1
+    printf '%s: %s (%s/20)\n' "$ns" "$state" "$attempt"
+    case "$state" in
+      Registered) break ;;
+      Registering|NotRegistered) ;;
+      *) echo "Provider 登録が正常に進んでいません。"; exit 1 ;;
+    esac
+    if [ "$attempt" -eq 20 ]; then echo "Provider 登録待ちを打ち切りました。"; exit 1; fi
+    sleep 15
+  done
 done
 ```
 
@@ -107,11 +126,12 @@ done
 ```bash
 for ns in Microsoft.Web Microsoft.DocumentDB Microsoft.KeyVault Microsoft.Insights Microsoft.AlertsManagement Microsoft.OperationalInsights Microsoft.Network Microsoft.Authorization
 do
-  az provider show --namespace "$ns" --query "{namespace:namespace,state:registrationState}" -o table
+  az provider show --subscription "$SUBSCRIPTION_ID" --namespace "$ns" \
+    --query "{namespace:namespace,state:registrationState,policy:registrationPolicy}" -o table || exit 1
 done
 ```
 
-すべて `Registered` になるまで数分かかることがあります。
+登録が必要な provider は `Registered`、登録不要な provider は `RegistrationFree` を確認します。CLI の権限・通信エラーを `NotRegistered` へ読み替えて登録を続けません。待機は最大 20 回、間隔 15 秒です（各 CLI 呼び出し時間は別）。未登録のまま deployment へ進まないでください。
 
 `Microsoft.AlertsManagement` が未登録の場合、Application Insights の `Failure Anomalies` アラート作成でデプロイが失敗することがあります。
 
@@ -128,7 +148,29 @@ Cloud Shell 手順では、ワークショップ向けの小さな SKU を使い
 
 > Static Web Apps Linked Backend は Free SKU では利用できません。このワークショップでは `/api/*` を App Service にルーティングするため Standard を使います。
 
-App Service SKU の利用可否はサブスクリプションやリージョンによって異なります。デプロイ時に quota エラーが出た場合は講師に相談してください。
+### 公開 catalog と対象 subscription の表示を確認する
+
+```bash
+node scripts/check-paas-catalog.cjs \
+  "$SUBSCRIPTION_ID" "$TENANT_ID" "$LOCATION" "$SWA_LOCATION" B1 || exit 1
+```
+
+現在の subscription/tenant/public-cloud context、provider、実際の `mongoClusters` を含む主要 resource type の region、Linux B1 の advertised region を read-only で確認します。blocked は終了コード 3、CLI / metadata 不正は 1 です。成功でも `status: catalog_checks_passed`、**`deploymentReady: false`** と未確認項目を出力します。リソース作成・provider 登録・region/SKU の自動変更はしません。SKU を変更する場合は末尾の値も実際のパラメータと一致させます。
+
+### quota・tier・その時点の容量を別々に確認する
+
+catalog に region が載ることと、subscription に quota があること、その瞬間に物理容量があることは別です。自動チェックだけで次へ進まず、対象 subscription / region / SKU / 台数と確認時刻を記録します。
+
+| 確認 | 本線の条件 | 未確認・不適合の場合 |
+|---|---|---|
+| App Service | Linux B1 を 1 instance 作成できる subscription quota と region の容量 | Quotas / App Service support で確認。勝手に別 region や有料上位 SKU に変えない |
+| Static Web Apps | 選択 region で Standard と Linked Backend が利用可能 | Free に変更して `/api` を省略しない |
+| DocumentDB | `Microsoft.DocumentDB/mongoClusters` の M25・1 shard・128 GiB・HA=false を作成可能 | RU ベース Cosmos DB の quota 表で代用しない |
+| Networking | private endpoint / VNet、および有効にした場合の public IP / NAT の quota | quota API の対象名を ARM resource type から推測しない |
+
+quota API が対象をサポートする場合は Azure CLI の quota extension と `az quota list` から実際の quota 名を調べ、対応する usage と単位を照合します。未対応・BadRequest・空の値・「No Limit」は無制限の証拠ではありません。MongoDB cluster の制約は [Azure DocumentDB limits](https://learn.microsoft.com/en-us/azure/documentdb/limitations) と [region availability](https://learn.microsoft.com/en-us/azure/documentdb/regional-availability)、App Service は [quota / regional capacity の区別](https://learn.microsoft.com/en-us/troubleshoot/azure/app-service/troubleshoot-non-zone-redundant-quota-requests) を使い、対象 subscription の Portal / support で補います。
+
+M25 は Dev/Test 用で、in-region HA はサポートされません。M30 以上へ上げると M25 以下へ戻せない制約があるため、演習中に自動 upgrade しません。有料 HA / 別 region は別途承認が必要です。確認できない条件は「未確認」として停止し、catalog 成功を workshop-ready と扱わないでください。
 
 ## 6. 作業用リソースグループを作成する
 

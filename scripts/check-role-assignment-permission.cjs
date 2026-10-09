@@ -27,7 +27,7 @@ function allowsRoleAssignment(permissions) {
 }
 
 function azureJson(args) {
-  const result = spawnSync('az', [...args, '--output', 'json'], { encoding: 'utf8' });
+  const result = spawnSync('az', [...args, '--output', 'json'], { encoding: 'utf8', timeout: 90000 });
   if (result.error) throw result.error;
   if (result.stderr) process.stderr.write(result.stderr);
   if (result.status !== 0) throw new Error(`Azure CLI failed: az ${args.slice(0, 2).join(' ')}`);
@@ -101,4 +101,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { allowsRoleAssignment, inspectPermission };
+module.exports = { allowsRoleAssignment, inspectPermission, azureJson };

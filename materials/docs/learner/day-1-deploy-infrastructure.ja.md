@@ -128,13 +128,32 @@ az deployment group validate \
 
 ## 5. PaaS リソースをデプロイする
 
+[Day 0 の catalog / quota / tier 確認](day-0-prerequisites.ja.html#5-quota-と費用の前提を確認する) と RBAC・Entra の条件を満たした場合だけ実行します。catalog が成功しても `deploymentReady: false` のままです。制約を無視して deployment を試す手順ではありません。
+
 ```bash
 az deployment group create \
   --subscription "$SUBSCRIPTION_ID" \
+  --name main \
   --resource-group "$RESOURCE_GROUP" \
   --template-file materials/bicep/main.bicep \
   --parameters "$PARAM_FILE" || exit 1
 ```
+
+このコマンドはリソース作成を待つため、数分以上かかる場合があります。進捗を見る場合は別の Cloud Shell セッションで同じ state をロードし、次を実行します。リソース名・type・状態だけを表示し、パラメータや秘密値は出しません。
+
+```bash
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load identity || exit 1
+az deployment group show --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --name main \
+  --query '{state:properties.provisioningState,started:properties.timestamp,correlationId:properties.correlationId}' -o jsonc
+az deployment operation group list --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --name main \
+  --query '[].{type:properties.targetResource.resourceType,name:properties.targetResource.resourceName,state:properties.provisioningState}' \
+  -o table
+```
+
+再実行時は前回の `Succeeded` と取り違えず、開始時刻・correlation ID と現在の作成コマンドの結果を照合します。`Failed` / `Canceled` / quota / regional capacity エラーでは deployment 出力の保存やアプリ deploy へ進みません。region/SKU/HA を自動変更せず、エラーコード・resource type・correlation ID を記録します。
 
 作成される主なリソース:
 
