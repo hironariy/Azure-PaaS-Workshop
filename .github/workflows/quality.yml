@@ -28,6 +28,64 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  public-package-evidence:
+    name: Public npm evidence (${{ matrix.application }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        application: [backend, frontend]
+    steps:
+      - name: Checkout candidate manifests without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - name: Resolve clean lockfile from public npm without lifecycle scripts
+        env:
+          APPLICATION: ${{ matrix.application }}
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/public-npm/${{ matrix.application }}
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE_DIRECTORY"
+          cp "materials/$APPLICATION/package.json" "$EVIDENCE_DIRECTORY/package.json"
+          cd "$EVIDENCE_DIRECTORY"
+          npm install --package-lock-only --ignore-scripts --no-fund \
+            --registry=https://registry.npmjs.org --fetch-retries=0 --fetch-timeout=30000
+          node <<'NODE'
+          const fs = require('node:fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const packages = Object.entries(lock.packages).filter(([name]) => name);
+          for (const [name, pkg] of packages) {
+            const url = typeof pkg.resolved === 'string' ? URL.parse(pkg.resolved) : null;
+            if (!url || url.origin !== 'https://registry.npmjs.org' || url.username || url.password ||
+                typeof pkg.integrity !== 'string' || !pkg.integrity.startsWith('sha512-')) {
+              throw new Error(`Unverified public package source/integrity: ${name}`);
+            }
+          }
+          fs.writeFileSync('provenance.json', JSON.stringify({
+            sourceRevision: process.env.GITHUB_SHA,
+            registry: 'https://registry.npmjs.org',
+            lifecycleScriptsExecuted: false,
+            installedApplicationValidated: false,
+            packages: packages.length,
+          }, null, 2) + '\n');
+          NODE
+      - name: Preserve generated public evidence for review, never rewrite the candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: public-npm-${{ matrix.application }}
+          path: |
+            ${{ runner.temp }}/public-npm/${{ matrix.application }}/package.json
+            ${{ runner.temp }}/public-npm/${{ matrix.application }}/package-lock.json
+            ${{ runner.temp }}/public-npm/${{ matrix.application }}/provenance.json
+          if-no-files-found: error
+          retention-days: 1
+
   application:
     name: Application (${{ matrix.application }})
     runs-on: ubuntu-latest
