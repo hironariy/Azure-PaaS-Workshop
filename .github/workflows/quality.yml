@@ -4,23 +4,27 @@ on:
   pull_request:
     paths:
       - ".github/workflows/quality.yml"
+      - ".github/workflow-templates/**"
       - "materials/backend/**"
       - "materials/frontend/**"
       - "materials/bicep/**"
       - "scripts/deploy-backend.sh"
       - "scripts/deploy-frontend.sh"
       - "scripts/check-public-lock.cjs"
+      - "scripts/configure-frontend.cjs"
       - "scripts/test/public-lock.test.cjs"
   push:
     branches: [main]
     paths:
       - ".github/workflows/quality.yml"
+      - ".github/workflow-templates/**"
       - "materials/backend/**"
       - "materials/frontend/**"
       - "materials/bicep/**"
       - "scripts/deploy-backend.sh"
       - "scripts/deploy-frontend.sh"
       - "scripts/check-public-lock.cjs"
+      - "scripts/configure-frontend.cjs"
       - "scripts/test/public-lock.test.cjs"
   workflow_dispatch:
 
@@ -51,7 +55,7 @@ jobs:
             023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757 \
             "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check -
           tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
-          "$RUNNER_TEMP/actionlint" -shellcheck= .github/workflows/*.yml
+          "$RUNNER_TEMP/actionlint" -shellcheck= .github/workflows/*.yml .github/workflow-templates/*.yml
 
   deployment-tool:
     name: Public SWA deployment-tool audit
@@ -189,6 +193,30 @@ jobs:
         run: npm test
       - name: Build production artifact
         run: npm run build
+      - name: Verify shared frontend runtime configuration on the real build
+        if: matrix.application == 'frontend'
+        env:
+          ENTRA_TENANT_ID: '00000000-0000-0000-0000-000000000001'
+          ENTRA_FRONTEND_CLIENT_ID: '00000000-0000-0000-0000-000000000002'
+          ENTRA_BACKEND_CLIENT_ID: '00000000-0000-0000-0000-000000000003'
+        run: |
+          cp staticwebapp.config.json dist/staticwebapp.config.json
+          node ../../scripts/configure-frontend.cjs dist
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const html = fs.readFileSync('dist/index.html', 'utf8');
+          const match = html.match(/window\.__APP_CONFIG__=(\{[^<]*?\});/);
+          assert(match, 'Real build must contain the prepared runtime assignment');
+          assert.deepEqual(JSON.parse(match[1]), {
+            ENTRA_TENANT_ID: process.env.ENTRA_TENANT_ID,
+            ENTRA_FRONTEND_CLIENT_ID: process.env.ENTRA_FRONTEND_CLIENT_ID,
+            ENTRA_BACKEND_CLIENT_ID: process.env.ENTRA_BACKEND_CLIENT_ID,
+            API_BASE_URL: '/api',
+          });
+          assert.equal(fs.readFileSync('dist/staticwebapp.config.json', 'utf8'),
+            fs.readFileSync('staticwebapp.config.json', 'utf8'));
+          NODE
       - name: Audit installed, production, and lockfile scopes
         run: |
           npm audit --audit-level=low --registry=https://registry.npmjs.org
@@ -201,7 +229,7 @@ jobs:
           package="$RUNNER_TEMP/backend-production"
           extracted="$RUNNER_TEMP/backend-extracted"
           mkdir "$package" "$extracted"
-          cp -R dist "$package/dist"
+          npm run build -- --outDir "$package/dist"
           cp package.json package-lock.json "$package/"
           cd "$package"
           npm ci --omit=dev --no-fund --registry=https://registry.npmjs.org

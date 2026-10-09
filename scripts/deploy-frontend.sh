@@ -43,27 +43,7 @@ else
 fi
 cp staticwebapp.config.json dist/staticwebapp.config.json
 
-node <<'NODE'
-const fs = require('node:fs');
-const indexPath = 'dist/index.html';
-const config = {
-  ENTRA_TENANT_ID: process.env.ENTRA_TENANT_ID,
-  ENTRA_FRONTEND_CLIENT_ID: process.env.ENTRA_FRONTEND_CLIENT_ID,
-  ENTRA_BACKEND_CLIENT_ID: process.env.ENTRA_BACKEND_CLIENT_ID,
-  API_BASE_URL: '/api',
-};
-const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-for (const [key, value] of Object.entries(config)) {
-  if (key !== 'API_BASE_URL' && !guid.test(value || '')) throw new Error(`Invalid public config: ${key}`);
-}
-const assignment = `window.__APP_CONFIG__=${JSON.stringify(config)};`;
-const pattern = /window\.__APP_CONFIG__\s*=\s*(?:null|undefined|\{[^<]*?\}|)\s*;/;
-const html = fs.readFileSync(indexPath, 'utf8');
-if (!pattern.test(html)) throw new Error('Missing window.__APP_CONFIG__ placeholder.');
-const updated = html.replace(pattern, assignment);
-fs.writeFileSync(indexPath, updated);
-if (!fs.readFileSync(indexPath, 'utf8').includes(assignment)) throw new Error('Runtime config verification failed.');
-NODE
+node "$SCRIPT_DIR/configure-frontend.cjs" "$FRONTEND_DIR/dist"
 
 echo "Retrieving the deployment token without printing any portion..."
 SWA_TOKEN="$(az staticwebapp secrets list --subscription "$SUBSCRIPTION_ID" \
@@ -73,7 +53,7 @@ if [ -z "$SWA_TOKEN" ] || [ "$SWA_TOKEN" = null ]; then
     exit 1
 fi
 trap 'unset SWA_TOKEN' EXIT
-SWA_CLI_DEPLOYMENT_TOKEN="$SWA_TOKEN" swa deploy ./dist --env production
+SWA_CLI_DEBUG=log SWA_CLI_DEPLOYMENT_TOKEN="$SWA_TOKEN" swa deploy ./dist --env production --verbose log
 unset SWA_TOKEN
 
 echo "Deployment Complete!"

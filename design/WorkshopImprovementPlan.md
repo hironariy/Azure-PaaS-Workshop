@@ -4,7 +4,7 @@
 
 状態: 実装計画承認済み・段階的に実施
 
-最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#43 で残る旧設計案の位置付けを同期し、#44 で application / operational stack を統合して検証した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–18 節を参照する。
+最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#43/#44 の文書・統合検証に続き、#45 で既存の任意 Actions 経路を実装・同期した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–19 節を参照する。
 
 対象: [Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop) の Issue #13–#23
 
@@ -407,3 +407,31 @@ application stack と operational stack は別々に green の部分があって
 Contributor-only / organizer preparation なし / MI と Key Vault RBAC の維持は、現行の fresh deployment では同時に満たせない platform constraint である。コードで権限を生み出す解決策はない。tooling にも supported zero-advisory release の外部条件が残る。この 2 つを意思決定・upstream remediation の gate として保持し、許可や条件の変更なしに Azure rehearsal を開始しない。
 
 Review の入口は #24（saved strategy）、#41（public application evidence）、#42（tooling の正しい failure）、#43（historical proposal boundaries）、#44（combined source / conflict resolution）。自動 GitHub merge / issue close / branch protection 変更はせず、実 cloud と人間のブラウザー操作が必要な acceptance を勝手に承認しない。
+
+## 19. 既存の任意 Actions 経路を安全な supported alternative に整える
+
+「ブロックを報告して止まる」だけでなく、Microsoft Learn と upstream source を確認し、CLI を使わない supported interface を検討した。低レベル StaticSitesClient を直接起動する内部 interface の独自 wrapper は、公開・サポート契約が確認できないため採用しない。Microsoft の公式 `Azure/static-web-apps-deploy` と documented prebuilt configuration を使う **既存の任意経路**を #45 で修正した。Cloud Shell baseline や Contributor-only 条件は変更しない。
+
+### 追加で見つかった gap と実装
+
+| Gap | #45 の修正 |
+|---|---|
+| Frontend template の unsafe expression interpolation / sed、runtime writer の重複 | shared `configure-frontend.cjs` を Cloud Shell / Actions で使う。3 UUID、1 個だけの placeholder、公開 `/api` contract を検証。追加の token 環境値を artifact に含めない |
+| profile の SWA CLI silly verbosity で token を表示し得る | CLI の debug / explicit verbose を log に固定し、token は当該 process の env にだけ渡す。inherited silly の regression を追加 |
+| Backend template の secret fallback / install と OIDC credentials の混在 | build job は credentials/OIDC mint 権限なし。isolated production ZIP だけを別 deploy job に渡し、OIDC-only とする。旧 AZURE_CREDENTIALS は使用しない |
+| ZIP / startup が Cloud Shell と不一致、constructed hostname、HTTP 200 のみの成功 | `dist/src/app.js` と production-only deps、explicit subscription/target、actual hostname、shared bounded healthy-JSON checker に統一 |
+| public OIDC IDs を setup helper が Secrets に保存し、template は Variables を参照 | 3 IDs を public Variables に設定。GitHub failure は停止。target Variables は実 baseline の値を別途設定 |
+| guide の無条件 role grant と token stdout、古い README fallback | frontend-only は新規 Entra identity/grant 不要と分離。backend OIDC は追加権限が必要な任意経路。saved context / owned repository / token stdin transfer / no overwrite を説明し、README entry と旧 fallback 説明を同期 |
+| copied templates が active workflow lint の対象外 | actionlint / path filters に templates を含める。main-only、serial deployment、timeouts、immutable action SHA、missing config の明示的な failure を検査 |
+
+Frontend の公式 action は prebuilt dist を扱い、SWA npm CLI はインストールしない。ただし、upstream Dockerfile は `mcr.microsoft.com/appsvc/staticappsclient:stable` を使う。**action commit の固定だけで native client の完全な immutable inventory / audit=0 を実証したことにはならない**。正式な deployment alternative を実装したことと、#15 の全 release 条件の変更・達成は別である。
+
+### 追加の actual evidence と継続する停止条件
+
+#45 source `65437f393899cbef741e3e3fe654836f1d96804a` の actual native run `37958746897` は **47 tests / success**。quality run `37958746932` は public evidence / application / Bicep / workflow-expression の 6 jobs が成功した。実 frontend build に共通 helper を適用して runtime/routing config shape を確認し、実 isolated outDir backend ZIP の compiled sanitizer/app loading と production audit=0 も成功した。**SWA CLI job は audit 6 件で失敗し、overall は failure** のまま。
+
+README 同期と token-shaped input が public HTML に混入しない regression を追加した source `19270a756e4c42577119730ed22b186f902801d7` も、native run `37959558713` は **47 tests / success**、quality run `37959558766` は同じ 6 jobs 成功 / SWA CLI audit のみ failure だった。latest runner artifact の audit JSON は high 5 / low 1、計 6 package-level findings を確認した。全体 green や実 cloud release と読み替えない。
+
+Changed learner Bash / links / Pages build、active/copied template actionlint、targeted regressions は成功。README は旧 OIDC samples を reference と明記して保持し、現在使わない client-secret 作成・JSON stdout の fallback 手順を除いた。旧 Secret を自動削除・移行はしない。
+
+追加の authorized read-only permission check でも exit 3、required `roleAssignments/write` は許可として報告されず、対象 RG は未作成だった。新しい実 deploy / app registration / grant / tenant policy / provider / quota / paid resilience の操作は実行していない。isolated Contributor-only principal、real OIDC / upload / browser / DB / telemetry / recovery / cleanup の実証は残る。Frontend の任意経路ができても、存在しない baseline や不足権限を自動で生み出すものではない。

@@ -1187,10 +1187,26 @@ Invoke-RestMethod "https://$swaHostname/api/health" | ConvertTo-Json
 
 ### 2.5 Advanced Path: GitHub Actions (Alternative)
 
-<details>
-<summary>🚀 <strong>GitHub Actions Deployment Details (Not Verified)</strong></summary>
+Use the current [optional Actions learner guide](materials/docs/learner/day-1-github-actions-alternative.ja.md)
+for executable setup. Frontend-only deployment uses Microsoft's official action
+with a prebuilt artifact, without SWA npm CLI or a new Entra service principal.
+Backend uses a credential-free build job and a separate **OIDC-only** deploy job;
+creating its scoped Contributor grant still requires additional authorization.
+Neither route solves the Contributor-only fresh Key Vault assignment constraint.
 
-> ⚠️ **Note:** This section describes CI/CD deployment using GitHub Actions. This method has not been fully verified and is provided as an alternative for teams who prefer automated deployments.
+The templates have pinned action revisions, public locked installs, main-only
+deployment, shared runtime-config/health validation and the `dist/src/app.js`
+production ZIP layout. The native deployment client's upstream image remains a
+mutable `stable` tag; supported deployment does not prove its complete immutable
+inventory, zero tooling advisories, or real Azure/browser acceptance.
+
+<details>
+<summary>🚀 <strong>Historical OIDC setup notes (not the current learner runbook)</strong></summary>
+
+> ⚠️ **Note:** The older OIDC examples below are preserved for reference, not
+> copy-and-run setup. Use the linked learner guide's saved context, permission
+> gates, exact targets, repository validation and token handling. No live
+> deployment or Contributor-only acceptance is claimed.
 
 GitHub Actions can automate deployments on every push to the main branch.
 
@@ -1214,9 +1230,10 @@ cp .github/workflow-templates/deploy-frontend.yml .github/workflows/
 
 - If a commit changes `materials/backend/**`, **only** the backend workflow runs.
 - If a commit changes `materials/frontend/**`, **only** the frontend workflow runs.
-- If a commit changes other paths only, **no workflows run**.
+- Changes to the enabled workflow and its shared helper/source-guard paths also trigger the corresponding workflow.
+- Manual production dispatch must select `main`; other branches fail explicitly.
 
-The backend workflow supports **OIDC (default)** and **Service Principal secret (optional)**.
+The current backend workflow supports **OIDC only**. It does not read the old `AZURE_CREDENTIALS` fallback.
 
 ---
 
@@ -1303,14 +1320,24 @@ Go to your repository → **Settings** → **Secrets and variables** → **Actio
 |--------|-------|
 | `SWA_DEPLOYMENT_TOKEN` | SWA deployment token |
 
-Get `SWA_DEPLOYMENT_TOKEN` from Azure:
+The current guide transfers `SWA_DEPLOYMENT_TOKEN` from the saved SWA to the
+selected repository Secret via stdin. Never use `[0]` to select a different
+site or print the token:
 
 ```bash
-SWA_NAME=$(az staticwebapp list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
-az staticwebapp secrets list \
-  --resource-group "$RESOURCE_GROUP" \
-  --name "$SWA_NAME" \
-  --query "properties.apiKey" -o tsv
+set +x
+SWA_DEPLOYMENT_TOKEN="$(az staticwebapp secrets list --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" --name "$SWA_NAME" --query properties.apiKey -o tsv)" || exit 1
+if [ -z "$SWA_DEPLOYMENT_TOKEN" ] || [ "$SWA_DEPLOYMENT_TOKEN" = null ]; then
+  unset SWA_DEPLOYMENT_TOKEN
+  echo "Deployment token unavailable." >&2
+  exit 1
+fi
+if ! printf '%s' "$SWA_DEPLOYMENT_TOKEN" | gh secret set SWA_DEPLOYMENT_TOKEN --repo "$GITHUB_REPO"; then
+  unset SWA_DEPLOYMENT_TOKEN
+  exit 1
+fi
+unset SWA_DEPLOYMENT_TOKEN
 ```
 
 ---
@@ -1351,27 +1378,14 @@ gh workflow run deploy-frontend.yml --ref main
 
 ---
 
-## (Optional Fallback): Service Principal Secret (`AZURE_CREDENTIALS`)
+## Removed fallback: Service Principal Secret (`AZURE_CREDENTIALS`)
 
-If you can’t use OIDC in your tenant/policy, you can use a classic service principal secret instead.
-
-1. Create a service principal scoped to your resource group:
-
-```bash
-az ad sp create-for-rbac \
-  --name "github-actions-blogapp-<TeamName>" \
-  --role contributor \
-  --scopes /subscriptions/<subscription-id>/resourceGroups/<Resource-Group-Name> \
-  --json-auth
-```
-
-2. Add a GitHub Actions secret:
-
-| Secret | Value |
-|--------|-------|
-| `AZURE_CREDENTIALS` | JSON output from the command above |
-
-The backend workflow will automatically use `AZURE_CREDENTIALS` only if OIDC variables are not set.
+The current template does not create or consume long-lived service-principal
+credentials. Configure the three public OIDC IDs as repository **Variables**,
+not Secrets. If tenant policy or grant permissions block OIDC setup, stop the
+optional backend route rather than introducing a secret or substituting
+organizer preparation. Frontend-only deployment is separate. Existing legacy
+secrets are not automatically read, deleted or migrated.
 
 </details>
 
