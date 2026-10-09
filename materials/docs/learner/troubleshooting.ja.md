@@ -201,7 +201,7 @@ az rest \
 
 ## Frontend の API permissions が Portal に表示されない
 
-`az ad app permission add` は Frontend app registration の API permission 要求を追加し、`az ad app permission grant` は Frontend service principal に delegated permission grant を作成します。Portal の **App registrations > Frontend > API permissions** は前者を表示しますが、反映に時間がかかることがあります。
+`az ad app permission add` は API permission の**要求**であり、実際の同意ではありません。Portal の **App registrations > Frontend > API permissions** は要求を表示します。実際の同意は本線では MSAL のブラウザーサインインで行い、CLI grant は実行しません。Day 0 時点で grant がないこと自体は失敗ではありません。
 
 CLI で状態を確認します。
 
@@ -220,9 +220,17 @@ az ad app permission list-grants \
 
 - `requiredResourceAccess[].resourceAppId` が `$BACKEND_CLIENT_ID`
 - `requiredResourceAccess[].resourceAccess[].id` が `$ACCESS_SCOPE_ID`
-- `list-grants` の `scope` に `access_as_user`
+- サインイン後の grant の `resourceId` が Backend **service principal object ID**、`scope` に `access_as_user`、自己同意の場合は `consentType: Principal` と対象ユーザーの `principalId`。詳細は [Day 0 の同意検証](day-0-entra-id.ja.html#day-1-のサインイン後に自己同意を検証する) を参照します。
 
 CLI では見えるのに Portal で見えない場合は、ブラウザー更新、Portal 再ログイン、正しい tenant と Frontend app registration を開いているかを確認します。
+
+## 「管理者の承認が必要」または同意操作で権限不足になる
+
+Azure Contributor/Owner、アプリ所有者、Application Developer は、テナント全体への同意権限と同義ではありません。Backend scope が `type: User` でもユーザー同意ポリシーによって拒否されます。
+
+tenant、Frontend/Backend client ID、scope、CLI バージョン、エラーコードと correlation ID、PIM ロールの有効化状態を確認します。トークンやシークレットは共有しません。Graph の読み取り権限不足は「grant が存在しない」と区別します。
+
+`az ad app permission grant` の consent type 省略は `AllPrincipals` です。`Principal` へ変えて再実行するだけの回避も既存 grant の置換につながるため行いません。本線がポリシーでブロックされた場合は記録して停止し、テナントポリシーを勝手に変更しません。別途承認した管理者例外の依頼内容・確認手順は [インストラクターガイド（GitHub 上の補足資料）](https://github.com/hironariy/Azure-PaaS-Workshop/blob/main/docs/instructor-guide.ja.md) を参照します。
 
 ## ログイン時に `AADSTS900144` が出る
 

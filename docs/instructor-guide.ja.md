@@ -37,6 +37,55 @@
 
 ## ワークショップ概要
 
+### 任意例外: 管理者が組織全体同意を行う
+
+本線は各グループの所有アプリと、ポリシーで許可されたブラウザー自己同意です。登録・同意が禁止されている環境では自己完結を保証しません。**以下は別途承認した管理者支援の例外**で、Contributor のみ・主催者の事前準備なしという条件を満たす手順ではありません。
+
+依頼者は対象 tenant、Frontend/Backend client ID、scope `access_as_user`、CLI バージョン、エラーコード・correlation ID、PIM の状態を提示します。トークンや秘密情報は渡しません。今回の独自 API delegated permission の組織全体同意は Cloud Application Administrator / Application Administrator 等の適切な権限で実行します。Azure Owner/Contributor やアプリ所有者だけでは不足します。PIM は付与済みの適切なロールのみ有効化し、受講者全員への管理者ロール付与は行いません。
+
+管理者は、依頼値を設定したうえで tenant と両アプリを確認します。共有アプリにはこの新規検証用コマンドを使用しません。
+
+```bash
+if [ -z "${TENANT_ID:-}" ] || [ -z "${FRONTEND_CLIENT_ID:-}" ] || [ -z "${BACKEND_CLIENT_ID:-}" ]; then
+  echo "依頼者の tenant と両 client ID を設定してから実行してください。"
+  exit 1
+fi
+current_tenant="$(az account show --query tenantId -o tsv)" || exit 1
+if [ "$current_tenant" != "$TENANT_ID" ]; then
+  echo "依頼された tenant と一致しません。停止します。"
+  exit 1
+fi
+az ad app show --id "$FRONTEND_CLIENT_ID" --query "{id:id,appId:appId,displayName:displayName}" -o jsonc || exit 1
+az ad app show --id "$BACKEND_CLIENT_ID" --query "{id:id,appId:appId,displayName:displayName}" -o jsonc || exit 1
+
+# 検索失敗と未作成を区別するため、一覧取得後に件数を判断する
+for client in "$BACKEND_CLIENT_ID" "$FRONTEND_CLIENT_ID"; do
+  principals="$(az ad sp list --filter "appId eq '$client'" -o json)" || exit 1
+  count="$(printf '%s' "$principals" | jq -r 'length')" || exit 1
+  if [ "$count" -eq 0 ]; then
+    az ad sp create --id "$client" --output none || exit 1
+  elif [ "$count" -ne 1 ]; then
+    echo "service principal が一意ではありません。停止します。"
+    exit 1
+  fi
+done
+
+existing="$(az ad app permission list-grants --id "$FRONTEND_CLIENT_ID" -o json)" || exit 1
+existing_count="$(printf '%s' "$existing" | jq -er 'if type == "array" then length else error("grant 一覧が配列ではありません") end')" || exit 1
+if [ "$existing_count" -ne 0 ]; then
+  echo "既存 grant があります。CLI による置換は行わず、個別にレビューしてください。"
+  exit 1
+fi
+
+az ad app permission grant \
+  --id "$FRONTEND_CLIENT_ID" --api "$BACKEND_CLIENT_ID" \
+  --scope access_as_user --consent-type AllPrincipals
+```
+
+実行後は [Day 0 の検証](../materials/docs/learner/day-0-entra-id.ja.md#day-1-のサインイン後に自己同意を検証する) と同じ client/resource object ID を確認し、この例外では `consentType: AllPrincipals`、`principalId: null`、`scope` に `access_as_user` があることを確認します。続けて Frontend サインインと認証付き記事作成を確認します。同時変更があり得る共有アプリには、上の確認だけでは置換リスクを排除できません。
+
+参考: [テナント全体への管理者同意](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/grant-admin-consent)、[Azure CLI grant](https://learn.microsoft.com/en-us/cli/azure/ad/app/permission#az-ad-app-permission-grant)。
+
 ### 進行形式の例
 
 | 形式 | 時間 | グループ規模 | メモ |

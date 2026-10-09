@@ -371,7 +371,7 @@ You need access to the following:
 
 | Account | Purpose | How to Get |
 |---------|---------|------------|
-| **Microsoft Azure** | Cloud platform | [Free Account](https://azure.microsoft.com/free/). Workshop attendees must have an active subscription with Owner or Contributor role. |
+| **Microsoft Azure** | Cloud platform | [Free Account](https://azure.microsoft.com/free/). Contributor can manage resources but cannot create the Key Vault RBAC assignment required by a fresh deployment. Contributor-only/no-organizer-preparation completion is currently blocked. |
 | **Microsoft Entra ID** | Authentication | Included with Azure subscription |
 | **GitHub** (optional) | Clone repository, CI/CD | [Sign Up](https://github.com/join) |
 
@@ -393,16 +393,20 @@ You need access to the following:
 > **How to check if you have permission:**
 > 1. Go to [Azure Portal](https://portal.azure.com) → Microsoft Entra ID → App registrations
 > 2. Click "+ New registration"
-> 3. If you see the registration form, you have permission ✅
+> 3. The form is only an initial indication; creation and management of your own isolated app must actually succeed.
 > 4. If you see an error or the button is disabled, contact your IT administrator ❌
 >
-> **For Workshop Organizers:**
-> If participants cannot create app registrations, you have two options:
-> 1. **Ask IT admin** to assign the "Application Developer" role to participants
-> 2. **Pre-create app registrations** and share the Client IDs with participants
+> Azure Owner/Contributor does not confer Entra registration or consent rights.
+> Application Developer/app ownership does not authorize tenant-wide consent.
+> The learner path uses separate owned apps and browser self-consent only where
+> tenant policy permits it; `type: User` does not bypass that policy.
+> If registration or consent is blocked, record the blocker rather than elevating
+> every learner or replacing grants on shared apps. Administrator-prepared apps
+> are an explicitly different, assisted scenario—not proof of self-service.
 >
 > **For Personal/Free Azure Accounts:**
-> If you created your own Azure account, you are automatically the Global Administrator and can create app registrations without any additional setup.
+> Check the actual tenant and effective roles; a subscription role or account type
+> alone does not establish Entra registration/consent permissions.
 
 #### 2.1.4 Clone the Repository
 
@@ -525,9 +529,11 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
    - Check the box next to `access_as_user`
    - Click "Add permissions"
 
-3. **(Optional) Grant Admin Consent**
-   - If you're an admin, click "Grant admin consent for [Your Organization]"
-   - This prevents users from needing to consent individually
+3. **Consent at first sign-in**
+   - Use the application's MSAL sign-in flow for individual consent if tenant policy permits.
+   - If administrator approval is required, the self-service path is blocked.
+   - Tenant-wide consent is an optional administrator exception; do not run learner CLI grants or overwrite existing shared grants.
+   - See the [learner consent checks](materials/docs/learner/day-0-entra-id.ja.md) for request versus grant, resource object ID, `consentType`, and `principalId` verification.
 
 </details>
 
