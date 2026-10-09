@@ -265,6 +265,46 @@ jobs:
           })().catch((error) => { console.error(error); process.exitCode = 1; });
           NODE
 
+  database-contracts:
+    name: Database HTTP contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      mongo:
+        image: mongo:8.0@sha256:d0d926f94df099bff534b7ee5b5986458131a22489dfff8664509af0c1e2ca9c
+        ports:
+          - 27017/tcp
+        options: >-
+          --memory=1g
+          --health-cmd "mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    defaults:
+      run:
+        working-directory: materials/backend
+    steps:
+      - name: Checkout without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: materials/backend/package-lock.json
+      - name: Require public locked sources and restore test dependencies
+        run: |
+          node ../../scripts/check-public-lock.cjs package-lock.json
+          npm ci --include=dev --no-fund --registry=https://registry.npmjs.org
+      - name: Type-check integration tests
+        run: npm run type-check
+      - name: Exercise persisted application HTTP contracts against the owned fixture
+        env:
+          WORKSHOP_TEST_MONGO_PORT: ${{ job.services.mongo.ports['27017'] }}
+        run: npm run test:integration
+
   bicep:
     name: Bicep artifact parity
     runs-on: ubuntu-latest

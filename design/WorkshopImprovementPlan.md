@@ -4,7 +4,7 @@
 
 状態: 実装計画承認済み・段階的に実施
 
-最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#43/#44 の文書・統合検証に続き、#45 で既存の任意 Actions 経路を実装・同期した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–19 節を参照する。
+最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#43–#45 の文書・統合・任意 Actions 経路に続き、#46 で実 MongoDB による HTTP persistence 検証と pagination 不整合修正を追加した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–20 節を参照する。
 
 対象: [Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop) の Issue #13–#23
 
@@ -435,3 +435,34 @@ README 同期と token-shaped input が public HTML に混入しない regressio
 Changed learner Bash / links / Pages build、active/copied template actionlint、targeted regressions は成功。README は旧 OIDC samples を reference と明記して保持し、現在使わない client-secret 作成・JSON stdout の fallback 手順を除いた。旧 Secret を自動削除・移行はしない。
 
 追加の authorized read-only permission check でも exit 3、required `roleAssignments/write` は許可として報告されず、対象 RG は未作成だった。新しい実 deploy / app registration / grant / tenant policy / provider / quota / paid resilience の操作は実行していない。isolated Contributor-only principal、real OIDC / upload / browser / DB / telemetry / recovery / cleanup の実証は残る。Frontend の任意経路ができても、存在しない baseline や不足権限を自動で生み出すものではない。
+
+## 20. Mock の成功から独立した database HTTP contract を追加する
+
+外部 gate を報告するだけでなく、#14 / #19 / #21 の repository 内で改善可能な検証 gap を調べた。従来の HTTP regression は query/create を mock しており、本物の persistence、unique index、所有者別 CRUD を証明しない。#46（base: #45）で **独立した credential-free database job** を追加した。別 test framework、production auth bypass、Cloud Shell の Docker 必須化は導入しない。
+
+### Fixture と実証範囲
+
+official MongoDB 8 image を multi-architecture digest に固定し、health readiness / random local port / memory bound を設定する。test preload は explicit numeric port を要求し、接続先を loopback と新しい `workshop-integration-<UUID>` DB に固定する。inherited cloud URI は使わず、missing / invalid port を接続前に拒否し、skip / success-shaped fallback はしない。2 native regressions でこの境界を確認する。
+
+7 scenarios（Node summary は parent を含め **8 tests**）は本物の Express application / Mongoose / MongoDB を使う。identity middleware だけ fixture actors で置き換え、DB / model / health は mock しない。
+
+- 日本語・中国語・韓国語・accented / mixed title の作成・URL encoding・詳細取得、日本語本文・要約・tags の保存／再取得。
+- Draft を public / 別 author に公開せず、author の `/my` と詳細にだけ返す。
+- 同名 Unicode title の同時作成が distinct URLs になることと、本物の unique index が duplicate slug を E11000 で拒否すること。
+- exact public / private pagination shape、unauthenticated / 他 author / sanitized-empty edit の拒否と内容維持。
+- Historical ASCII permalink の title/content edit で URL を変更しないこと。
+- DB disconnect で両 health=503、reconnect で両 health=200、publish/content の persistence、author-only deletion と DB 上の absence。
+- First-time profile の保存と emoji-only title の URL-safe fallback。
+
+### テストで見つかった production contract の修正
+
+未知の author を指定した public list の early return は `totalPages` を欠いていた。新しい integration は修正前に exact-shape assertion で失敗し、`totalPages: 0` の補完後に成功した。通常の DB-free suite にも page/limit を含めた regression を追加した。既存 slug / routing / owner semantics は変更しない。
+
+Local backend type/lint/build、**9 DB-free tests / 8 integration tests / 49 native tests**、active/template actionlint は成功。developer guide の exact Docker recipe を実行し、readiness、dynamic port、test success、当該 container だけの owned teardown を確認した。使用した local fixtures は停止・自動削除済みで、既存 container / DB / global prune を操作していない。
+
+| Actual public source | Evidence | 結果 |
+|---|---|---|
+| `b5b864c8d5dd9e8e197290e17c7acb5e91f18855` | quality `37961964564` / native `37961964393` | 新しい Database HTTP contracts を含む 7 jobs 成功。backend unit9 / database8 / native49 成功。CLI audit のみ failure |
+| `1075d325652d0aaceb1d886aef6ab4b6b4804663` | quality `37962658482` / native `37962658457` | multilingual fields を含め、同じ 7 jobs / unit9 / database8 / native49 成功。CLI audit のみ failure、overall failure |
+
+**MongoDB fixture actors は actual Entra/JWT/consent、Azure DocumentDB compatibility/TLS、Key Vault/private networking、SWA routing、browser、telemetry、live recovery の実証ではない。** Release gates を消さず、これらは第 18 節の停止条件として残す。公開 version を再確認しても official SWA CLI latest は v2.0.10。current official `az staticwebapp` command reference に content upload/deploy command はなく、未文書化 native interface を Cloud Shell の supported solution として追加しない。
