@@ -9,6 +9,8 @@ on:
       - "materials/bicep/**"
       - "scripts/deploy-backend.sh"
       - "scripts/deploy-frontend.sh"
+      - "scripts/check-public-lock.cjs"
+      - "scripts/test/public-lock.test.cjs"
   push:
     branches: [main]
     paths:
@@ -18,6 +20,8 @@ on:
       - "materials/bicep/**"
       - "scripts/deploy-backend.sh"
       - "scripts/deploy-frontend.sh"
+      - "scripts/check-public-lock.cjs"
+      - "scripts/test/public-lock.test.cjs"
   workflow_dispatch:
 
 permissions:
@@ -56,25 +60,20 @@ jobs:
           cd "$EVIDENCE_DIRECTORY"
           npm install --package-lock-only --ignore-scripts --no-fund \
             --registry=https://registry.npmjs.org --fetch-retries=0 --fetch-timeout=30000
+          node "$GITHUB_WORKSPACE/scripts/check-public-lock.cjs" package-lock.json
           node <<'NODE'
           const fs = require('node:fs');
           const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
-          const packages = Object.entries(lock.packages).filter(([name]) => name);
-          for (const [name, pkg] of packages) {
-            const url = typeof pkg.resolved === 'string' ? URL.parse(pkg.resolved) : null;
-            if (!url || url.origin !== 'https://registry.npmjs.org' || url.username || url.password ||
-                typeof pkg.integrity !== 'string' || !pkg.integrity.startsWith('sha512-')) {
-              throw new Error(`Unverified public package source/integrity: ${name}`);
-            }
-          }
           fs.writeFileSync('provenance.json', JSON.stringify({
             sourceRevision: process.env.GITHUB_SHA,
             registry: 'https://registry.npmjs.org',
             lifecycleScriptsExecuted: false,
             installedApplicationValidated: false,
-            packages: packages.length,
+            packages: Object.keys(lock.packages).length - 1,
           }, null, 2) + '\n');
           NODE
+      - name: Verify public source guard regressions
+        run: node --test scripts/test/public-lock.test.cjs
       - name: Preserve generated public evidence for review, never rewrite the candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -109,19 +108,7 @@ jobs:
           cache: npm
           cache-dependency-path: materials/${{ matrix.application }}/package-lock.json
       - name: Require portable public npm package sources
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
-          const invalid = Object.entries(lock.packages).filter(([name, pkg]) => {
-            if (!name || !pkg.resolved) return false;
-            const url = typeof pkg.resolved === 'string' ? URL.parse(pkg.resolved) : null;
-            return !url || url.origin !== 'https://registry.npmjs.org' || url.username || url.password;
-          });
-          if (invalid.length) {
-            throw new Error(`Non-public package sources: ${invalid.slice(0, 3).map(([name]) => name).join(', ')}. Regenerate from a supported public registry before merging.`);
-          }
-          NODE
+        run: node ../../scripts/check-public-lock.cjs package-lock.json
       - name: Restore locked build dependencies
         run: npm ci --include=dev --no-fund
       - name: Type-check application and tests
