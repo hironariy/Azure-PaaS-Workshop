@@ -6,6 +6,8 @@ title: "Day 0: 事前準備 2 サブスクリプション確認、リソース�
 
 このページでは、Cloud Shell から Azure PaaS リソースを作成するためのサブスクリプション、Provider、リージョン、費用の前提を確認します。
 
+**開始前の制約:** Azure Contributor は Entra の登録・ユーザー同意権限を含みません。[Day 0: Entra ID](day-0-entra-id.ja.html) の権限表を先に確認してください。また、現在の Bicep は App Service の Managed Identity に Key Vault の読み取りロールを割り当てます。Contributor には `Microsoft.Authorization/roleAssignments/write` がないため、**Contributor のみ・主催者の事前準備なしでは新規構成を最後までデプロイできません**。この条件では費用の発生するリソースを作成せず、制約を記録して停止します。Key Vault RBAC を無効にして回避しません。
+
 ## 1. アーキテクチャを確認する
 
 ![Azure PaaS Workshop アーキテクチャ](../assets/images/architecture.png)

@@ -37,6 +37,8 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 
 通常のワークショップ参加では、ローカル PC に Azure CLI、Azure PowerShell、Bicep CLI、Node.js、Docker、WSL、PowerShell をインストールする必要はありません。CLI とデプロイ作業は Azure Cloud Shell Bash を標準にします。
 
+**開始前の権限確認:** Azure Contributor/Owner は Entra の登録・同意権限ではありません。本線はグループ専用アプリを作成し、許可されたブラウザー自己同意を使います。テナントポリシーで登録・同意が禁止されていれば自己完結はブロックです。また、現行 Bicep の Key Vault ロール割り当てには Contributor に含まれない `Microsoft.Authorization/roleAssignments/write` が必要なため、**Contributor のみ・主催者の事前準備なしでは新規構成を完了できません**。費用の発生する操作前に [Day 0 の前提条件](materials/docs/learner/day-0-prerequisites.ja.md) を確認し、制約を記録します。受講者への過剰な管理者権限付与や Key Vault RBAC 無効化で回避しません。
+
 ## ワークショップ概要
 
 ### 対象者
