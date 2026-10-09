@@ -72,7 +72,7 @@ router.get(
           filter.author = author._id;
         } else {
           // No posts for non-existent author
-          res.json({ posts: [], total: 0, page, limit });
+          res.json({ posts: [], total: 0, page, limit, totalPages: 0 });
           return;
         }
       }
