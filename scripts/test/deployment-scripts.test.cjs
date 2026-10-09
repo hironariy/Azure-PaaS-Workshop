@@ -24,7 +24,7 @@ function fixture(t) {
   }
   for (const name of ['workshop-state.sh', 'workshop-state.cjs', 'workshop-deploy-common.sh',
     'deploy-backend.sh', 'deploy-frontend.sh', 'cleanup-workshop.sh', 'workshop-setup.sh',
-    'check-role-assignment-permission.cjs']) {
+    'check-role-assignment-permission.cjs', 'configure-frontend.cjs']) {
     fs.copyFileSync(path.join(repository, 'scripts', name), path.join(checkout, 'scripts', name));
   }
   fs.writeFileSync(path.join(checkout, 'README.md'), 'Owned fixture');
@@ -46,7 +46,7 @@ function fixture(t) {
   const mock = `#!/usr/bin/env node
 const fs=require('node:fs'), path=require('node:path');
 const tool=path.basename(process.argv[1]), args=process.argv.slice(2), scenario=process.env.SCENARIO;
-fs.appendFileSync(process.env.MOCK_LOG,JSON.stringify({tool,args,hasToken:!!process.env.SWA_CLI_DEPLOYMENT_TOKEN})+'\\n');
+fs.appendFileSync(process.env.MOCK_LOG,JSON.stringify({tool,args,hasToken:!!process.env.SWA_CLI_DEPLOYMENT_TOKEN,debug:process.env.SWA_CLI_DEBUG})+'\\n');
 const fail=(message)=>{console.error(message);process.exit(9)};
 const result=(value)=>{console.log(typeof value==='string'?value:JSON.stringify(value));process.exit(0)};
 const marker=(name)=>path.join(process.env.MOCK_ROOT,name);
@@ -196,13 +196,15 @@ test('health requires bounded transport and healthy JSON, not merely HTTP 200', 
 test('frontend injects saved public IDs and never prints or passes a token as an argument', (t) => {
   const { checkout, env, run, calls } = fixture(t);
   env.NODE_ENV = 'production';
+  env.SWA_CLI_DEBUG = 'silly';
   const result = run('deploy-frontend.sh', [group]);
   assert.equal(result.status, 0, result.stderr);
   assert.doesNotMatch(result.stdout + result.stderr, /SENTINEL_DEPLOYMENT_TOKEN_FIXTURE/);
   assert(fs.readFileSync(path.join(checkout, 'materials/frontend/dist/index.html'), 'utf8').includes(frontend));
   const deploy = calls().find((call) => call.tool === 'swa');
   assert.equal(deploy.hasToken, true);
-  assert.deepEqual(deploy.args, ['deploy', './dist', '--env', 'production']);
+  assert.deepEqual(deploy.args, ['deploy', './dist', '--env', 'production', '--verbose', 'log']);
+  assert.equal(deploy.debug, 'log');
   assert(calls().filter((call) => call.tool !== 'swa').every((call) => !call.hasToken));
   assert.deepEqual(calls().find((call) => call.tool === 'npm' && call.args[0] === 'ci').args,
     ['ci', '--include=dev', '--registry=https://registry.npmjs.org']);

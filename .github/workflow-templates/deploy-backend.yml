@@ -6,140 +6,178 @@ on:
       - main
     paths:
       - 'materials/backend/**'
+      - 'scripts/workshop-deploy-common.sh'
+      - 'scripts/check-public-lock.cjs'
+      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
+
+concurrency:
+  group: deploy-backend-${{ github.repository }}
+  cancel-in-progress: false
 
 env:
   BACKEND_DIR: materials/backend
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
 
 jobs:
-  deploy:
-    name: Build and Deploy Backend
-    runs-on: ubuntu-latest
+  build:
+    name: Build the credential-free production ZIP
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: '${{ env.BACKEND_DIR }}/package-lock.json'
 
-      - name: Check Azure credentials secret
-        id: check-creds
-        env:
-          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Validate production branch, OIDC IDs and deployment target
         run: |
-          if [ -n "$AZURE_CREDENTIALS" ]; then
-            echo "has_creds=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "Production deployment requires the main branch." >&2
+            exit 1
           fi
+          node <<'NODE'
+          const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          for (const key of ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID']) {
+            if (!guid.test(process.env[key] || '')) throw new Error(`Missing or invalid variable: ${key}`);
+          }
+          const group = process.env.AZURE_RESOURCE_GROUP || '';
+          if (!/^[a-z0-9_().-]{1,90}$/i.test(group) || group.endsWith('.')) throw new Error('Invalid AZURE_RESOURCE_GROUP');
+          if (!/^[a-z0-9][a-z0-9-]{0,58}[a-z0-9]$/i.test(process.env.AZURE_WEBAPP_NAME || '')) throw new Error('Invalid AZURE_WEBAPP_NAME');
+          NODE
 
-      - name: Fail if Azure auth not configured
-        if: ${{ vars.AZURE_CLIENT_ID == '' && steps.check-creds.outputs.has_creds == 'false' }}
+      - name: Verify public sources and install build dependencies
+        working-directory: ${{ env.BACKEND_DIR }}
         run: |
-          echo "Missing Azure authentication configuration."
-          echo "OIDC (default): set repo Variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID"
-          echo "Fallback: set repo Secret: AZURE_CREDENTIALS"
-          exit 1
+          node ../../scripts/check-public-lock.cjs package-lock.json
+          NODE_ENV=production npm ci --include=dev --no-fund --registry=https://registry.npmjs.org
 
+      - name: Check application quality before packaging
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: |
+          npm run type-check
+          npm run lint
+          npm test
+          npm audit --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --package-lock-only --audit-level=low --registry=https://registry.npmjs.org
+
+      - name: Build and package the isolated production ZIP
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: |
+          PACKAGE="$RUNNER_TEMP/backend-production"
+          mkdir "$PACKAGE"
+          npm run build -- --outDir "$PACKAGE/dist"
+          cp package.json package-lock.json "$PACKAGE/"
+          cd "$PACKAGE"
+          npm ci --omit=dev --no-fund --registry=https://registry.npmjs.org
+          test -f dist/src/app.js
+          test ! -d node_modules/typescript
+          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
+          zip -qr "$RUNNER_TEMP/backend-production.zip" .
+          unzip -tq "$RUNNER_TEMP/backend-production.zip"
+
+      - name: Preserve only the production ZIP for the deployment job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backend-production
+          path: ${{ runner.temp }}/backend-production.zip
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    name: Deploy the verified ZIP with OIDC
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout the same source revision without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Use Node.js 24 for the shared health checker
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - name: Restore the verified ZIP from this workflow run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: backend-production
+          path: ${{ runner.temp }}/backend-download
+      - name: Validate the restored artifact and record the source revision
+        run: |
+          unzip -tq "$RUNNER_TEMP/backend-download/backend-production.zip"
+          unzip -Z1 "$RUNNER_TEMP/backend-download/backend-production.zip" | grep -x 'dist/src/app.js' >/dev/null
+          echo "Deployment revision: $GITHUB_SHA"
       - name: Azure login (OIDC)
-        if: ${{ vars.AZURE_CLIENT_ID != '' }}
-        uses: azure/login@v2
+        uses: Azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Azure login (Service Principal secret - optional)
-        if: ${{ vars.AZURE_CLIENT_ID == '' && steps.check-creds.outputs.has_creds == 'true' }}
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Fail if deployment target not configured
+      - name: Verify actual Azure context and hostname
         run: |
-          if [ -z "${{ vars.AZURE_RESOURCE_GROUP }}" ] || [ -z "${{ vars.AZURE_WEBAPP_NAME }}" ]; then
-            echo "Missing deployment target configuration."
-            echo "Set repo Variables: AZURE_RESOURCE_GROUP, AZURE_WEBAPP_NAME"
+          ACCOUNT="$(az account show --subscription "$AZURE_SUBSCRIPTION_ID" --output json)"
+          printf '%s' "$ACCOUNT" | node -e '
+            let data = ""; process.stdin.on("data", chunk => data += chunk);
+            process.stdin.on("end", () => {
+              const a = JSON.parse(data);
+              if (a.state !== "Enabled" || a.environmentName !== "AzureCloud" ||
+                  a.id.toLowerCase() !== process.env.AZURE_SUBSCRIPTION_ID.toLowerCase() ||
+                  a.tenantId.toLowerCase() !== process.env.AZURE_TENANT_ID.toLowerCase()) {
+                throw new Error("Azure subscription/tenant context mismatch");
+              }
+            });'
+          HOSTNAME="$(az webapp show --subscription "$AZURE_SUBSCRIPTION_ID" \
+            --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" \
+            --query defaultHostName --output tsv)"
+          if ! [[ "$HOSTNAME" =~ ^[a-z0-9.-]+\.azurewebsites\.net$ ]]; then
+            echo "App Service returned an invalid hostname." >&2
             exit 1
           fi
-
-          az account show 1>/dev/null
-          echo "Azure login OK"
-
-      - name: Install dependencies
-        working-directory: ${{ env.BACKEND_DIR }}
-        run: npm ci
-
-      - name: Build
-        working-directory: ${{ env.BACKEND_DIR }}
-        run: npm run build
-
-      - name: Package for ZIP deploy
-        working-directory: ${{ env.BACKEND_DIR }}
-        run: |
-          cp package.json package-lock.json dist/
-          pushd dist
-          npm ci --omit=dev
-          zip -r ../deploy.zip .
-          popd
+          printf 'APP_HOSTNAME=%s\n' "$HOSTNAME" >> "$GITHUB_ENV"
 
       - name: Configure App Service
         run: |
-          az webapp config appsettings set \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+          az webapp config appsettings set --subscription "$AZURE_SUBSCRIPTION_ID" \
+            --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" \
             --settings "SCM_DO_BUILD_DURING_DEPLOYMENT=false" \
-            1>/dev/null
+            --output none
 
-          az webapp config set \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
-            --startup-file "node src/app.js" \
-            1>/dev/null
+          az webapp config set --subscription "$AZURE_SUBSCRIPTION_ID" \
+            --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" \
+            --startup-file "node dist/src/app.js" --output none
 
       - name: Deploy to App Service
         run: |
-          TRACK_STATUS_FLAG=""
-          if az webapp deploy -h 2>/dev/null | grep -q "track-status"; then
-            TRACK_STATUS_FLAG="--track-status false"
-          fi
+          DEPLOY_HELP="$(az webapp deploy --help)"
+          set --
+          if [[ "$DEPLOY_HELP" == *"--track-status"* ]]; then set -- --track-status false; fi
+          az webapp deploy --subscription "$AZURE_SUBSCRIPTION_ID" \
+            --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" \
+            --src-path "$RUNNER_TEMP/backend-download/backend-production.zip" --type zip --clean true \
+            --restart true --async true "$@" --output none
 
-          az webapp deploy \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
-            --src-path "${{ env.BACKEND_DIR }}/deploy.zip" \
-            --type zip \
-            --clean true \
-            --restart true \
-            --async true \
-            $TRACK_STATUS_FLAG
-
-      - name: Wait for health endpoint
+      - name: Require bounded healthy JSON from the actual hostname
         run: |
-          HEALTH_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/health"
-          echo "Health endpoint: $HEALTH_URL"
-
           sleep 20
-
-          for i in $(seq 1 30); do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" 2>/dev/null || echo "000")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "Healthy (HTTP 200)"
-              curl -s "$HEALTH_URL"
-              exit 0
-            fi
-            echo "Attempt $i/30: HTTP $HTTP_CODE (waiting 15s...)"
-            sleep 15
-          done
-
-          echo "Backend failed to become healthy in time"
-          exit 1
+          source scripts/workshop-deploy-common.sh
+          workshop_wait_for_health "https://$APP_HOSTNAME/health"
+          echo "Upload/readiness passed; separately verify this release, browser CRUD and telemetry."

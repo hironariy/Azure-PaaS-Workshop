@@ -87,10 +87,12 @@ curl -fsS "https://${SWA_HOSTNAME}" \
 | Static Web Apps 情報取得 | 保存した SWA 名を明示的な subscription/RG で取得し hostname を比較する | `[0]` で別アプリを選ばず、CLI の失敗を「未作成」と扱わない |
 | フロントエンド build | `materials/frontend` に移動し、`npm ci --include=dev --registry=https://registry.npmjs.org` と `NODE_ENV=production npm run build -- --mode production` を実行する | 公開 lockfile の build 用依存関係を復元し、Cloud Shell の環境変数に左右されず本番成果物を作成する |
 | SWA routing 設定 | `staticwebapp.config.json` を `dist/` にコピーする | SPA fallback と `/api/*` の Linked Backend routing を Static Web Apps に反映する |
-| runtime config 注入 | `dist/index.html` の `window.__APP_CONFIG__` 代入を Entra ID 設定と `API_BASE_URL: "/api"` を含む JSON に置換し、`ENTRA_FRONTEND_CLIENT_ID` が入ったことと development bundle でないことを検査する | build 後の静的ファイルに環境ごとの公開設定を埋め込み、`client_id` 欠落をデプロイ前に防ぐ |
-| Static Web Apps deploy | token を直前に取得し、`SWA_CLI_DEPLOYMENT_TOKEN` をそのプロセスだけに渡して `swa deploy ./dist --env production` を実行する | token をコマンド引数やログに出さず production 環境へアップロードする |
+| runtime config 注入 | Actions と共通の `configure-frontend.cjs` が 3 UUID と 1 個だけの placeholder を検証し、Entra 設定と `API_BASE_URL: "/api"` を注入する | 同じ artifact contract を使い、ID 欠落・曖昧な代入をデプロイ前に停止する |
+| Static Web Apps deploy | token を直前に取得し、`SWA_CLI_DEPLOYMENT_TOKEN` をそのプロセスだけに渡し、debug と `--verbose` を `log` に固定する | 環境で `silly` が設定されていても token を verbose log に出さず、production 環境へアップロードする |
 
 `SWA_TOKEN` はデプロイ権限を持つシークレットです。末尾を含め一切表示しません。#41 を含む検証済み stack ではアプリの公開 npm source と audit=0 を確認していますが、CLI の既知の依存脆弱性は別の未解決事項です（#15）。ローカルの stub テストは実際の SWA deploy 成功を証明しません。
+
+CLI を使わない Microsoft の公式 deployment action は [GitHub Actions の任意経路](day-1-github-actions-alternative.ja.html) で説明します。Frontend だけの切替に追加の Entra identity / role assignment は不要ですが、既存 baseline の権限制約・CLI audit の zero 条件・実 cloud acceptance を解消したという意味ではありません。
 
 ## 6. SWA URL を確認する
 

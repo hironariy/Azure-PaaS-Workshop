@@ -7,6 +7,7 @@ on:
       - 'materials/bicep/**'
       - 'materials/docs/learner/**'
       - '.github/workflows/scripts-quality.yml'
+      - '.github/workflow-templates/**'
   push:
     branches: [main]
     paths:
@@ -14,6 +15,7 @@ on:
       - 'materials/bicep/**'
       - 'materials/docs/learner/**'
       - '.github/workflows/scripts-quality.yml'
+      - '.github/workflow-templates/**'
   workflow_dispatch:
 
 permissions:

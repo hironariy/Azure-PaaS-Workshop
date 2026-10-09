@@ -252,28 +252,28 @@ create_azure_resources() {
     fi
 }
 
-# Configure GitHub secrets
+# Configure public GitHub variables for OIDC.
 configure_github_secrets() {
-    print_step "Configuring GitHub secrets..."
+    print_step "Configuring GitHub OIDC variables..."
     
     if [ "$GH_AVAILABLE" = true ]; then
-        echo "  Setting GitHub secrets automatically..."
+        echo "  Setting public GitHub variables automatically..."
         
-        if gh secret set AZURE_CLIENT_ID --repo "$GITHUB_USER/$REPO_NAME" --body "$APP_ID"; then
+        if gh variable set AZURE_CLIENT_ID --repo "$GITHUB_USER/$REPO_NAME" --body "$APP_ID"; then
             print_success "AZURE_CLIENT_ID set"
         else
             print_error "Failed to set AZURE_CLIENT_ID"
             exit 1
         fi
         
-        if gh secret set AZURE_TENANT_ID --repo "$GITHUB_USER/$REPO_NAME" --body "$TENANT_ID"; then
+        if gh variable set AZURE_TENANT_ID --repo "$GITHUB_USER/$REPO_NAME" --body "$TENANT_ID"; then
             print_success "AZURE_TENANT_ID set"
         else
             print_error "Failed to set AZURE_TENANT_ID"
             exit 1
         fi
         
-        if gh secret set AZURE_SUBSCRIPTION_ID --repo "$GITHUB_USER/$REPO_NAME" --body "$SUBSCRIPTION_ID"; then
+        if gh variable set AZURE_SUBSCRIPTION_ID --repo "$GITHUB_USER/$REPO_NAME" --body "$SUBSCRIPTION_ID"; then
             print_success "AZURE_SUBSCRIPTION_ID set"
         else
             print_error "Failed to set AZURE_SUBSCRIPTION_ID"
@@ -285,7 +285,7 @@ configure_github_secrets() {
         echo "  ─────────────────────────────────────────"
         echo "  Go to: https://github.com/${GITHUB_USER}/${REPO_NAME}/settings/secrets/actions"
         echo ""
-        echo "  Add these secrets:"
+        echo "  Add these Variables (not client secrets):"
         echo ""
     fi
 }
@@ -297,19 +297,19 @@ print_summary() {
     echo -e "${GREEN}║             Azure identity setup completed                  ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${YELLOW}GitHub Secrets (configure if not auto-set):${NC}"
+    echo -e "${YELLOW}GitHub OIDC Variables (configure if not auto-set):${NC}"
     echo "─────────────────────────────────────────────────────────────"
     echo -e "  ${GREEN}AZURE_CLIENT_ID${NC}:       $APP_ID"
     echo -e "  ${GREEN}AZURE_TENANT_ID${NC}:       $TENANT_ID"
     echo -e "  ${GREEN}AZURE_SUBSCRIPTION_ID${NC}: $SUBSCRIPTION_ID"
     echo ""
-    echo -e "${YELLOW}GitHub Secrets URL:${NC}"
+    echo -e "${YELLOW}GitHub Variables / Secrets URL:${NC}"
     echo "  https://github.com/${GITHUB_USER}/${REPO_NAME}/settings/secrets/actions"
     echo ""
     echo -e "${YELLOW}Next Steps:${NC}"
     echo "─────────────────────────────────────────────────────────────"
-    echo "  1. Verify GitHub secrets are configured"
-    echo "     Manual secret configuration is still required if GitHub CLI was unavailable."
+    echo "  1. Verify GitHub OIDC Variables and deployment target Variables are configured"
+    echo "     Manual variable configuration is still required if GitHub CLI was unavailable."
     echo "     A Contributor service principal cannot create the Bicep Key Vault role assignments."
     echo ""
     echo "  2. Deploy infrastructure:"
