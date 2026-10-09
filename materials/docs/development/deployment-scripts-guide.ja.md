@@ -12,4 +12,6 @@ Cloud Shell 本線では、バックエンドはリポジトリ内ソースか�
 - [Day 1: バックエンドをデプロイ](../learner/day-1-deploy-backend.ja.html)
 - [Day 1: フロントエンドをデプロイ](../learner/day-1-deploy-frontend.ja.html)
 
-スクリプト詳細はリポジトリ内の `docs/deployment-scripts-guide.ja.md` を参照してください。
+現行スクリプトは JSON state と現在の subscription/tenant/対象を照合し、`npm ci` で build します。backend は実行ごとの一時ディレクトリを使い、HTTP 200 と healthy JSON の両方を上限付きで検査します。Frontend token は環境で渡し、引数・ログ・末尾表示には使いません。CLI の失敗を未作成・削除済み・成功へ読み替えません。
+
+旧実装の詳細を残した `docs/deployment-scripts-guide.ja.md` は履歴の参照用です。実行には上記の Day 1 ページを使います。ローカル回帰テストは `node --test scripts/test/*.test.cjs` で実行でき、Azure CLI・npm・SWA の stub を使用するため実クラウドへ書き込みません。これは実際の Azure deployment の証拠ではありません。

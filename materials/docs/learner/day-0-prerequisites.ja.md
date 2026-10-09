@@ -133,10 +133,21 @@ App Service SKU の利用可否はサブスクリプションやリージョン�
 ## 6. 作業用リソースグループを作成する
 
 ```bash
-az group create \
-  --name "$RESOURCE_GROUP" \
-  --location "$LOCATION" \
-  --tags Workshop=Azure-PaaS-Workshop GroupId="$GROUP_ID"
+GROUP_EXISTS="$(az group exists --subscription "$SUBSCRIPTION_ID" --name "$RESOURCE_GROUP")" || exit 1
+case "$GROUP_EXISTS" in
+  false)
+    az group create --subscription "$SUBSCRIPTION_ID" \
+      --name "$RESOURCE_GROUP" --location "$LOCATION" \
+      --tags Workshop=Azure-PaaS-Workshop GroupId="$GROUP_ID" || exit 1 ;;
+  true)
+    TAGS="$(az group show --subscription "$SUBSCRIPTION_ID" --name "$RESOURCE_GROUP" --query tags -o json)" || exit 1
+    printf '%s' "$TAGS" | jq -e --arg group "$GROUP_ID" \
+      '.Workshop == "Azure-PaaS-Workshop" and .GroupId == $group' >/dev/null || {
+      echo "既存 RG の workshop/group tag が一致しません。対象を確認し、上書きしないでください。"
+      exit 1
+    } ;;
+  *) echo "RG の存在確認結果が不正です。"; exit 1 ;;
+esac
 ```
 
 確認します。

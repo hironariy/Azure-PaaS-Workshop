@@ -14,7 +14,10 @@
 #   ./scripts/workshop-setup.sh
 #
 
-set -e
+set +x
+set -euo pipefail
+GITHUB_USER="${GITHUB_USER:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors for output
 RED='\033[0;31m'
@@ -62,12 +65,13 @@ check_prerequisites() {
     print_success "Azure CLI found"
     
     # Check Azure login status
-    if ! az account show >/dev/null 2>&1; then
-        print_error "Not logged in to Azure CLI."
-        echo "  Run: az login"
+    if ! az account show --output none; then
+        print_error "Unable to read Azure context. Resolve the CLI error before continuing."
         exit 1
     fi
     print_success "Azure CLI logged in"
+    command -v node >/dev/null
+    command -v jq >/dev/null
     
     # Check GitHub CLI (optional)
     if command -v gh >/dev/null 2>&1; then
@@ -99,7 +103,8 @@ get_configuration() {
     
     # Get GitHub username
     if [ "$GH_AVAILABLE" = true ]; then
-        GITHUB_USER=$(gh api user --jq '.login' 2>/dev/null || echo "")
+        GITHUB_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+        GITHUB_USER="${GITHUB_REPO%/*}"
     fi
     
     if [ -z "$GITHUB_USER" ]; then
@@ -107,11 +112,17 @@ get_configuration() {
     fi
     
     # Get repository name from git remote
-    REPO_URL=$(git remote get-url origin 2>/dev/null || echo "")
+    REPO_URL=$(git remote get-url origin)
     if [ -n "$REPO_URL" ]; then
         REPO_NAME=$(basename "$REPO_URL" .git)
     else
         REPO_NAME="Azure-PaaS-Workshop"
+    fi
+    if [ "$GH_AVAILABLE" = true ]; then REPO_NAME="${GITHUB_REPO##*/}"; fi
+    if ! [[ "$GITHUB_USER" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,38}$ &&
+            "$REPO_NAME" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        print_error "Invalid GitHub repository owner/name."
+        exit 1
     fi
     
     # Azure configuration
@@ -152,17 +163,22 @@ create_azure_resources() {
     SUBSCRIPTION_NAME=$(az account show --query name -o tsv)
     
     echo "  Subscription: $SUBSCRIPTION_NAME ($SUBSCRIPTION_ID)"
+    node "$SCRIPT_DIR/check-role-assignment-permission.cjs" "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP"
     
     # Create Resource Group
     echo "  Creating resource group..."
     az group create \
+        --subscription "$SUBSCRIPTION_ID" \
         --name "$RESOURCE_GROUP" \
         --location "$LOCATION" \
         --output none
     print_success "Resource group created: $RESOURCE_GROUP"
     
     # Check if App Registration already exists
-    EXISTING_APP=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv 2>/dev/null || echo "")
+    EXISTING_APPS="$(az ad app list --display-name "$APP_NAME" --query '[].appId' -o json)"
+    APP_COUNT="$(printf '%s' "$EXISTING_APPS" | jq -er 'if type=="array" then length else error("Expected app array") end')"
+    if [ "$APP_COUNT" -gt 1 ]; then print_error "Multiple matching applications; resolve ambiguity."; exit 1; fi
+    EXISTING_APP="$(printf '%s' "$EXISTING_APPS" | jq -r '.[0] // empty')"
     
     if [ -n "$EXISTING_APP" ]; then
         print_warning "App Registration '$APP_NAME' already exists. Using existing app."
@@ -175,7 +191,13 @@ create_azure_resources() {
     fi
     
     # Create Service Principal if not exists
-    SP_ID=$(az ad sp show --id "$APP_ID" --query id -o tsv 2>/dev/null || echo "")
+    SIGNED_IN_USER_ID="$(az ad signed-in-user show --query id -o tsv)"
+    APP_OWNERS="$(az ad app owner list --id "$APP_ID" -o json)"
+    printf '%s' "$APP_OWNERS" | jq -e --arg user "$SIGNED_IN_USER_ID" 'any(.[]; .id == $user)' >/dev/null
+    EXISTING_SPS="$(az ad sp list --filter "appId eq '$APP_ID'" --query '[].id' -o json)"
+    SP_COUNT="$(printf '%s' "$EXISTING_SPS" | jq -er 'if type=="array" then length else error("Expected SP array") end')"
+    if [ "$SP_COUNT" -gt 1 ]; then print_error "Multiple matching service principals."; exit 1; fi
+    SP_ID="$(printf '%s' "$EXISTING_SPS" | jq -r '.[0] // empty')"
     
     if [ -z "$SP_ID" ]; then
         echo "  Creating Service Principal..."
@@ -192,11 +214,12 @@ create_azure_resources() {
     # Assign Contributor role on resource group
     echo "  Assigning Contributor role..."
     az role assignment create \
+        --subscription "$SUBSCRIPTION_ID" \
         --assignee-object-id "$SP_ID" \
         --assignee-principal-type ServicePrincipal \
         --role "Contributor" \
         --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP" \
-        --output none 2>/dev/null || true
+        --output none
     print_success "Contributor role assigned on $RESOURCE_GROUP"
     
     # Create Federated Credential for GitHub Actions
@@ -204,10 +227,16 @@ create_azure_resources() {
     SUBJECT="repo:${GITHUB_USER}/${REPO_NAME}:ref:refs/heads/main"
     
     # Check if federated credential already exists
-    EXISTING_CRED=$(az ad app federated-credential list --id "$APP_ID" --query "[?name=='$FED_CRED_NAME'].name" -o tsv 2>/dev/null || echo "")
+    EXISTING_CREDS="$(az ad app federated-credential list --id "$APP_ID" \
+        --query "[?name=='$FED_CRED_NAME']" -o json)"
+    CRED_COUNT="$(printf '%s' "$EXISTING_CREDS" | jq -er 'if type=="array" then length else error("Expected credential array") end')"
+    if [ "$CRED_COUNT" -gt 1 ]; then print_error "Multiple matching federated credentials."; exit 1; fi
+    EXISTING_CRED="$(printf '%s' "$EXISTING_CREDS" | jq -r '.[0].name // empty')"
     
     if [ -n "$EXISTING_CRED" ]; then
-        print_warning "Federated credential already exists. Skipping creation."
+        printf '%s' "$EXISTING_CREDS" | jq -e --arg subject "$SUBJECT" \
+            '.[0] | .subject == $subject and .issuer == "https://token.actions.githubusercontent.com" and .audiences == ["api://AzureADTokenExchange"]' >/dev/null
+        print_success "Existing federated credential matches the requested repository and branch."
     else
         echo "  Creating Federated Credential..."
         az ad app federated-credential create \
@@ -230,22 +259,25 @@ configure_github_secrets() {
     if [ "$GH_AVAILABLE" = true ]; then
         echo "  Setting GitHub secrets automatically..."
         
-        if gh secret set AZURE_CLIENT_ID --body "$APP_ID" 2>/dev/null; then
+        if gh secret set AZURE_CLIENT_ID --repo "$GITHUB_USER/$REPO_NAME" --body "$APP_ID"; then
             print_success "AZURE_CLIENT_ID set"
         else
             print_error "Failed to set AZURE_CLIENT_ID"
+            exit 1
         fi
         
-        if gh secret set AZURE_TENANT_ID --body "$TENANT_ID" 2>/dev/null; then
+        if gh secret set AZURE_TENANT_ID --repo "$GITHUB_USER/$REPO_NAME" --body "$TENANT_ID"; then
             print_success "AZURE_TENANT_ID set"
         else
             print_error "Failed to set AZURE_TENANT_ID"
+            exit 1
         fi
         
-        if gh secret set AZURE_SUBSCRIPTION_ID --body "$SUBSCRIPTION_ID" 2>/dev/null; then
+        if gh secret set AZURE_SUBSCRIPTION_ID --repo "$GITHUB_USER/$REPO_NAME" --body "$SUBSCRIPTION_ID"; then
             print_success "AZURE_SUBSCRIPTION_ID set"
         else
             print_error "Failed to set AZURE_SUBSCRIPTION_ID"
+            exit 1
         fi
     else
         echo ""
@@ -262,7 +294,7 @@ configure_github_secrets() {
 print_summary() {
     echo ""
     echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║                    Setup Complete!                         ║${NC}"
+    echo -e "${GREEN}║             Azure identity setup completed                  ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "${YELLOW}GitHub Secrets (configure if not auto-set):${NC}"
@@ -277,6 +309,8 @@ print_summary() {
     echo -e "${YELLOW}Next Steps:${NC}"
     echo "─────────────────────────────────────────────────────────────"
     echo "  1. Verify GitHub secrets are configured"
+    echo "     Manual secret configuration is still required if GitHub CLI was unavailable."
+    echo "     A Contributor service principal cannot create the Bicep Key Vault role assignments."
     echo ""
     echo "  2. Deploy infrastructure:"
     echo "     cd materials/bicep"
@@ -291,11 +325,8 @@ print_summary() {
     echo ""
     echo -e "${YELLOW}Cleanup After Workshop:${NC}"
     echo "─────────────────────────────────────────────────────────────"
-    echo "  # Delete all Azure resources"
-    echo "  az group delete --name $RESOURCE_GROUP --yes --no-wait"
-    echo ""
-    echo "  # Delete App Registration"
-    echo "  az ad app delete --id $APP_ID"
+    echo "  Follow materials/docs/learner/cleanup.ja.md; verify the dedicated target and ownership."
+    echo "  This optional GitHub identity is separate from the learner backend/frontend apps."
     echo ""
     
     # Save configuration to file for reference
@@ -332,4 +363,4 @@ main() {
     print_summary
 }
 
-main "$@"
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi

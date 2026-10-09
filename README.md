@@ -6,6 +6,8 @@
 
 A hands-on workshop for learning Azure PaaS patterns through building and deploying a production-ready web application.
 
+> **Current deployment entry:** Start with the [Cloud Shell quickstart](materials/docs/learner/cloud-shell-quickstart.ja.md) and the linked Day 0/Day 1 guides. Current deploy scripts require versioned JSON state with a verified subscription/tenant and exact resource targets. Legacy `deploy-frontend.local.env` and token-argument instructions further below are historical; do not use them with the current scripts. [Cleanup](materials/docs/learner/cleanup.ja.md) confirms dedicated ownership and actual Azure deletion and never recursively deletes the checkout.
+
 > 📚 **Workshop Series - Day 2**
 > 
 > This workshop is part of a **2-day Azure workshop series**:

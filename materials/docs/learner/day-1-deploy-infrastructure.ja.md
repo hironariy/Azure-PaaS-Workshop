@@ -25,43 +25,47 @@ echo "$PARAM_FILE"
 
 値が空の場合は、[受講者クイックスタート](cloud-shell-quickstart.ja.html) と [Day 0: Entra ID と認証設定](day-0-entra-id.ja.html) に戻って設定してください。
 
-## 2. Cosmos DB 管理者パスワードを生成する
+## 2. Cosmos DB 管理者パスワードの扱いを確認する
 
-接続文字列で扱いやすいよう、URL-safe な値を使います。
-
-```bash
-export COSMOS_PASSWORD="$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=' | cut -c1-32)"
-echo "Password length: ${#COSMOS_PASSWORD}"
-```
+次の手順で初めてパラメータファイルを作る場合だけ、暗号学的乱数から URL-safe なパスワードを生成してファイルへ直接保存します。大文字・小文字・数字・記号を必ず含めます。パスワードをターミナルへ表示せず、JSON state に保存しません。再実行時は既存の値を保持し、意図しない DB パスワード変更を防ぎます。
 
 ## 3. 標準デプロイ用パラメータファイルを作成する
 
 テンプレートをローカル用ファイルにコピーし、Cloud Shell のエディターで自分の値に変更します。この章では、パラメータの意味を確認しながら手動で編集します。
 
 ```bash
-if [ ! -f "$PARAM_FILE" ]; then
-  (umask 077; cp materials/bicep/dev.bicepparam "$PARAM_FILE")
-else
-  echo "既存パラメータを保持します: $PARAM_FILE"
-fi
-chmod 600 "$PARAM_FILE"
-node <<'NODE'
+node <<'NODE' || exit 1
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomBytes } = require('node:crypto');
 const file = process.env.PARAM_FILE;
+const created = !fs.existsSync(file);
+if (!created && (!fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink())) {
+  throw new Error('パラメータは通常ファイルでなければなりません');
+}
 const relative = path.relative(path.dirname(file),
   path.join(process.env.WORKSHOP_REPO_DIR, 'materials/bicep/main.bicep')).split(path.sep).join('/');
 const using = `using '${relative.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
-const source = fs.readFileSync(file, 'utf8');
+let source = fs.readFileSync(created
+  ? path.join(process.env.WORKSHOP_REPO_DIR, 'materials/bicep/dev.bicepparam') : file, 'utf8');
 const pattern = /^using '(?:\\.|[^'\\])*'/m;
 if (!pattern.test(source)) throw new Error('パラメータの using 行を確認してください');
-fs.writeFileSync(file, source.replace(pattern, () => using), { mode: 0o600 });
+source = source.replace(pattern, () => using);
+if (created) {
+  const passwordLine = /^param cosmosDbAdminPassword = ''/m;
+  if (!passwordLine.test(source)) throw new Error('テンプレートのパスワード行を確認してください');
+  source = source.replace(passwordLine,
+    () => `param cosmosDbAdminPassword = 'Aa1_${randomBytes(24).toString('base64url')}'`);
+}
+fs.writeFileSync(file, source, { mode: 0o600, flag: created ? 'wx' : 'w' });
+fs.chmodSync(file, 0o600);
+console.log(created ? 'パラメータを作成しました（秘密値は非表示）' : '既存パラメータ・秘密値を保持しました');
 NODE
 ```
 
 `PARAM_FILE` は state ディレクトリ直下に保存します。`using` は実際の clone 先への相対パスから生成するため、ディレクトリ名を固定しません。再実行時は既存パラメータ・秘密値を上書きせず、テンプレート変更は手動で確認します。
 
-編集に使う値を確認します。`cosmosDbAdminPassword` はこのあとパラメータファイルに貼り付けるため、このタイミングだけ表示します。
+編集に使う公開設定値だけを確認します。`cosmosDbAdminPassword` は生成済みで、表示・コピーする必要はありません。
 
 ```bash
 cat <<EOF
@@ -73,7 +77,6 @@ groupId=$GROUP_ID
 entraTenantId=$TENANT_ID
 entraBackendClientId=$BACKEND_CLIENT_ID
 entraFrontendClientId=$FRONTEND_CLIENT_ID
-cosmosDbAdminPassword=$COSMOS_PASSWORD
 EOF
 ```
 
@@ -95,7 +98,7 @@ code "$PARAM_FILE"
 | `param entraTenantId` | `$TENANT_ID` の値 | Day 0 で確認した tenant ID |
 | `param entraBackendClientId` | `$BACKEND_CLIENT_ID` の値 | Backend API app registration の client ID |
 | `param entraFrontendClientId` | `$FRONTEND_CLIENT_ID` の値 | Frontend SPA app registration の client ID |
-| `param cosmosDbAdminPassword` | `$COSMOS_PASSWORD` の値 | 直前に生成した URL-safe なパスワード |
+| `param cosmosDbAdminPassword` | 生成済みの値を保持 | 表示・コピー・再生成しない |
 | `param staticWebAppSku` | `'Standard'` のまま | Static Web Apps Linked Backend に必要 |
 | `param staticWebAppLocation` | `$SWA_LOCATION` の値 | Static Web Apps のリージョン |
 
@@ -117,18 +120,20 @@ fi
 
 ```bash
 az deployment group validate \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --template-file materials/bicep/main.bicep \
-  --parameters "$PARAM_FILE"
+  --parameters "$PARAM_FILE" || exit 1
 ```
 
 ## 5. PaaS リソースをデプロイする
 
 ```bash
 az deployment group create \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --template-file materials/bicep/main.bicep \
-  --parameters "$PARAM_FILE"
+  --parameters "$PARAM_FILE" || exit 1
 ```
 
 作成される主なリソース:
@@ -143,20 +148,25 @@ az deployment group create \
 ## 6. デプロイ出力を保存する
 
 ```bash
-export APP_SERVICE_NAME="$(az deployment group show \
+APP_SERVICE_NAME="$(az deployment group show \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query "properties.outputs.appServiceName.value" -o tsv)"
+  --query "properties.outputs.appServiceName.value" -o tsv)" || exit 1
 
-export SWA_NAME="$(az deployment group show \
+SWA_NAME="$(az deployment group show \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query "properties.outputs.staticWebAppName.value" -o tsv)"
+  --query "properties.outputs.staticWebAppName.value" -o tsv)" || exit 1
 
-export SWA_HOSTNAME="$(az staticwebapp show \
+SWA_HOSTNAME="$(az staticwebapp show \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name "$SWA_NAME" \
-  --query defaultHostname -o tsv)"
+  --query defaultHostname -o tsv)" || exit 1
+
+export APP_SERVICE_NAME SWA_NAME SWA_HOSTNAME
 
 workshop_state_save deployed || exit 1
 

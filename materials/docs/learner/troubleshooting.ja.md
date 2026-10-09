@@ -83,7 +83,7 @@ az deployment group show \
 |---|---|
 | SKU quota | App Service Plan / Cosmos DB tier の quota |
 | region unavailable | `LOCATION` と `SWA_LOCATION` |
-| invalid password | `COSMOS_PASSWORD` が空でないか |
+| invalid password | `PARAM_FILE` の `cosmosDbAdminPassword` の設定有無。秘密値は出力しない |
 | app registration mismatch | `BACKEND_CLIENT_ID` / `FRONTEND_CLIENT_ID` |
 
 ## App Service `/health` が失敗する
@@ -240,7 +240,7 @@ AADSTS900144: The request body must contain the following parameter: 'client_id'
 原因:
 
 - Static Web Apps にデプロイされた `index.html` の `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID` が入っていない。
-- `$WORKSHOP_STATE_DIR/deploy-frontend.local.env` の値が空、または古い frontend 成果物を再デプロイしている。
+- JSON state の frontend ID が異なる、または古い frontend 成果物を再デプロイしている。
 
 確認:
 
@@ -248,7 +248,8 @@ AADSTS900144: The request body must contain the following parameter: 'client_id'
 curl -fsS "https://${SWA_HOSTNAME}" \
   | grep -o 'window.__APP_CONFIG__=[^<]*'
 
-cat "$WORKSHOP_STATE_DIR/deploy-frontend.local.env"
+workshop_state_load deployed || exit 1
+printf 'Tenant: %s / Frontend: %s / Backend: %s\n' "$TENANT_ID" "$FRONTEND_CLIENT_ID" "$BACKEND_CLIENT_ID"
 ```
 
 期待値は `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_TENANT_ID`、`ENTRA_BACKEND_CLIENT_ID` が含まれることです。
@@ -258,12 +259,7 @@ cat "$WORKSHOP_STATE_DIR/deploy-frontend.local.env"
 対処:
 
 ```bash
-cat > "$WORKSHOP_STATE_DIR/deploy-frontend.local.env" <<EOF
-ENTRA_TENANT_ID="$TENANT_ID"
-ENTRA_FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
-ENTRA_BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
-EOF
-
+workshop_state_load deployed || exit 1
 ./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
 ```
 

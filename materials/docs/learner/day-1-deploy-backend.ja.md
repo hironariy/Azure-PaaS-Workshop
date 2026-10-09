@@ -44,28 +44,32 @@ chmod +x scripts/deploy-backend.sh
 
 | 処理 | スクリプトが行うこと | 意図 |
 |---|---|---|
-| 引数と作業ディレクトリ確認 | `<resource-group>` と `<app-service-name>` を受け取り、`materials/backend` に移動する | 誤ったリソースやディレクトリにデプロイしない |
-| アプリ build | `npm install` と `npm run build` を実行する | TypeScript を Cloud Shell 側で JavaScript に変換する |
-| ZIP package 作成 | `deploy-package/` に `dist/` と `package.json` / `package-lock.json` をコピーし、`npm ci --omit=dev` で production 依存関係だけを入れてから ZIP 化する | App Service 上で追加 build せず、実行に必要なファイルだけを配置する |
+| 引数と対象確認 | JSON state の RG・App Service と引数を比較し、subscription/tenant を検証する | 誤った対象への build/deploy を停止する |
+| アプリ build | `npm ci` と `npm run build -- --outDir <専用一時ディレクトリ>/package/dist` を実行する | lockfile を使い、既存 `dist` や他実行の ZIP を消さず build する |
+| ZIP package 作成 | 実行ごとの `.deploy-XXXXXX/package/` に `package.json` / lockfile をコピーし、`npm ci --omit=dev` で production 依存関係を入れて ZIP 化する | App Service 上で追加 build せず、必要なファイルだけを配置する |
 | ZIP の検査 | `unzip -t` とパス区切りの確認を行う | 壊れた ZIP や Windows 形式の区切り文字による起動失敗を防ぐ |
 | App Service 設定 | `SCM_DO_BUILD_DURING_DEPLOYMENT=false` と startup command `node dist/src/app.js` を設定する | App Service 側の remote build を避け、ZIP 内の build 済みアプリを起動する |
 | ZIP deploy | `az webapp deploy --type zip --clean true --restart true --async true` を実行する | 既存ファイルを整理し、アップロード後に App Service を再起動する |
-| 起動待ち | `/health` を 20 秒後から最大 30 回、15 秒間隔で確認する | VNet Integration、Key Vault reference、DB 接続の初期化待ちを吸収する |
-| 後片付け | 成功/失敗時に `deploy.zip` を削除する | Cloud Shell 作業ディレクトリに不要な成果物を残さない |
+| 起動待ち | 20 秒後から最大 30 回、接続 5 秒・各要求 10 秒の上限付きで確認し、失敗間隔は 15 秒とする | HTTP 200 だけでなく JSON の `status: healthy` を要求し、通信失敗を区別する |
+| 後片付け | 成功/失敗時にこの実行が作った一時ディレクトリだけを削除する | 既存 `deploy.zip`・`deploy-package`・リポジトリは消さない |
 
 重要なポイントは、ZIP のルートに `dist/src/app.js` と `node_modules/` を含めることです。これにより、Dockerfile、`package.json`、startup command の `node dist/src/app.js` と App Service 上のファイル配置が一致します。
 
 期待値:
 
 ```text
-✅ App is healthy! (HTTP 200)
-Deployment successful!
+Readiness passed after ...s (HTTP 200, status=healthy).
+Upload and readiness checks passed: https://<actual-hostname>
 ```
+
+アップロード受付や既存インスタンスの health は、新しい release の完了証拠ではありません。Deployment Center の該当 deployment の完了と変更したアプリ内容を別途確認します。失敗時は非ゼロ終了し、成功メッセージを表示しません。
 
 ## 5. App Service 直接ヘルスチェックを確認する
 
 ```bash
-curl -fsS "https://${APP_SERVICE_NAME}.azurewebsites.net/health" | jq .
+APP_HOSTNAME="$(az webapp show --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" --query defaultHostName -o tsv)" || exit 1
+curl --connect-timeout 5 --max-time 10 -fsS "https://${APP_HOSTNAME}/health" | jq .
 ```
 
 期待値:
