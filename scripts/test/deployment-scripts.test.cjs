@@ -82,7 +82,7 @@ if(command==='account show'){
  if(query==='id')result('${subscription}');
  if(query==='tenantId')result('${tenant}');
  if(query==='name')result('Owned fixture subscription');
- result({id:'${subscription}',tenantId:'${tenant}',state:'Enabled'});
+ result({id:'${subscription}',tenantId:'${tenant}',state:'Enabled',environmentName:'AzureCloud'});
 }
 if(command==='group exists'){
  if(scenario==='group-lookup-fail')fail('Group lookup rejected');
@@ -286,5 +286,7 @@ test('optional setup stops on missing RBAC, rejected app lookup or failed role a
     assert.notEqual(result.status, 0, result.stderr);
     assert.doesNotMatch(result.stdout, /Contributor role assigned|Azure identity setup completed/);
     if (scenario === 'no-permission') assert.equal(calls().some((call) => call.args.slice(0, 2).join(' ') === 'group create'), false);
+    if (scenario === 'app-lookup-fail') assert(calls().some((call) => call.args.slice(0, 3).join(' ') === 'ad app list'));
+    if (scenario === 'role-fail') assert(calls().some((call) => call.args.slice(0, 3).join(' ') === 'role assignment create'));
   }
 });
