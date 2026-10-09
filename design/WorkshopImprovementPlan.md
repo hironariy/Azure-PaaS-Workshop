@@ -218,3 +218,32 @@ IaaS の Issue を「共通 application」「learner workflow」「PaaS へ適�
 - IaaS 比較と対応記録を更新し、次回の workshop release 前に新しい relevant Issues を確認する。
 
 参考: [Azure-IaaS-Workshop Issues](https://github.com/hironariy/Azure-IaaS-Workshop/issues)、[Materials Validation Strategy](MaterialsValidationStrategy.md)、[受講者ポータル](../materials/docs/index.md)。
+
+## 12. 初回実装の証拠と未解決事項を反映する
+
+初回の実装は Issue ごとの PR に分けて開始した。以下は全 Issue の解決宣言ではなく、次の実装・レビューのための到達点である。PR は自動 merge せず、Issue も閉じていない。
+
+| 対象 | 成果物 | 現時点で言えること | 未達の検証・条件 |
+|---|---|---|---|
+| #19 foundation | #25: Node / Vitest の回帰テスト基盤 | 実行可能な model / HTTP / runtime-config tests | 全体 CI と Azure の実証は別 |
+| #14 | #26: Unicode slug、競合 retry、URL encode、作成エラー表示 | 日本語・記号 fallback、draft/published、競合と安全なエラーをローカル検証 | 実 DB とブラウザー CRUD / ownership / 既存 URL |
+| #15 | **Draft #27:** 依存更新 candidate と再現可能な build | 設定済み registry 内では clean install / audit / production ZIP smoke が成功 | public release / package provenance、通常の Cloud Shell 再現性、SWA CLI |
+| #13 | #28: 自己同意と管理者例外の分離 | learner の暗黙 AllPrincipals grant を除き、所有者・request・grant の確認を明記 | 実ユーザーの policy / consent / token / 認証付き API |
+| #16 | #29: read-only RBAC preflight | 承認された環境の tenant/subscription を確認。RG は未作成で、呼び出し元には必要な roleAssignments/write が許可として報告されず停止 | isolated Contributor principal の実証、権限を保持した新規 deploy |
+| #19 gate | **Draft #30:** app / Bicep CI | 実 GitHub run で Bicep artifact parity は成功。app jobs は package-source guard で停止 | public-source の依存解決後の green CI と手動 required-check 設定 |
+
+### 依存更新は registry の結果だけで完成にしない
+
+初回環境の registry は package mirror を使用しており、更新後の lockfile もその artifact URL を参照した。そこでの audit 0 件は public npm 上の公開版・upstream provenance の証明ではない。Axios 1.20.0 は public npm の確認で E404、latest は 1.18.1 だった。他パッケージの public metadata 取得で生じた transport error も成功と解釈しない。
+
+このため #27 は draft とし、#30 は非 public npm の package source をインストール前に拒否する。URL だけを置換して未公開 version / integrity を残したり、組織固有 registry を説明なしの前提にしたりしない。公開済みの supported versions と source を再確認し、通常の Cloud Shell で clean install / audit / build が成立するまで #15 は未解決である。
+
+別途インストールして確認した SWA CLI 2.0.10 は、互換範囲の `npm audit fix` 後も 6 件（high 5、low 1）の package-level 指摘が残った。これは unique CVE 数や exploitability の実証ではない。古い CLI への強制 downgrade、非互換 override、警告抑制で解決扱いにしない。
+
+### Azure の停止は失敗を隠すためのスキップではない
+
+承認された環境で read-only permission check は実行したが、必要な `Microsoft.Authorization/roleAssignments/write` が許可として報告されなかったため、リソースは作成していない。これは現在の呼び出し元の結果であり、isolated principal に Contributor だけを割り当てた試験の代用とはしない。Contributor-only / 主催者事前準備なしという条件を、受講者の権限昇格や Key Vault RBAC 無効化で変更しない。
+
+### 次の実装は独立した作業とブロックされた実証を分ける
+
+#20 の state / naming と #18 の失敗通知・秘密値・Cleanup、#22 の preflight、#21 の diagnostics、#23 の文書同期は、可能なローカル実装を継続できる。一方、public-source 依存の確認、必要権限、実ユーザー consent、実 DB / browser の証拠がないまま、#17 の有料・復旧演習や workshop-ready 判定へ進まない。環境 ID と認証情報は repository の既定値にせず、検証用の非公開設定に保持する。
