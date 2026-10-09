@@ -21,26 +21,44 @@ title: "Day 0: Entra ID と認証設定"
 ## 1. 名前を決める
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load base || exit 1
 
 export BACKEND_APP_NAME="paas-blog-backend-${GROUP_ID}"
 export FRONTEND_APP_NAME="paas-blog-frontend-${GROUP_ID}"
-export ACCESS_SCOPE_ID="$(uuidgen)"
+export ACCESS_SCOPE_ID="${ACCESS_SCOPE_ID:-$(node -p 'require("node:crypto").randomUUID()')}"
+SIGNED_IN_USER_ID="$(az ad signed-in-user show --query id -o tsv)" || exit 1
+workshop_state_save base || exit 1
 ```
+
+保存済みの `BACKEND_CLIENT_ID` / `FRONTEND_CLIENT_ID` がある場合、以下のコードは作成を省略して既存アプリを確認します。削除済み・権限不足・tenant 不一致を区別し、新しいアプリを無断で作成しません。アプリ作成と state 保存は別サービスの操作であり、同時に確定できません。作成直後に保存が失敗した場合は、その ID を保持して保存を再試行します。ID を失った場合は専用アプリの名前・所有者を確認して復元し、作成コードをそのまま再実行しません。
 
 ## 2. Backend API アプリ登録を作成する
 
 ```bash
-export BACKEND_CLIENT_ID="$(az ad app create \
-  --display-name "$BACKEND_APP_NAME" \
-  --sign-in-audience AzureADMyOrg \
-  --query appId -o tsv)"
+if [ -z "$BACKEND_CLIENT_ID" ]; then
+  BACKEND_CLIENT_ID="$(az ad app create \
+    --display-name "$BACKEND_APP_NAME" \
+    --sign-in-audience AzureADMyOrg \
+    --query appId -o tsv)" || exit 1
+  export BACKEND_CLIENT_ID
+else
+  az ad app show --id "$BACKEND_CLIENT_ID" --output none || exit 1
+fi
+workshop_state_save base || exit 1
 
-export BACKEND_OBJECT_ID="$(az ad app show \
+BACKEND_OBJECT_ID="$(az ad app show \
   --id "$BACKEND_CLIENT_ID" \
-  --query id -o tsv)"
+  --query id -o tsv)" || exit 1
+export BACKEND_OBJECT_ID
+
+APP_OWNERS="$(az ad app owner list --id "$BACKEND_CLIENT_ID" -o json)" || exit 1
+printf '%s' "$APP_OWNERS" | jq -e --arg user "$SIGNED_IN_USER_ID" 'any(.[]; .id == $user)' >/dev/null || {
+  echo "自分が所有する Backend アプリでないため、変更を停止します。"
+  exit 1
+}
 
 az ad app update \
   --id "$BACKEND_CLIENT_ID" \
@@ -98,14 +116,27 @@ az ad app show \
 ## 3. Frontend SPA アプリ登録を作成する
 
 ```bash
-export FRONTEND_CLIENT_ID="$(az ad app create \
-  --display-name "$FRONTEND_APP_NAME" \
-  --sign-in-audience AzureADMyOrg \
-  --query appId -o tsv)"
+if [ -z "$FRONTEND_CLIENT_ID" ]; then
+  FRONTEND_CLIENT_ID="$(az ad app create \
+    --display-name "$FRONTEND_APP_NAME" \
+    --sign-in-audience AzureADMyOrg \
+    --query appId -o tsv)" || exit 1
+  export FRONTEND_CLIENT_ID
+else
+  az ad app show --id "$FRONTEND_CLIENT_ID" --output none || exit 1
+fi
+workshop_state_save base || exit 1
 
-export FRONTEND_OBJECT_ID="$(az ad app show \
+FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
-  --query id -o tsv)"
+  --query id -o tsv)" || exit 1
+export FRONTEND_OBJECT_ID
+
+APP_OWNERS="$(az ad app owner list --id "$FRONTEND_CLIENT_ID" -o json)" || exit 1
+printf '%s' "$APP_OWNERS" | jq -e --arg user "$SIGNED_IN_USER_ID" 'any(.[]; .id == $user)' >/dev/null || {
+  echo "自分が所有する Frontend アプリでないため、変更を停止します。"
+  exit 1
+}
 ```
 
 Cloud Shell では本番の Static Web Apps URL がまだ分からないため、まずローカル/検証用 URI を入れておきます。Day 1 のデプロイ後に SWA URL を追加します。
@@ -122,9 +153,10 @@ fi
 
 echo "FRONTEND_OBJECT_ID=$FRONTEND_OBJECT_ID"
 
-SPA_PATCH="$(jq -nc '{
+EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)" || exit 1
+SPA_PATCH="$(jq -nc --argjson existing "$EXISTING_REDIRECTS" '{
   spa: {
-    redirectUris: ["http://localhost:4280"]
+    redirectUris: (($existing // []) + ["http://localhost:4280"] | unique)
   }
 }')"
 
@@ -187,31 +219,17 @@ az ad app show \
 Cloud Shell のセッション切断に備え、再利用する値を Azure Files 側の state ファイルに保存します。
 
 ```bash
-cat > "$ENV_FILE" <<EOF
-export WORKSHOP_REPO_DIR="$WORKSHOP_REPO_DIR"
-export WORKSHOP_STATE_DIR="$WORKSHOP_STATE_DIR"
-export ENV_FILE="$ENV_FILE"
-export LOCATION="$LOCATION"
-export SWA_LOCATION="$SWA_LOCATION"
-export BASE_NAME="$BASE_NAME"
-export GROUP_ID="$GROUP_ID"
-export RESOURCE_GROUP="$RESOURCE_GROUP"
-export PARAM_FILE="$PARAM_FILE"
-export TENANT_ID="$TENANT_ID"
-export BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
-export FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
-export ACCESS_SCOPE_ID="$ACCESS_SCOPE_ID"
-EOF
-
-cat "$ENV_FILE"
+workshop_state_save identity || exit 1
+printf 'State saved: %s\n' "$ENV_FILE"
 ```
 
 次回 Cloud Shell を開いたら、次で復元できます。
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load identity || exit 1
 ```
 
 ## 次に進む

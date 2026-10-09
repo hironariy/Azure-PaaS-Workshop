@@ -9,9 +9,10 @@ Cloud Shell から Bicep を実行し、PaaS リソースを作成します。�
 ## 1. 変数と作業ディレクトリを確認する
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env" 2>/dev/null || true
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load identity || exit 1
 
 echo "$WORKSHOP_REPO_DIR"
 echo "$WORKSHOP_STATE_DIR"
@@ -38,13 +39,27 @@ echo "Password length: ${#COSMOS_PASSWORD}"
 テンプレートをローカル用ファイルにコピーし、Cloud Shell のエディターで自分の値に変更します。この章では、パラメータの意味を確認しながら手動で編集します。
 
 ```bash
-cp materials/bicep/dev.bicepparam "$PARAM_FILE"
-
-sed -i.bak "s|using 'main.bicep'|using '../../Azure-PaaS-Workshop/materials/bicep/main.bicep'|" "$PARAM_FILE"
-rm -f "${PARAM_FILE}.bak"
+if [ ! -f "$PARAM_FILE" ]; then
+  (umask 077; cp materials/bicep/dev.bicepparam "$PARAM_FILE")
+else
+  echo "既存パラメータを保持します: $PARAM_FILE"
+fi
+chmod 600 "$PARAM_FILE"
+node <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const file = process.env.PARAM_FILE;
+const relative = path.relative(path.dirname(file),
+  path.join(process.env.WORKSHOP_REPO_DIR, 'materials/bicep/main.bicep')).split(path.sep).join('/');
+const using = `using '${relative.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+const source = fs.readFileSync(file, 'utf8');
+const pattern = /^using '(?:\\.|[^'\\])*'/m;
+if (!pattern.test(source)) throw new Error('パラメータの using 行を確認してください');
+fs.writeFileSync(file, source.replace(pattern, () => using), { mode: 0o600 });
+NODE
 ```
 
-`PARAM_FILE` は `~/clouddrive/paas-workshop` 配下に保存します。Bicep の `using` 行だけは、永続領域から `~/Azure-PaaS-Workshop/materials/bicep/main.bicep` を参照できるように調整します。
+`PARAM_FILE` は state ディレクトリ直下に保存します。`using` は実際の clone 先への相対パスから生成するため、ディレクトリ名を固定しません。再実行時は既存パラメータ・秘密値を上書きせず、テンプレート変更は手動で確認します。
 
 編集に使う値を確認します。`cosmosDbAdminPassword` はこのあとパラメータファイルに貼り付けるため、このタイミングだけ表示します。
 
@@ -143,11 +158,7 @@ export SWA_HOSTNAME="$(az staticwebapp show \
   --name "$SWA_NAME" \
   --query defaultHostname -o tsv)"
 
-cat >> "$ENV_FILE" <<EOF
-export APP_SERVICE_NAME="$APP_SERVICE_NAME"
-export SWA_NAME="$SWA_NAME"
-export SWA_HOSTNAME="$SWA_HOSTNAME"
-EOF
+workshop_state_save deployed || exit 1
 
 echo "App Service: $APP_SERVICE_NAME"
 echo "Static Web App: https://$SWA_HOSTNAME"
@@ -156,7 +167,9 @@ echo "Static Web App: https://$SWA_HOSTNAME"
 ## 7. Static Web Apps URL を Entra ID に追加する
 
 ```bash
-REDIRECT_URIS="$(jq -nc --arg swa "https://$SWA_HOSTNAME" '["http://localhost:4280", $swa, ($swa + "/")]')"
+EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)" || exit 1
+REDIRECT_URIS="$(jq -nc --argjson existing "$EXISTING_REDIRECTS" --arg swa "https://$SWA_HOSTNAME" \
+  '(($existing // []) + ["http://localhost:4280", $swa, ($swa + "/")]) | unique')" || exit 1
 
 FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
