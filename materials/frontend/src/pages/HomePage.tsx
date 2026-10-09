@@ -67,7 +67,7 @@ function HomePage() {
                 />
               )}
               <div className="p-6">
-                <Link to={`/posts/${post.slug}`}>
+                <Link to={`/posts/${encodeURIComponent(post.slug)}`}>
                   <h2 className="mb-2 text-xl font-semibold text-gray-900 hover:text-azure-600">
                     {post.title}
                   </h2>

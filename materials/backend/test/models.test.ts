@@ -9,6 +9,26 @@ test('ASCII slug generation preserves the current title convention', () => {
   assert.equal(generateSlug(' Hello, Azure World! '), 'hello-azure-world');
 });
 
+test('Unicode titles have normalized nonempty URL-safe slugs', () => {
+  for (const [title, expected] of [
+    ['日本語の記事', '日本語の記事'],
+    ['中文文章', '中文文章'],
+    ['한국어 제목', '한국어-제목'],
+    ['Café résumé', 'café-résumé'],
+    ['Cafe\u0301', 'café'],
+    ['Azure 日本語の記事', 'azure-日本語の記事'],
+    ['-- 日本語 --', '日本語'],
+  ]) {
+    assert.equal(generateSlug(title), expected);
+  }
+  for (const title of ['😀', '!!!', '---', ' ']) {
+    assert.match(generateSlug(title), /^post-[a-f0-9-]{36}$/);
+  }
+  const slug = generateSlug('𠮷'.repeat(101));
+  assert.equal(Array.from(slug).length, 100);
+  assert.equal(decodeURIComponent(encodeURIComponent(slug)), slug);
+});
+
 test('a draft preserves Japanese content without a database connection', () => {
   const post = new Post({
     title: 'Azure 入門',
