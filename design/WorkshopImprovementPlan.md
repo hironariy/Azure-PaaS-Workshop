@@ -305,3 +305,28 @@ catalog 成功後に現在の caller の permission を再確認したが、専�
 実装順は **IaC ownership / SKU → normative baseline reference / diagram → component・comparison・cost → 教材リンク / build**。main.json は Bicep **0.44.1** で再生成して parity を検証する。resource 名 / role GUID / secret reference / private DNS / public API routing は維持し、権限不足を回避する変更はしない。
 
 #17 はこれと並行して、B1 で可能な restart / 既知 revision の rebuild・redeploy と content integrity の計測手順を配布する。slots / HA / backup restore / multi-region は追加承認・対応 SKU・実証が揃わなければ実行済みとしない。依存・権限・consent の block は文書同期や template build の成功では解消しない。
+
+## 15. #23 / #17 のローカル実装と実証待ちを記録する
+
+| 対象 | 成果物 | 確認した結果 | 未確認 |
+|---|---|---|---|
+| #23 第 1 slice | #36 / base #35 branch | SWA Standard 必須、B1/M25/HA=false、新規 default と既存 M30 の区別、Key Vault single writer / role-only module、既存 role GUID/RBAC 維持、main.json parity（0.44.1）、4 parameter templates、33 native tests。実 CI `37948591435` success | 実 redeploy / role idempotence / effective DB network isolation、全 component / comparison / reference / instructor の個別同期 |
+| #17 baseline | #37 / base #36 branch | read-only recovery observer、2 経路の stable healthy、初期 healthy で観測終了しない、未観測 downtime は null、429 区別、UTC / monotonic、restart / redeploy / known revision rebuild rollback / content integrity の具体手順。38 native tests、実 CI `37949511461` success | 実 restart / release / rollback / DB persistence / browser CRUD / telemetry |
+| #21 Day 2 同期 | #37 内 | exact subscription、real hostname helper、connection value / raw logs ZIP 表示の除去、exception aggregate、0 件は成功でない説明 | 実 SDK / reference status / sanitized incident の診断 |
+
+両 slice は Pages build と changed Bash / relative links を確認した。stdout と outfile の末尾 newline の差を ARM 差分と取り違えず、同じ compiler の **outfile 同士**で配布 artifact の exact parity を検証した。既存の unused environment warnings は残している。
+
+### 互換性と歴史資料を扱う
+
+- role assignment は同じ vault scope / MI principal / Secrets User role / deterministic GUID を使い、resource 名・secret reference を変えない。resource writer の分離だけで Contributor-only の不足権限を解消したとはしない。
+- 以前の implicit M30 deployment は actual tier を明示して保持する。fresh baseline の M25 default を既存 cluster の downgrade として使わない。
+- Bicep README の App Gateway / certificate / Free / callback / token 表示 / F1 回避策を現行本線へ同期。両 README の価格は未検証 fixed total ではなく、実 region / quote date / currency / storage / NAT / public IP / telemetry を含む見積へ変更した。
+- 現行 raster 図を確認し、既存 B1 / Dev-Test の非 HA 警告を保持した。3 zone backdrop を有効な冗長性の保証とは解釈しない。
+- IaaS 比較は sister README revision `5aa79ac5969e551f08295ad660f6b1ec6856eda6` の **3 data-bearing members / no arbiter** を基準とする。旧 2 DB VM / Free / HA / gateway 設計は normative でない境界を設け、内容を削除して解決扱いにはしない。
+- pinned mongoClusters `2024-02-15-preview` schema には publicNetworkAccess property が無い。private endpoint 作成だけで effective isolation が検証済みとは言わず、実 firewall / DNS / route の確認を残す。無承認の API migration や public DB 回避策を追加しない。
+
+### 残る完成条件
+
+公開依存 provenance / SWA CLI audit と app CI、必須 RBAC、実ユーザー consent がブロックのまま、Azure resource は作成していない。#17 observer は probe のみで restart を自動実行せず、paid HA / secondary region / DB destructive injection も実行していない。#23 の歴史資料区分は個別同期の代替ではない。これらの local PR / CI の成功を全 Issue 解決・workshop-ready・Contributor-only rehearsal 成功へ読み替えない。
+
+次の作業は #23 の残る component / comparison / reference / instructor synchronization と、ブロック解消後の実 Cloud Shell → Entra → PaaS deploy → CRUD / telemetry → recovery → owned cleanup である。PR は #24〜#37 を公開したが、自動 merge / Issue close はしていない。#27/#30 は public-source / audit の制約を保持した draft である。
