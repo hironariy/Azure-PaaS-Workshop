@@ -281,3 +281,27 @@ PR は積み重ねであり、自動 merge・Issue close はしていない。#3
 catalog 成功後に現在の caller の permission を再確認したが、専用 RG はまだ未作成で、必要な roleAssignments/write は許可として報告されなかった。リソース・app registration・provider 登録・quota increase は実行していない。この caller 結果を isolated Contributor-only principal の試験とは扱わない。
 
 #33 の optional setup test は public-cloud fixture と failure-path 到達 assert を強化し、更新後の run `37942734034` も success。次の実装は #21 の public response contract / secret-safe startup・KV・DB・telemetry diagnostics と #23/#17 の文書・測定仕様である。catalog や native CI の成功で残る Azure / dependency blocker を解決済みにしない。
+
+### #21 の公開経路検証を配布する
+
+#35（base: #34 の branch）で、saved context / scoped target lookup、直接・SWA health / published pagination / Frontend runtime config の 5 contracts、timeout / payload 上限 / 本文非表示、browser CRUD と secret-safe diagnostics を公開した。native **31 tests** と Pages build が成功し、実 Actions run `37947506964` も success。記事詳細 GET は view count を更新するため自動 probe に含めない。
+
+成功出力は **`workshopReady: false`**。実 resource がないため HTTP は injected fixture であり、MSAL / consent / DB / telemetry / release / recovery は未検証である。#21 は閉じない。
+
+## 14. #23 の gap analysis と同期先を決める
+
+広い文書改訂の前に、現行実装と以下の差分を確認した。削除で片付けず、現行の normative reference と過去の設計案を分離する。
+
+| 確認した差分 | 改善する surface | 同期後の基準 |
+|---|---|---|
+| main / production parameter の SWA Free と実際の Linked Backend が矛盾 | main.bicep、配布 parameters、main.json | orchestrator は Standard を必須とする。standalone module の Free 利用は linked backend なしに限定 |
+| keyvault module を resource 作成と role assignment のため 2 回実行 | Key Vault / RBAC module、compiled ARM、native regression | vault / endpoint / DNS group の writer は 1 module。既存 vault へ同じ deterministic assignment ID / Secrets User を付与 |
+| design rules が App Gateway / private App Service / GitHub Actions を必須としている | RepositoryWideDesignRules、Bicep README | Cloud Shell / ZIP / SWA Standard、public authenticated App Service、private data dependencies を normative にする |
+| architecture / database / comparison に Free / M30 HA / 2 DB VM の旧前提が残る | component design、comparison、README、講師・reference | B1 / M25 / HA=false と optional paid resilience を分離。IaaS は現行 README の 3 data-bearing members、比較 revision を記録 |
+| 既存 raster 図の内容をまだ確認していない | assets の実画像と元データ | 内容を確認してから表示を更新。未確認の画像を古いと断定しない |
+| 月額固定価格が SKU / region / telemetry / NAT / storage / 税を反映しない | README、cost tables、baseline reference | 見積時点・地域・通貨・稼働時間を示す。SWA Standard、NAT / public IP / private endpoints / storage / logs を漏らさない |
+| 過去の guide / FastPath と現行手順が混在 | learner / reference / development 入口 | 日本語 learner を実行本線、英語 README は対応する入口へ。過去資料は歴史・任意であり copy-and-run 本線ではないと明示 |
+
+実装順は **IaC ownership / SKU → normative baseline reference / diagram → component・comparison・cost → 教材リンク / build**。main.json は Bicep **0.44.1** で再生成して parity を検証する。resource 名 / role GUID / secret reference / private DNS / public API routing は維持し、権限不足を回避する変更はしない。
+
+#17 はこれと並行して、B1 で可能な restart / 既知 revision の rebuild・redeploy と content integrity の計測手順を配布する。slots / HA / backup restore / multi-region は追加承認・対応 SKU・実証が揃わなければ実行済みとしない。依存・権限・consent の block は文書同期や template build の成功では解消しない。
