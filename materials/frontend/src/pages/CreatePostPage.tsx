@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createPost } from '../services/api';
+import { createPost, getCreatePostErrorMessage } from '../services/api';
 
 function CreatePostPage() {
   const navigate = useNavigate();
@@ -37,10 +37,10 @@ function CreatePostPage() {
         status: formData.status,
       });
 
-      navigate(`/posts/${post.slug}`);
+      navigate(`/posts/${encodeURIComponent(post.slug)}`);
     } catch (err) {
-      setError('Failed to create post. Please try again.');
-      console.error(err);
+      setError(getCreatePostErrorMessage(err));
+      console.error('Post creation failed');
     } finally {
       setLoading(false);
     }

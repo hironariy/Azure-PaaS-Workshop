@@ -44,11 +44,11 @@ DEPLOY_ZIP="$ARTIFACT_DIR/deploy.zip"
 mkdir "$PACKAGE_DIR"
 
 echo "Building backend and creating an isolated production package..."
-npm ci
+npm ci --include=dev --registry=https://registry.npmjs.org
 npm run build -- --outDir "$PACKAGE_DIR/dist"
 cp package.json package-lock.json "$PACKAGE_DIR/"
 cd "$PACKAGE_DIR"
-npm ci --omit=dev
+npm ci --omit=dev --registry=https://registry.npmjs.org
 if [ ! -f dist/src/app.js ]; then
     echo "Build did not produce the required dist/src/app.js." >&2
     exit 1

@@ -28,7 +28,7 @@ if [ "$ACTUAL_HOSTNAME" != "$SWA_HOSTNAME" ]; then
 fi
 
 echo "Building production frontend for the saved target..."
-npm ci
+npm ci --include=dev --registry=https://registry.npmjs.org
 NODE_ENV=production npm run build -- --mode production
 if [ ! -d dist/assets ] || [ ! -f dist/index.html ]; then
     echo "Frontend build outputs are missing." >&2

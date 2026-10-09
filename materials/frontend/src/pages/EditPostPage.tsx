@@ -67,7 +67,7 @@ function EditPostPage() {
         status: formData.status,
       });
 
-      navigate(`/posts/${updatedPost.slug}`);
+      navigate(`/posts/${encodeURIComponent(updatedPost.slug)}`);
     } catch (err) {
       setError('Failed to update post. Please try again.');
       console.error(err);
@@ -202,7 +202,7 @@ function EditPostPage() {
           </button>
           <button
             type="button"
-            onClick={() => navigate(`/posts/${slug}`)}
+            onClick={() => navigate(`/posts/${encodeURIComponent(post.slug)}`)}
             className="btn-secondary"
           >
             Cancel

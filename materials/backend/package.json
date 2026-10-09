@@ -4,15 +4,15 @@
   "description": "Azure PaaS Workshop - Blog Application Backend API",
   "main": "dist/src/app.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/app.ts",
+    "dev": "node --watch --require ts-node/register src/app.ts",
     "build": "tsc",
     "start": "node dist/src/app.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit && tsc -p tsconfig.test.json",
     "seed": "ts-node scripts/seed.ts",
-    "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test": "node --require ts-node/register --require ./test/setup.cjs --test test/*.test.ts",
+    "test:coverage": "node --require ts-node/register --require ./test/setup.cjs --experimental-test-coverage --test test/*.test.ts"
   },
   "keywords": [
     "azure",
@@ -27,19 +27,19 @@
   "author": "Azure PaaS Workshop",
   "license": "MIT",
   "dependencies": {
-    "compression": "^1.7.4",
+    "compression": "^1.8.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "express": "^4.18.2",
+    "express": "^4.22.3",
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1",
     "helmet": "^7.1.0",
-    "dompurify": "^3.4.11",
+    "dompurify": "^3.4.16",
     "jsdom": "^29.1.1",
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^3.1.0",
-    "mongoose": "^8.0.3",
-    "morgan": "^1.10.0",
+    "mongoose": "^8.24.4",
+    "morgan": "^1.12.1",
     "winston": "^3.11.0"
   },
   "devDependencies": {
@@ -54,7 +54,6 @@
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
-    "nodemon": "^3.0.2",
     "prettier": "^3.4.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.2"
