@@ -105,7 +105,8 @@ test('isolated MongoDB persists the full application HTTP contracts', { timeout:
   const create = async (
     title: string, status: string = 'draft', actor: string = 'alice',
   ): Promise<Record<string, unknown>> => readObject(await request('POST', '/api/posts', 201, actor, {
-    title, content: '<p>日本語の本文</p><script>alert(1)</script>', status, tags: ['日本語'],
+    title, content: '<p>日本語の本文</p><script>alert(1)</script>',
+    excerpt: '日本語の要約', status, tags: ['日本語'],
   }));
   const routeFor = (post: Record<string, unknown>): string =>
     `/api/posts/${encodeURIComponent(stringField(post, 'slug'))}`;
@@ -127,17 +128,30 @@ test('isolated MongoDB persists the full application HTTP contracts', { timeout:
     const post = await create('日本語の記事');
     assert.equal(post.slug, '日本語の記事');
     assert.equal(post.content, '<p>日本語の本文</p>');
+    assert.equal(post.excerpt, '日本語の要約');
+    assert.deepEqual(post.tags, ['日本語']);
     assert.equal(post.status, 'draft');
     const persisted = await Post.findById(post._id);
-    assert.equal(persisted?.content, '<p>日本語の本文</p>');
+    assert.ok(persisted);
+    assert.equal(persisted.content, '<p>日本語の本文</p>');
+    assert.equal(persisted.excerpt, '日本語の要約');
+    assert.deepEqual(Array.from(persisted.tags), ['日本語']);
     await request('GET', routeFor(post), 404);
     await request('GET', routeFor(post), 404, 'bob');
     assert.equal((await readObject(await request('GET', routeFor(post), 200, 'alice')))._id, post._id);
+    for (const title of ['中文文章', '한국어 제목', 'Café résumé', 'Azure 日本語']) {
+      const multilingual = await create(title);
+      const restored = await readObject(await request('GET', routeFor(multilingual), 200, 'alice'));
+      assert.equal(restored.title, title);
+      assert.equal(restored.content, '<p>日本語の本文</p>');
+      assert.equal(restored.excerpt, '日本語の要約');
+      assert.deepEqual(restored.tags, ['日本語']);
+    }
     assert.equal((await readObject(await request('GET', '/api/posts', 200))).total, 0);
     const mine = await readObject(await request('GET', '/api/posts/my?status=draft', 200, 'alice'));
-    assert.equal(mine.total, 1);
+    assert.equal(mine.total, 5);
     assert.ok(Array.isArray(mine.posts));
-    assert.equal(mine.posts.length, 1);
+    assert.equal(mine.posts.length, 5);
     assert.equal((await readObject(await request('GET', '/api/posts/my', 200, 'bob'))).total, 0);
   });
 
