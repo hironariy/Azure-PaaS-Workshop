@@ -165,6 +165,12 @@ M30+ cannot be scaled back to M25. Neither `environment = 'prod'` nor M30
 alone enables HA. Review RBAC, consent, provider/region, subscription quota,
 tier eligibility and physical capacity before any paid operation.
 
+**Existing deployment compatibility:** if an existing cluster used the former
+implicit M30 default, preserve `param cosmosDbTier = 'M30'` explicitly (or its
+actual current tier) before redeployment. The new fresh-baseline M25 default
+is not a migration/downgrade command. Review parameter changes and current
+resources first; do not reset existing parameters to a new template.
+
 ### 4. Deploy
 
 ```bash
