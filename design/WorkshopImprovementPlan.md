@@ -330,3 +330,11 @@ catalog 成功後に現在の caller の permission を再確認したが、専�
 公開依存 provenance / SWA CLI audit と app CI、必須 RBAC、実ユーザー consent がブロックのまま、Azure resource は作成していない。#17 observer は probe のみで restart を自動実行せず、paid HA / secondary region / DB destructive injection も実行していない。#23 の歴史資料区分は個別同期の代替ではない。これらの local PR / CI の成功を全 Issue 解決・workshop-ready・Contributor-only rehearsal 成功へ読み替えない。
 
 次の作業は #23 の残る component / comparison / reference / instructor synchronization と、ブロック解消後の実 Cloud Shell → Entra → PaaS deploy → CRUD / telemetry → recovery → owned cleanup である。PR は #24〜#37 を公開したが、自動 merge / Issue close はしていない。#27/#30 は public-source / audit の制約を保持した draft である。
+
+### #23 component / comparison / instructor / reference の追加同期
+
+#38（base: #37 branch）で、比較表・DB/Frontend/Backend component・講師ガイド・quick reference を追加同期した。3 data-bearing member の比較基準、B1/M25/HA=false、SWA Standard、Cloud Shell deployment と runtime config、Actions optional、tier-dependent slots/scaling/HA、Entra は WAF/firewall 代替でない責任分界を反映。DB の未実証 concurrent-user count、M30 HA-enabled、M30+→M25 を cost reduction とする説明、Free-SWA/fixed savings の比較を除いた。
+
+講師の organizer-prepared registration と固定所要時間を本線成功の代替としない。quick reference は actual hostname / deployed JSON / exact subscription / bounded public contracts / absolute script paths / secret-safe logs を使う。changed Bash / added links / Pages build を確認した documentation-only slice で、#37 の actual native CI と live Azure acceptance を混同しない。
+
+旧 architecture / migration / validation と長い reference の詳細 proposals は保持しており、全例を executable に刷新したとは言わない。#23 の残りはその個別 modernization と live idempotence / network 検証。PR は #38 まで公開したが、merge / Issue close はしていない。
