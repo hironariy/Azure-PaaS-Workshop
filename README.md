@@ -1529,22 +1529,20 @@ const config = window.__APP_CONFIG__ || await fetchConfig();
 
 ## 5. Cost Estimate
 
-Estimated costs (Japan East region, dev configuration):
+The current dev baseline is **SWA Standard**, App Service B1 and DocumentDB
+M25/HA=false. Free SWA cannot provide its App Service linked backend. B1 has
+no deployment slots or zone redundancy; M25 is Dev/Test without in-region HA.
 
-| Resource | SKU | Monthly Cost |
-|----------|-----|--------------|
-| Static Web Apps | Free | $0 |
-| App Service | B1 | ~$13 |
-| Azure DocumentDB | M25 | ~$100 |
-| Key Vault | Standard | ~$1 |
-| VNet / Private Endpoints | - | ~$10 |
-| NAT Gateway | Standard | ~$45 |
-| Application Insights | Free tier | $0 |
-| **Total (Dev)** | | **~$170/month** |
+Create a dated estimate in the [Azure pricing calculator](https://azure.microsoft.com/pricing/calculator/)
+using the actual resource regions, currency, duration and subscription offer.
+Include database storage, Key Vault operations, private endpoints, NAT gateway,
+public IP/data processing and telemetry ingestion/retention. SWA has a separate
+supported region. See the [baseline cost checklist](materials/bicep/README.md#estimate-costs-for-the-actual-baseline).
 
-> ⚠️ **Important**: Remember to delete resources after the workshop to avoid charges!
-> 
-> For a 4-hour workshop, expected cost is approximately **$0.50 - $1.00**.
+A four-hour price cannot be guaranteed by dividing an old monthly total:
+fixed/minimum fees, provisioning/cleanup duration, transfer and tax also matter.
+Use [verified cleanup](materials/docs/learner/cleanup.ja.md); stopping the
+application alone does not remove billable infrastructure.
 
 ---
 

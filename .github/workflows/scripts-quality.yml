@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'scripts/**'
+      - 'materials/bicep/**'
       - 'materials/docs/learner/**'
       - '.github/workflows/scripts-quality.yml'
   push:
     branches: [main]
     paths:
       - 'scripts/**'
+      - 'materials/bicep/**'
       - 'materials/docs/learner/**'
       - '.github/workflows/scripts-quality.yml'
   workflow_dispatch:

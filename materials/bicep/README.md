@@ -2,37 +2,31 @@
 
 This directory contains Infrastructure as Code (IaC) templates for deploying the Azure PaaS Workshop environment.
 
+The executable learner path is the [Japanese Cloud Shell guide](../docs/learner/cloud-shell-quickstart.ja.md).
+Use its JSON state, private parameter file, exact subscription targets and
+safe deployment/cleanup scripts. Local development and container FastPath are
+alternatives, not learner prerequisites.
+
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              Internet                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-         │                                    │
-         ▼                                    ▼
-┌─────────────────────┐            ┌─────────────────────────────────┐
-│  Static Web Apps    │            │  Application Gateway + WAF v2   │
-│  (React Frontend)   │            │  (Public IP)                    │
-└─────────────────────┘            └─────────────────────────────────┘
-                                               │
-                                               ▼ (via Private Endpoint)
-                            ┌─────────────────────────────────────────────┐
-                            │              Virtual Network                 │
-                            │                                             │
-                            │  ┌──────────────────────────────────────┐   │
-                            │  │  App Service (Node.js 24 LTS)        │   │
-                            │  │  + VNet Integration (outbound)       │   │
-                            │  │  + Private Endpoint (inbound)        │   │
-                            │  └──────────────────────────────────────┘   │
-                            │           │              │          │       │
-                            │           ▼              ▼          ▼       │
-                            │  ┌────────────┐  ┌────────────┐  ┌──────┐  │
-                            │  │ Cosmos DB  │  │ Key Vault  │  │ NAT  │  │
-                            │  │ (MongoDB)  │  │ (Secrets)  │  │ GW   │──┼──→ Internet
-                            │  │ Private EP │  │ Private EP │  └──────┘  │   (App Insights)
-                            │  └────────────┘  └────────────┘            │
-                            └─────────────────────────────────────────────┘
+Browser -> SWA Standard -> /api/* linked backend -> App Service B1 (public HTTPS)
+                                                   |
+                                          outbound VNet integration
+                                           /                 \
+                         DocumentDB private endpoint     Key Vault private endpoint
+                         M25, one shard, HA=false        MI + Secrets User RBAC
+                                                   |
+                                         NAT / App Insights / Log Analytics
 ```
+
+VNet integration is **outbound**, not an inbound App Service private endpoint.
+Public reads/health and protected writes have different EasyAuth/application
+rules; Entra authentication is not a replacement for WAF. App Gateway is not
+deployed by `main.bicep`. DocumentDB private endpoints/DNS are configured; the
+pinned `2024-02-15-preview` cluster API has no `publicNetworkAccess` property,
+so inspect actual network/firewall behavior rather than claiming this template
+sets it to Disabled.
 
 ## Module Structure
 
@@ -41,11 +35,19 @@ modules/
 ├── network.bicep       # VNet, Subnets, NAT Gateway, Private DNS Zones
 ├── monitoring.bicep    # Log Analytics, Application Insights
 ├── keyvault.bicep      # Key Vault with Private Endpoint
+├── keyvault-rbac.bicep # Role assignment to the existing vault only
 ├── cosmosdb.bicep      # Cosmos DB for MongoDB vCore with Private Endpoint
-├── appservice.bicep    # App Service with VNet Integration & Private Endpoint
-├── appgateway.bicep    # Application Gateway WAF v2
+├── appservice.bicep    # Public App Service with outbound VNet Integration
+├── appservice-auth.bicep # EasyAuth after SWA Linked Backend
 └── staticwebapp.bicep  # Azure Static Web Apps
 ```
+
+`keyvault.bicep` is the sole writer of the vault, its endpoint and DNS group.
+`keyvault-rbac.bicep` references that vault after App Service creates its MI.
+The vault-scoped Secrets User role and deterministic GUID remain unchanged;
+moving the assignment does not remove its permission prerequisite. Existing
+resource names and secret references are unchanged. Repeated live deployments
+are still an acceptance check, not proven by local compilation.
 
 ## Prerequisites
 
@@ -58,7 +60,7 @@ modules/
 ### Permission boundary before creating resources
 
 **Contributor-only, with no organizer preparation, cannot complete the current
-fresh deployment.** `modules/keyvault.bicep` creates a Key Vault Secrets User
+fresh deployment.** `modules/keyvault-rbac.bicep` creates a Key Vault Secrets User
 assignment for App Service's Managed Identity. This requires
 `Microsoft.Authorization/roleAssignments/write`, which Contributor excludes.
 Resource management, permission assignment, Key Vault secret access, and Entra
@@ -103,7 +105,7 @@ az group create --name rg-blogapp-A-workshop --location japaneast
 
 ### 2. Configure Parameters
 
-**Option A: Full deployment (production-like)**
+**Option A: Alternative M30 sizing (not a production-readiness guarantee)**
 ```bash
 cp main.bicepparam main.local.bicepparam
 ```
@@ -136,14 +138,15 @@ param entraBackendClientId = '<your-backend-app-id>'
 param entraFrontendClientId = '<your-frontend-app-id>'
 param cosmosDbAdminPassword = '<strong-password>'
 
-// Optional: SSL certificate for HTTPS (recommended)
-// param sslCertificateData = '<base64-encoded-pfx>'
-// param sslCertificatePassword = 'Workshop2024!'
+param appServiceSku = 'B1'
+param cosmosDbTier = 'M25'
+param cosmosDbEnableHa = false
+param staticWebAppSku = 'Standard'
 ```
 
 **Mode guidance:**
 - `standard`: Existing workshop flow (App Service code deployment + SWA linked backend)
-- `fastpath-container`: App Service for Linux container mode (prebuilt image, no SWA linked backend deployment)
+- `fastpath-container`: App Service for Linux container mode; SWA Standard and Linked Backend are still deployed
 
 Example for FastPath mode:
 ```bicep
@@ -153,21 +156,14 @@ param appServiceContainerImage = 'docker.io/your-org/blogapp-api@sha256:xxxxxxxx
 
 If you use Option C templates, these values are already preconfigured in the file and you only need to fill placeholders.
 
-### 3. (Optional) Generate SSL Certificate for HTTPS
+### 3. Verify the baseline and prerequisites
 
-For HTTPS support on Application Gateway, generate a self-signed certificate:
-
-```bash
-# Generate certificate
-./scripts/generate-ssl-cert.sh
-
-# Add to your .local.bicepparam file:
-param sslCertificateData = '<paste contents of cert-base64.txt>'
-param sslCertificatePassword = 'Workshop2024!'
-```
-
-**Note:** Self-signed certificates cause browser warnings. This is expected for workshop purposes.
-If you skip this step, Application Gateway will serve HTTP only (port 80).
+SWA Standard is mandatory for the linked backend; Free is rejected by the
+orchestrator instead of silently creating a frontend with no API link.
+B1 has no deployment slots or zone redundancy. M25 is Dev/Test without HA;
+M30+ cannot be scaled back to M25. Neither `environment = 'prod'` nor M30
+alone enables HA. Review RBAC, consent, provider/region, subscription quota,
+tier eligibility and physical capacity before any paid operation.
 
 ### 4. Deploy
 
@@ -191,79 +187,69 @@ az deployment group show \
 az deployment group show \
   --resource-group rg-paasworkshop-dev \
   --name main \
-  --query properties.outputs.appGatewayFqdn.value -o tsv
+  --query properties.outputs.staticWebAppUrl.value -o tsv
 ```
 
 ## Post-Deployment Steps
 
-### 1. Get Static Web Apps Deployment Token
-
-```bash
-SWA_NAME=$(az deployment group show -g rg-paasworkshop-dev -n main --query properties.outputs.staticWebAppName.value -o tsv)
-az staticwebapp secrets list --name $SWA_NAME --query "properties.apiKey" -o tsv
-```
-
-### 2. Configure GitHub Secrets
-
-Add to your GitHub repository secrets:
-- `AZURE_STATIC_WEB_APPS_API_TOKEN`: Token from step 1
-
-### 3. Update Entra ID Redirect URIs
-
-Add redirect URI to your Frontend App Registration:
-```
-https://<swa-url>/.auth/login/aad/callback
-```
-
-### 4. Update Frontend Configuration
-
-Update `materials/frontend/staticwebapp.config.json` with the Application Gateway URL:
-```json
-{
-  "routes": [
-    {
-      "route": "/api/*",
-      "rewrite": "https://<app-gateway-fqdn>/api/*"
-    }
-  ]
-}
-```
+Follow the learner [infrastructure output/redirect steps](../docs/learner/day-1-deploy-infrastructure.ja.md),
+[backend deployment](../docs/learner/day-1-deploy-backend.ja.md),
+[frontend deployment](../docs/learner/day-1-deploy-frontend.ja.md) and
+[validation](../docs/learner/day-1-validation.ja.md).
+The Frontend MSAL redirect is the SWA **origin**, not an EasyAuth callback.
+`/api` is routed by the Standard linked backend; no App Gateway URL rewrite is
+needed. Public runtime IDs are injected into the built frontend, while the
+SWA deployment token stays in the deployment process environment and is not
+printed or committed. GitHub Actions setup is an optional separate path.
 
 ## Resource Naming Convention
 
 | Resource Type | Pattern | Example |
 |--------------|---------|---------|
-| Resource Group | `rg-{baseName}-{env}` | `rg-blogapp-dev` |
+| Resource Group | From saved learner state | `rg-blogapp-A-paas-workshop` |
 | Virtual Network | `vnet-{baseName}-{env}` | `vnet-blogapp-dev` |
-| App Service Plan | `asp-{baseName}-{env}` | `asp-blogapp-dev` |
-| App Service | `app-{baseName}-{env}` | `app-blogapp-dev` |
-| Cosmos DB | `cosmos-{baseName}-{env}` | `cosmos-blogapp-dev` |
-| Key Vault | `kv-{baseName}-{env}` | `kv-blogapp-dev` |
-| Application Gateway | `agw-{baseName}-{env}` | `agw-blogapp-dev` |
-| Static Web Apps | `swa-{baseName}-{env}` | `swa-blogapp-dev` |
+| App Service Plan | `asp-{baseName}-{uniqueSuffix}` | Use deployment outputs |
+| App Service | `app-{baseName}-{uniqueSuffix}` | Use actual default hostname |
+| Cosmos DB | `cosmos-{baseName}-{uniqueSuffix}` | Use deployment outputs |
+| Key Vault | `kv-{baseName}-{uniqueSuffix}` | Use deployment outputs |
+| Static Web Apps | `swa-{baseName}-{uniqueSuffix}` | Use actual default hostname |
 | NAT Gateway | `nat-{baseName}-{env}` | `nat-blogapp-dev` |
-| Private Endpoint | `pe-{service}-{baseName}` | `pe-appservice-blogapp` |
+| Private Endpoint | `pe-{service}-{baseName}-{uniqueSuffix}` | DB / Key Vault only |
 
-## Estimated Costs (Japan East)
+## Estimate costs for the actual baseline
 
-| Resource | SKU | Monthly Cost |
-|----------|-----|--------------|
-| Static Web Apps | Free | $0 |
-| App Service | B1 | ~$13 |
-| Cosmos DB vCore | M30 | ~$200 |
-| Application Gateway | WAF_v2 (1 instance) | ~$250 |
-| Key Vault | Standard | ~$1 |
-| NAT Gateway | Standard | ~$45 |
-| VNet / Private Endpoints | - | ~$10 |
-| **Total** | | **~$520/month** |
+Do not reuse an undated fixed USD/month total. Use the [Azure pricing calculator](https://azure.microsoft.com/pricing/calculator/)
+with the selected regions, currency, quote date and billable duration. Include
+SWA **Standard**, App Service B1, DocumentDB M25 + 128 GiB storage, Key Vault
+operations, two private endpoints, NAT gateway + public IP + processed data,
+and App Insights/Log Analytics ingestion and retention. App Gateway is absent.
+SWA uses its own supported region, not necessarily Japan East.
+
+Fixed fees/minimum billing, deployment/warm-up/cleanup time, data transfer,
+tax and subscription offers prevent a monthly-total/730 shortcut from
+guaranteeing a four-hour price. Stopping the app does not delete the plan,
+database, NAT or other billable infrastructure.
+
+## Maintain the compiled ARM artifact
+
+`main.json` is distributed and must match `main.bicep`. Use Bicep **0.44.1**,
+the version pinned by the app/Bicep quality workflow, from the repository root:
+
+```bash
+az bicep version
+az bicep build --file materials/bicep/main.bicep --outfile materials/bicep/main.json
+git diff -- materials/bicep/main.json
+node --test scripts/test/bicep-contract.test.cjs
+```
+
+Review the generated diff and commit source and ARM together. Compilation and
+native contract tests do not prove deployment permissions or cloud readiness.
 
 ## Cleanup
 
-Delete all resources:
-
-```bash
-az group delete --name rg-paasworkshop-dev --yes --no-wait
-```
+Use the [state-scoped cleanup guide](../docs/learner/cleanup.ja.md), which
+checks ownership and waits for actual absence before removing Entra apps.
+`--no-wait` acceptance is not deletion completion.
 
 ## Troubleshooting
 
@@ -285,14 +271,10 @@ Current Limit (Basic VMs): 0
    - Request increase for "Basic vCPUs" in your region
    - Or visit: https://aka.ms/antquotahelp
 
-2. **Use Free Tier (Temporary workaround):**
-   - Edit `dev.local.bicepparam` and change:
-     ```bicep
-     param appServiceSku = 'F1'  // Free tier
-     ```
-   - **Note:** F1 has limitations (60 min/day CPU, no VNet integration, no custom domains)
+2. **Do not use F1 as a baseline workaround:** it is not allowed by the
+   template and does not provide the required VNet integration.
 
-3. **Use Standard Tier (If you have S1 quota but not B1):**
+3. **Consider Standard Tier only with verified quota, cost and approval:**
    - Edit `dev.local.bicepparam` and change:
      ```bicep
      param appServiceSku = 'S1'  // Standard tier (~$73/month)
@@ -306,16 +288,16 @@ The Key Vault module needs to complete before Cosmos DB can store secrets. The d
 
 Ensure the App Service Managed Identity has the `Key Vault Secrets User` role on the Key Vault. The template handles this via RBAC.
 
-### Application Gateway Shows Unhealthy Backend
+### SWA linked API is unhealthy
 
 1. Check that the App Service health endpoint (`/health`) returns 200 OK
 2. Verify the Private DNS Zone is correctly linked to the VNet
-3. Check NSG rules aren't blocking traffic
+3. Verify the Standard linked backend, EasyAuth, startup and DB readiness separately
 
 ### GitHub Actions Can't Deploy to App Service
 
 Ensure SCM site allows public access:
-- `scmIpSecurityRestrictionsUseMain` should be `false`
+- Baseline main/SCM defaults are public Allow, so `scmIpSecurityRestrictionsUseMain` is `true`
 - `scmIpSecurityRestrictionsDefaultAction` should be `Allow`
 
 ## References
@@ -323,5 +305,4 @@ Ensure SCM site allows public access:
 - [Azure Static Web Apps Documentation](https://docs.microsoft.com/azure/static-web-apps/)
 - [Azure App Service Documentation](https://docs.microsoft.com/azure/app-service/)
 - [Cosmos DB for MongoDB vCore](https://docs.microsoft.com/azure/cosmos-db/mongodb/vcore/)
-- [Application Gateway WAF](https://docs.microsoft.com/azure/web-application-firewall/ag/ag-overview)
 - [Private Endpoints](https://docs.microsoft.com/azure/private-link/private-endpoint-overview)

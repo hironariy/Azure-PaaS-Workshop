@@ -4,7 +4,7 @@
 // This module creates:
 // - Azure Key Vault for storing secrets
 // - Private Endpoint for secure access
-// - Access policies for App Service Managed Identity
+// App Service RBAC is owned by keyvault-rbac.bicep after identity creation.
 // =============================================================================
 
 @description('Environment name (dev, staging, prod)')
@@ -25,11 +25,8 @@ param privateEndpointSubnetId string
 @description('Private DNS Zone ID for Key Vault')
 param keyVaultPrivateDnsZoneId string
 
-@description('Tenant ID for access policies')
+@description('Tenant ID for the vault')
 param tenantId string
-
-@description('Object ID of App Service Managed Identity (optional - can be set after App Service creation)')
-param appServicePrincipalId string = ''
 
 @description('Tags to apply to all resources')
 param tags object = {}
@@ -110,23 +107,6 @@ resource privateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneG
         }
       }
     ]
-  }
-}
-
-// =============================================================================
-// RBAC Role Assignment for App Service (Key Vault Secrets User)
-// =============================================================================
-
-// Key Vault Secrets User role ID
-var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
-
-resource appServiceKeyVaultRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(appServicePrincipalId)) {
-  name: guid(keyVault.id, appServicePrincipalId, keyVaultSecretsUserRoleId)
-  scope: keyVault
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsUserRoleId)
-    principalId: appServicePrincipalId
-    principalType: 'ServicePrincipal'
   }
 }
 

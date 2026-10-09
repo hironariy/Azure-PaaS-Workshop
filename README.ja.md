@@ -87,6 +87,8 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 
 Application Gateway、Bastion、VM への SSH、Azure Site Recovery などの IaaS 手順は、この PaaS ワークショップの受講者本線では使用しません。
 
+本線は **SWA Standard / App Service B1 / DocumentDB M25 / HA=false** です。B1 の deployment slots / zone redundancy、M25 の in-region HA は利用できません。図の 3 zone 背景は本線で有効な冗長性の保証ではありません。Key Vault 作成と MI の role assignment は別 module が所有し、RBAC の必須権限は維持します。費用は SWA Standard、DB storage、NAT / public IP / private endpoints、telemetry まで含め、実 region・通貨・見積日・稼働時間で [確認](materials/bicep/README.md#estimate-costs-for-the-actual-baseline) します。未更新の component design は歴史資料であり、本線は learner と [現行設計契約](design/RepositoryWideDesignRules.md#current-baseline-contract) を参照します。
+
 ## リポジトリ構成
 
 | パス | 内容 |
