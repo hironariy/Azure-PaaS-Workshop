@@ -247,3 +247,27 @@ IaaS の Issue を「共通 application」「learner workflow」「PaaS へ適�
 ### 次の実装は独立した作業とブロックされた実証を分ける
 
 #20 の state / naming と #18 の失敗通知・秘密値・Cleanup、#22 の preflight、#21 の diagnostics、#23 の文書同期は、可能なローカル実装を継続できる。一方、public-source 依存の確認、必要権限、実ユーザー consent、実 DB / browser の証拠がないまま、#17 の有料・復旧演習や workshop-ready 判定へ進まない。環境 ID と認証情報は repository の既定値にせず、検証用の非公開設定に保持する。
+
+## 13. 第 2 段階の実装結果と次の判定
+
+| 対象 | PR / base | 実装・証拠 | 未完了 |
+|---|---|---|---|
+| #20 Cloud Shell state | #31 / #29 の branch | version 1 JSON、atomic rename / lock、対象変更拒否、context 検証、グループ / clone / パラメータパス統一、Entra 再利用・所有者確認・既存 redirect 保持 | 実 Cloud Shell / Azure Files / Entra 再接続・グループ別リハーサル |
+| #18 明示的な失敗・秘密値・cleanup | #32 / #31 の branch | explicit subscription/resource、`npm ci`、所有する一時 ZIP のみ削除、bounded healthy JSON、token 非表示・環境渡し、password 非表示・再実行保持、所有対象の削除待機 / 空一覧確認 | 実 App Service / SWA / Entra delete、DB 起動、release 完了の証拠 |
+| #19 native script CI | #33 / #32 の branch | Ubuntu 24.04 / Node.js 24、Bash/CJS syntax、22 isolated regression tests。Actions run `37942050776` が **success** | アプリの公開 package source / audit / build CI は #30 でブロックのまま |
+
+PR は積み重ねであり、自動 merge・Issue close はしていない。#31/#32 の Azure/npm/SWA/curl テストは隔離した stub を使用し、実クラウドに書き込まない。`scripts-quality.yml` には Azure credentials・本物の token・アプリ package install を与えない。script CI 成功は app CI や workshop-ready の代用ではない。
+
+### 失敗を成功へ読み替えない実装
+
+- RG・Entra・token の lookup error は不存在と扱わない。optional GitHub setup の role assignment / secret 設定失敗は停止し、既存 federation は subject / issuer / audience を照合する。
+- health は最大 30 回、各要求最大 10 秒（接続最大 5 秒）、失敗間隔 15 秒。最後に余分な待機をせず、実経過時間を表示する。HTTP 200 の HTML、unhealthy JSON、通信失敗では成功しない。
+- upload acceptance / readiness / release 完了を区別する。古いインスタンスの healthy は新しいコードの配信証拠ではなく、#21/#17 の追加検証が必要。
+- cleanup は saved subscription / dedicated tag / current app owner / 完全な対象入力を確認し、RG 削除待機と正常な空 app 一覧まで確認する。タグだけで所有を証明したとはしない。timeout 時は app と state を保持する。
+- checkout や state ディレクトリ全体は再帰削除しない。Azure 削除確認後に、明示したパラメータと JSON の 2 ファイルだけを任意で削除する。
+
+### 再確認したブロックと残りの順序
+
+公開 npm の再確認でも Axios latest は 1.18.1、compression metadata は transport error となった。別の取得方法でも compression の transport が失敗した。候補 mirror の version を公開済みと扱わず、#15/#30 の gate を緩めない。
+
+次は #22 の provider / region / SKU / quota と #21 の secret-safe diagnostics を実装し、#23 の現行 baseline / optional material / 費用説明を同期する。#17 は baseline restart / 再 deploy / data integrity / rollback の測定仕様を先に整える。実 consent / DB / browser / recovery は、必要な権限・公開依存・ツールの根拠が揃うまで未検証として保持する。Contributor-only 制約を解消したことにせず、管理者や主催者の事前準備へ置き換えない。
