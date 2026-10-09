@@ -75,6 +75,19 @@ export interface CreatePostData {
   featuredImageUrl?: string;
 }
 
+export function getCreatePostErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    switch (error.response?.status) {
+      case 400: return 'Check your title and content. The title must contain text after formatting is removed.';
+      case 401: return 'Your session has expired. Sign in again before retrying.';
+      case 403: return 'You do not have permission to create this post.';
+      case 409: return 'An article URL could not be allocated. Please retry.';
+      case 429: return 'Too many requests. Wait a moment before retrying.';
+    }
+  }
+  return 'Failed to create post. Your input is preserved; please try again.';
+}
+
 /**
  * Get access token for API calls
  * Uses the shared MSAL instance to acquire token silently
@@ -236,7 +249,7 @@ export async function getMyPosts(
  * Auth: Optional - works without auth for published posts, requires auth for drafts
  */
 export async function getPost(slug: string): Promise<Post> {
-  const response = await api.get<Post>(`/api/posts/${slug}`, {
+  const response = await api.get<Post>(`/api/posts/${encodeURIComponent(slug)}`, {
     authMode: 'optional',
   });
   return response.data;
@@ -258,7 +271,7 @@ export async function createPost(data: CreatePostData): Promise<Post> {
  * Auth: Required - must be authenticated and post author
  */
 export async function updatePost(slug: string, data: Partial<CreatePostData>): Promise<Post> {
-  const response = await api.put<Post>(`/api/posts/${slug}`, data, {
+  const response = await api.put<Post>(`/api/posts/${encodeURIComponent(slug)}`, data, {
     authMode: 'required',
   });
   return response.data;
@@ -269,7 +282,7 @@ export async function updatePost(slug: string, data: Partial<CreatePostData>): P
  * Auth: Required - must be authenticated and post author
  */
 export async function deletePost(slug: string): Promise<void> {
-  await api.delete(`/api/posts/${slug}`, {
+  await api.delete(`/api/posts/${encodeURIComponent(slug)}`, {
     authMode: 'required',
   });
 }
