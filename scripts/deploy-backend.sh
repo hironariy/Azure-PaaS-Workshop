@@ -63,7 +63,7 @@ trap cleanup_artifacts EXIT
 # Step 1: Build the application
 echo ""
 echo -e "${YELLOW}Step 1: Building application...${NC}"
-npm install
+npm ci --include=dev
 rm -rf dist
 npm run build
 echo -e "${GREEN}✅ Build complete${NC}"
