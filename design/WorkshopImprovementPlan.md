@@ -271,3 +271,13 @@ PR は積み重ねであり、自動 merge・Issue close はしていない。#3
 公開 npm の再確認でも Axios latest は 1.18.1、compression metadata は transport error となった。別の取得方法でも compression の transport が失敗した。候補 mirror の version を公開済みと扱わず、#15/#30 の gate を緩めない。
 
 次は #22 の provider / region / SKU / quota と #21 の secret-safe diagnostics を実装し、#23 の現行 baseline / optional material / 費用説明を同期する。#17 は baseline restart / 再 deploy / data integrity / rollback の測定仕様を先に整える。実 consent / DB / browser / recovery は、必要な権限・公開依存・ツールの根拠が揃うまで未検証として保持する。Contributor-only 制約を解消したことにせず、管理者や主催者の事前準備へ置き換えない。
+
+### #22 catalog / quota / progress の実装後
+
+#34（base: #33 の branch）で read-only PaaS catalog checker、registration error / bounded wait、quota・tier・physical capacity の区別、deployment progress の安全な表示を公開した。承認済み環境で **18 catalog checks が通過**し、実際の native CI `37944250145` も **26 tests / success**。installed CLI の `account list-locations` は subscription selector が無かったため、context を勝手に変更せず、明示した subscription の locations API を使って再実行した。
+
+出力は catalog 成功時も **`deploymentReady: false`**。subscription quota、物理容量、M25 の eligibility、SWA Standard / Linked Backend eligibility、RBAC / deny / Policy、tenant consent、実 parameter / deployment validation は未確認であり、自動で region / SKU / HA を変えない。M25 は Dev/Test で HA 不可、M30 以上から M25 への downgrade 不可という制約も教材へ追加した。
+
+catalog 成功後に現在の caller の permission を再確認したが、専用 RG はまだ未作成で、必要な roleAssignments/write は許可として報告されなかった。リソース・app registration・provider 登録・quota increase は実行していない。この caller 結果を isolated Contributor-only principal の試験とは扱わない。
+
+#33 の optional setup test は public-cloud fixture と failure-path 到達 assert を強化し、更新後の run `37942734034` も success。次の実装は #21 の public response contract / secret-safe startup・KV・DB・telemetry diagnostics と #23/#17 の文書・測定仕様である。catalog や native CI の成功で残る Azure / dependency blocker を解決済みにしない。
