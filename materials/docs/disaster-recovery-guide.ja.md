@@ -12,6 +12,8 @@
 
 > 対象範囲: 現行 Bicep テンプレートは **単一リージョンのプライマリ環境** をデプロイします。本ガイドでは、この前提に対してワークショップで実施しやすい継続性・DR ランブックを示します。
 
+**実施境界:** 本線 B1 / M25 / HA=false は slots / zone redundancy / DB HA / secondary region を提供しません。必須演習は [restart / redeploy / known-revision rebuild rollback / content integrity](learner/day-2-reliability.ja.html) です。以下の secondary region / backup restore は **optional 設計案・未実証** で、追加承認・supported SKU / region / quota / restore point / 費用 / cleanup を確認するまで実行しません。RBAC / consent / 公開依存の block を管理者・主催者準備や public DB で回避しません。
+
 ---
 
 ## 1. 継続性目標（RPO / RTO）を定義する
@@ -21,10 +23,7 @@
 - **RPO（Recovery Point Objective）**: 許容できるデータ損失幅
 - **RTO（Recovery Time Objective）**: 許容できるサービス停止時間
 
-ワークショップ向けの目安:
-
-- RPO: 1〜24 時間（バックアップ頻度に依存）
-- RTO: 1〜4 時間（自動化レベルに依存）
+RPO/RTO は workload の要求から決め、restore point / content 比較 / operation time / traffic cutover を実測します。旧 RPO 1〜24 時間 / RTO 1〜4 時間を本線の達成値・保証として使いません。health sample の復旧時間は真の停止時間や DB failover RTO ではなく、停止未観測は null です。429 は throttling として区別します。
 
 ---
 
@@ -67,7 +66,7 @@ BCDR 対応:
 
 1. ソースコードと CI ワークフローを GitHub（等）で管理する。
 2. 環境変数/アプリ設定をコード化または手順書化する。
-3. DR 時はセカンダリリージョンに SWA を展開し、ユーザートラフィックを切り替える。
+3. optional DR の承認後だけ、別 state / RG に SWA Standard を展開する。new origin、Frontend MSAL redirect、API IDs/consent、Linked Backend と runtime config を検証してから traffic を切り替える。
 
 ## 3.2 App Service（バックエンド）
 
@@ -87,13 +86,15 @@ BCDR 対応:
 
 - データ層が RPO を左右するため、最優先の復旧依存として扱う
 
-BCDR 対応（ワークショップ向け）:
+BCDR 対応（optional 設計の確認項目）:
 
-1. 論理バックアップ（`mongodump`）と復元検証（`mongorestore`）を定期実施する。
+1. 対応 tier の managed restore / retention を確認する。logical export を採用するなら private network 内の承認済み経路・tool compatibility・安全な認証/暗号化保管・restore destination を定義する。Cloud Shell が private DB に直接届くとは仮定しない。
 2. バックアップ保持期間を RPO に合わせる。
 3. 本番要件に応じて、HA やジオ戦略など上位の可用性機能を検討する。
 
 > 利用ティアで使用可能な機能と復元オプションは、Cosmos DB for MongoDB vCore の最新 Microsoft ドキュメントで必ず確認してください。
+
+M25 は HA 不可、M30+ から M25 へは戻せません。tier upgrade を可逆的な演習 toggle としません。export / restore は本線で実行検証しておらず、copyable destructive commands をここから省略しているのは権限・経路・保管・宛先が未確定のためです。元 DB の削除・overwrite / VM replica-set / ASR を本線へ追加しません。
 
 ## 3.4 Key Vault（シークレット）
 
@@ -105,15 +106,15 @@ BCDR 対応:
 
 1. シークレット登録/更新手順をスクリプトまたはランブック化する。
 2. 重要な初期シークレットの安全なエスカレーション/保管手順を定義する。
-3. フェールオーバー時にセカンダリリージョンへシークレットを再投入する。
+3. optional secondary の secret/MI/RBAC を安全に復元し、reference の status を検証する。primary の secret を terminal / JSON state / Git / raw logs に出さず、再実行時の password rotation を避ける。
 
 ---
 
-## 4. ワークショップ推奨 DR ランブック
+## 4. Optional DR ランブック設計（追加承認後のみ）
 
 ### フェーズ A: 事前準備（通常時）
 
-1. プライマリ/セカンダリ用の Bicep パラメータファイルを管理する。
+1. primary / secondary は別専用 RG / JSON state / private parameter にする。immutable target を上書きして切り替えない。
 2. バックエンド/フロントエンドのデプロイパイプラインを定期検証する。
 3. データバックアップと復元演習を定期実施する。
 4. 運用チェックリスト（担当者、コマンド、検証手順）を維持する。
@@ -154,9 +155,9 @@ BCDR 対応:
 
 ---
 
-## 6. 四半期ごとの最小 DR 演習
+## 6. 本番向け optional DR 演習の頻度
 
-四半期に最低 1 回、次を実施します。
+以下は対応環境で追加承認後に計画する例であり、現在の learner baseline の必須作業・検証済み内容ではありません。頻度は要件と費用に応じて決めます。
 
 1. プライマリ停止を想定したシミュレーション
 2. Bicep からセカンダリ環境を展開

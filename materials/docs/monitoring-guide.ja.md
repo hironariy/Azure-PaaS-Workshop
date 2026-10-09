@@ -4,6 +4,8 @@
 
 > **受講者本線:** Cloud Shell 専用の Day 2 手順は [Day 2: 監視と運用](learner/day-2-operations.ja.html) を参照してください。このガイドは監視設計と KQL の参照用です。
 
+本線は B1 / M25 / HA=false / SWA Standard。設定値があるだけで telemetry ingestion / new release / recovery 成功とは言えません。以下の診断・alert は実 resource と対象時刻を確認してから行い、秘密値・token・本文・個人データ・raw logs を共有しません。
+
 - **Frontend**: Azure Static Web Apps
 - **Backend**: Azure App Service（`/health`, `/api/health`）
 - **Database**: Azure Cosmos DB for MongoDB vCore
@@ -81,7 +83,7 @@
 ### 4.3 アプリケーションログを標準化する
 
 - 構造化ログ（JSON フレンドリー）を維持する
-- 可能なら相関キー（request id、user id、operation）を含める
+- 非秘密の相関キー（request id、operation id、sanitized operation）を含める。user id / token / payload を診断証拠へ出さない
 - シークレット/トークン/個人情報はログ出力しない
 
 ---
@@ -105,7 +107,8 @@ search *
 AppRequests
 | where TimeGenerated > ago(1h)
 | where Success == false or ResultCode startswith "5"
-| project TimeGenerated, Name, ResultCode, DurationMs, OperationId, AppRoleName
+| summarize Failures=count(), P95DurationMs=percentile(DurationMs, 95)
+    by ResultCode, bin(TimeGenerated, 5m)
 | order by TimeGenerated desc
 ```
 
@@ -114,7 +117,7 @@ AppRequests
 ```kusto
 AppRequests
 | where TimeGenerated > ago(24h)
-| summarize P95DurationMs=percentile(DurationMs, 95) by Name
+| summarize P95DurationMs=percentile(DurationMs, 95) by bin(TimeGenerated, 5m)
 | order by P95DurationMs desc
 ```
 
@@ -132,27 +135,31 @@ AppExceptions
 `AppRequests` / `AppExceptions` が表示されない場合は、まずバックエンドへリクエストを送って Application Insights にテレメトリを発生させます。
 
 ```bash
-curl -fsS "https://${APP_SERVICE_NAME}.azurewebsites.net/health" | jq .
-curl -fsS "https://${SWA_HOSTNAME}/api/health" | jq .
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
+node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
 ```
 
-数分待っても `AppRequests` が出ない場合は、App Service の `APPLICATIONINSIGHTS_CONNECTION_STRING` が空ではないことを確認します。
+数分待っても 0 件なら、対象 resource / 時間範囲 / SDK startup / instrumentation 設定を Portal で確認します。0 件は正常監視の証拠ではありません。CLI は設定名のみを表示します。
 
 ```bash
 az webapp config appsettings list \
+	--subscription "$SUBSCRIPTION_ID" \
 	--resource-group "$RESOURCE_GROUP" \
 	--name "$APP_SERVICE_NAME" \
-	--query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].{name:name,value:value}" \
+	--query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].name" \
 	-o table
 ```
 
-接続文字列を追加・更新した後は、App Service を再起動してから再度 `/health` にアクセスします。
+設定の変更・再起動は原因と承認範囲を確認してから実施します。App settings の全値・logs ZIP を取得して貼る方法で診断しません。[Resource Health → startup → MI / KV → DB](learner/day-1-validation.ja.html) と、[復旧の UTC / monotonic 観測](learner/day-2-reliability.ja.html) を使います。
 
 ---
 
 ## 6. 最小アラート設計
 
-次のアラートルールを作成します。
+次は追加設計案です。本線の Bicep が作成・発火検証済みではありません。実 traffic / 最小 sample count / observation window / ingestion delay / 通知先 / 費用を確認してから承認された scope で作成します。
 
 - HTTP 5xx 比率が閾値超過（例: 5 分間で 5% 超）
 - `/health` の連続失敗
