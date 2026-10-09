@@ -8,8 +8,8 @@ Cloud Shell learner path or proof of Azure production parity.
 Use the checked-in application/dev-environment source for current commands and
 the [validation gates](MaterialsValidationStrategy.md#use-the-current-release-acceptance-gates)
 for acceptance. Node 24 is the application baseline. SWA CLI's package is
-`@microsoft/static-web-apps-cli`; the `@azure` name in the historical examples
-below is obsolete and must not be copied. A separate deployment-tool audit
+`@azure/static-web-apps-cli`, confirmed in the upstream v2.0.10 manifest.
+Do not substitute a similarly named unpublished package. A separate deployment-tool audit
 must pass before the CLI can satisfy the zero-advisory release gate.
 
 Vite/MongoDB can support isolated development, but local MongoDB is not a
