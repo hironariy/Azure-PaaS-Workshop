@@ -43,6 +43,25 @@ These signatures prove middleware contracts, not real Microsoft-issued keys,
 tenant registration/consent, MSAL interaction or live browser/API acceptance.
 No production verification bypass or reusable signing secret is introduced.
 
+## Frontend runtime request contracts
+
+The API client reads the successfully loaded runtime `apiBaseUrl` when each
+request starts, not a possibly stale build-time API host. The workshop `/api`
+routes remain same-origin; local backend origins and gateway prefixes are
+preserved without duplicating `/api`. Unicode permalink encoding is unchanged.
+API roots must be HTTP(S), without credentials, query parameters or fragments.
+Invalid roots fail before token acquisition or transport without echoing values.
+
+Tests use real Axios URL joining/interceptors and the real delegated scope
+builder, with a fixture transport and fake MSAL responses. They verify exact
+request URLs, Backend API scope and authorization dispatch without network
+access. Failed production configuration validation must not populate the cache:
+corrected inline or JSON configuration can be loaded on a subsequent attempt.
+Existing development warning/fallback behavior is preserved.
+
+These contracts do not prove real browser/MSAL interaction, CORS or SWA Linked
+Backend routing. Those still require the learner validation and Azure rehearsal.
+
 ## Isolated database HTTP contracts
 
 `test:integration` exercises the full Express application with real Mongoose

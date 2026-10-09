@@ -14,6 +14,7 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { getMsalInitPromise, getMsalInstance } from '../config/msalInstance';
 import { createApiRequest } from '../config/authConfig';
+import { getConfig } from '../config/appConfig';
 
 /**
  * Authentication mode for API requests
@@ -151,12 +152,27 @@ async function getAccessToken(mode: AuthMode = 'optional'): Promise<string | nul
   }
 }
 
+function getApiTransportBaseUrl(): string {
+  let base: URL;
+  try {
+    base = new URL(getConfig().apiBaseUrl, window.location.origin);
+  } catch (error) {
+    if (error instanceof TypeError) throw new Error('Invalid API base URL');
+    throw error;
+  }
+  if (!['http:', 'https:'].includes(base.protocol) ||
+      base.username || base.password || base.search || base.hash) {
+    throw new Error('API base URL must be HTTP(S) without credentials, query parameters or fragments');
+  }
+  const prefix = base.pathname.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+  return base.origin + prefix;
+}
+
 /**
  * Create axios instance with interceptors
  */
 function createApiClient(): AxiosInstance {
   const client = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '',
     timeout: 30000,
     headers: {
       'Content-Type': 'application/json',
@@ -166,6 +182,7 @@ function createApiClient(): AxiosInstance {
   // Request interceptor to add auth token based on authMode
   client.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
+      config.baseURL = getApiTransportBaseUrl();
       const authMode = config.authMode || 'optional';
       const token = await getAccessToken(authMode);
       if (token) {

@@ -68,7 +68,7 @@ function assertRequiredConfig(config: AppConfig, source: string): void {
   if (missing.length > 0) {
     throw new Error(
       `[Config] Missing required runtime configuration from ${source}: ${missing.join(', ')}. ` +
-        'Recreate deploy-frontend.local.env and rerun scripts/deploy-frontend.sh.',
+        'Check the saved workshop identity and rerun scripts/deploy-frontend.sh.',
     );
   }
 }
@@ -110,8 +110,9 @@ export async function loadConfig(): Promise<AppConfig> {
   const inlineConfig = window.__APP_CONFIG__;
   if (inlineConfig && inlineConfig.ENTRA_TENANT_ID) {
     console.log('[Config] Loading from window.__APP_CONFIG__');
-    cachedConfig = buildConfigFromRuntimeJson(inlineConfig);
-    assertRequiredConfig(cachedConfig, 'window.__APP_CONFIG__');
+    const candidate = buildConfigFromRuntimeJson(inlineConfig);
+    assertRequiredConfig(candidate, 'window.__APP_CONFIG__');
+    cachedConfig = candidate;
     console.log('[Config] Configuration loaded successfully from inline config');
     return cachedConfig;
   }
@@ -141,8 +142,9 @@ export async function loadConfig(): Promise<AppConfig> {
       if (contentType.includes('application/json')) {
         const json = await response.json();
 
-        cachedConfig = buildConfigFromRuntimeJson(json);
-        assertRequiredConfig(cachedConfig, '/config.json');
+        const candidate = buildConfigFromRuntimeJson(json);
+        assertRequiredConfig(candidate, '/config.json');
+        cachedConfig = candidate;
         console.log('[Config] Configuration loaded successfully from /config.json');
         return cachedConfig;
       }
@@ -159,10 +161,11 @@ export async function loadConfig(): Promise<AppConfig> {
     console.warn('[Config] Failed to load /config.json. Falling back to build-time env.', error);
   }
 
-  cachedConfig = buildConfigFromEnv();
-  cachedConfig.redirectUri = window.location.origin;
+  const candidate = buildConfigFromEnv();
+  candidate.redirectUri = window.location.origin;
 
-  assertRequiredConfig(cachedConfig, 'build-time VITE_* values');
+  assertRequiredConfig(candidate, 'build-time VITE_* values');
+  cachedConfig = candidate;
 
   return cachedConfig;
 }
