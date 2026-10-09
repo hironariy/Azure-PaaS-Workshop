@@ -36,8 +36,6 @@ jobs:
     name: Public SWA deployment-tool audit
     runs-on: ubuntu-24.04
     timeout-minutes: 8
-    env:
-      TOOL_DIRECTORY: ${{ runner.temp }}/public-swa-cli
     steps:
       - name: Checkout provenance verifier without credentials
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -50,8 +48,8 @@ jobs:
       - name: Resolve the pinned upstream CLI from public npm without lifecycle scripts
         shell: bash
         run: |
-          mkdir "$TOOL_DIRECTORY"
-          cd "$TOOL_DIRECTORY"
+          mkdir "$RUNNER_TEMP/public-swa-cli"
+          cd "$RUNNER_TEMP/public-swa-cli"
           npm init --yes >/dev/null
           npm view @microsoft/static-web-apps-cli@2.0.10 version engines dist.tarball dist.integrity \
             --json --registry=https://registry.npmjs.org > release.json
@@ -61,13 +59,13 @@ jobs:
       - name: Verify clean public installation and CLI loading without Azure
         shell: bash
         run: |
-          cd "$TOOL_DIRECTORY"
+          cd "$RUNNER_TEMP/public-swa-cli"
           npm ci --ignore-scripts --no-fund --registry=https://registry.npmjs.org
           ./node_modules/.bin/swa --version
       - name: Require zero deployment-tool advisories
         shell: bash
         run: |
-          cd "$TOOL_DIRECTORY"
+          cd "$RUNNER_TEMP/public-swa-cli"
           npm audit --package-lock-only --audit-level=low --json \
             --registry=https://registry.npmjs.org > audit.json
       - name: Preserve public tooling evidence even when its audit fails
