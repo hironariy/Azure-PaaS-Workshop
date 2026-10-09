@@ -44,7 +44,7 @@ chmod +x scripts/deploy-backend.sh
 | 処理 | スクリプトが行うこと | 意図 |
 |---|---|---|
 | 引数と作業ディレクトリ確認 | `<resource-group>` と `<app-service-name>` を受け取り、`materials/backend` に移動する | 誤ったリソースやディレクトリにデプロイしない |
-| アプリ build | `npm install` と `npm run build` を実行する | TypeScript を Cloud Shell 側で JavaScript に変換する |
+| アプリ build | `npm ci --include=dev` と `npm run build` を実行する | lockfile に固定した build 用依存関係を復元し、TypeScript を Cloud Shell 側で JavaScript に変換する |
 | ZIP package 作成 | `deploy-package/` に `dist/` と `package.json` / `package-lock.json` をコピーし、`npm ci --omit=dev` で production 依存関係だけを入れてから ZIP 化する | App Service 上で追加 build せず、実行に必要なファイルだけを配置する |
 | ZIP の検査 | `unzip -t` とパス区切りの確認を行う | 壊れた ZIP や Windows 形式の区切り文字による起動失敗を防ぐ |
 | App Service 設定 | `SCM_DO_BUILD_DURING_DEPLOYMENT=false` と startup command `node dist/src/app.js` を設定する | App Service 側の remote build を避け、ZIP 内の build 済みアプリを起動する |

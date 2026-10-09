@@ -7,7 +7,8 @@
 #
 # Prerequisites:
 #   - Azure CLI logged in
-#   - SWA CLI installed (npm install -g @azure/static-web-apps-cli)
+#   - SWA CLI installed (npm install -g @azure/static-web-apps-cli@2.0.10)
+#     Review the learner guide's unresolved deployment-tool audit limitation.
 #   - Entra ID app registrations created
 #   - Frontend config file created from template
 #
@@ -173,7 +174,7 @@ echo -e "${GREEN}✅ Azure resources found${NC}"
 # Step 2: Install dependencies and build
 echo ""
 echo -e "${YELLOW}Step 2: Building application...${NC}"
-npm install
+npm ci --include=dev
 # Force a production Vite build even if the Cloud Shell profile has NODE_ENV=development.
 NODE_ENV=production npm run build -- --mode production
 
