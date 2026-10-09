@@ -93,7 +93,7 @@ async function inspectPublicApp(values, appHostname, request = fetch) {
       'draft authorization', 'telemetry ingestion', 'recovery/data integrity'] };
 }
 
-async function inspectSavedApp(directory, invoke = azureJson, request = fetch) {
+function loadAppTargets(directory, invoke = azureJson) {
   if (!directory || !path.isAbsolute(directory)) throw new Error('Supply the absolute saved state directory');
   const values = readState(directory, 'deployed');
   const account = invoke(['account', 'show']);
@@ -108,7 +108,13 @@ async function inspectSavedApp(directory, invoke = azureJson, request = fetch) {
   const actualSwa = invoke(['staticwebapp', 'show', '--subscription', values.SUBSCRIPTION_ID,
     '--resource-group', values.RESOURCE_GROUP, '--name', values.SWA_NAME, '--query', 'defaultHostname']);
   if (actualSwa !== values.SWA_HOSTNAME) throw new Error('SWA target differs from saved state');
-  return inspectPublicApp(values, hostname, request);
+  if (!isAzureHostname(hostname, 'azurewebsites.net')) throw new Error('Unexpected App Service hostname');
+  return { values, appHostname: hostname };
+}
+
+async function inspectSavedApp(directory, invoke = azureJson, request = fetch) {
+  const { values, appHostname } = loadAppTargets(directory, invoke);
+  return inspectPublicApp(values, appHostname, request);
 }
 
 if (require.main === module) {
@@ -118,4 +124,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { inspectPublicApp, inspectSavedApp };
+module.exports = { inspectPublicApp, inspectSavedApp, loadAppTargets, readResponse };
