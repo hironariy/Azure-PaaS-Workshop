@@ -2,7 +2,17 @@
 
 作成日: 2026-10-09
 
-状態: 実装計画承認済み・段階的に実施
+再評価日: 2026-10-11
+
+状態: 従来の実装計画は承認済み。**第 24 節の解決戦略は再提案であり、権限・tooling・費用・merge の変更は未承認**。
+
+### 現在の解決方針を先に読む
+
+全 23 Issues を再確認し、#1–#12 は closed、#13–#23 の 11 件は open。#24–#48 の 25 PRs はすべて未マージで、main は引き続き `005cc191d970b7ee3374ad73452270ebacb98eef`。修正候補の成功を、受講者が使う main の改善や Issue 解決と混同しない。
+
+**今後は追加の局所修正を積み続けるのでなく、意思決定 → 検証済み candidate の統合 → 共通 Azure rehearsal → Issue 単位の受け入れ → release の順で進める。** 詳細は [第 24 節](#all-issue-resolution) を現在の判断基準とし、第 1–23 節は従来の方針と証拠を保持する。
+
+最優先の提案は、受講者の Contributor を維持した **必要時だけの限定的な権限担当者 handoff** と、Cloud Shell から使う **documented ARM ZIP deployment の実証**。前者は「講師関与なし」の条件変更、後者は hosted artifact と費用・監査条件の決定を必要とする。承認前には本線へ組み込まない。strict Contributor-only / 講師準備・関与なし / fresh MI + Key Vault RBAC をすべて維持したまま全 Issue を解決できる、とは約束しない。
 
 最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#46 の実 MongoDB persistence に続き、#47 で署名付き API token の audience/permission 判定、#48 で runtime API routing と failed-config cache を修正した。documented ARM ZIP deployment も代替候補へ追加した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–23 節を参照する。
 
@@ -513,3 +523,147 @@ API version `2025-05-01` の `POST .../Microsoft.Web/staticSites/{name}/zipdeplo
 | Tooling decision | used tool inventory / public provenance / audit criteria を合意し、既存 CLI audit failure を削除・skip・suppression で隠さない |
 
 本段階では ARM upload helper / hosted artifact / live trial は未実装・未実行。baseline を自動で変更せず、storage/cost/ownership と第 18 節の permission gate を解決してから end-to-end route を採用する。documented operation の発見を #15 完了や Contributor-only fresh deployment の解決とはしない。
+
+<a id="all-issue-resolution"></a>
+
+## 24. 全 Issue を閉じるための解決戦略を組み直す
+
+### 24.1. 「全件 blocked」から、解決に必要な作業と判断を分ける
+
+2026-10-11 に全 Issues の state と open 11 件の受け入れ条件、全 open PRs、remote main、#48 の実 checks、Microsoft の権限・同意・ZIP deployment 文書を再確認した。#48 final head `04405074b4cd384f0602e209358230d0c4e3e5e0` は application / database / public evidence / Bicep / workflow / native checks が成功し、SWA CLI audit だけ failure。第 21–22 節の件数はその実行時の証拠であり、今回すべての audit や Azure rehearsal を再実行したという意味ではない。official CLI latest release は再確認しても v2.0.10 だった。
+
+従来の進め方には次の問題があった。
+
+| 問題 | 新しい扱い |
+|---|---|
+| 局所修正の PR が増えても main に届かない | candidate を固定し、レビュー・採用の担当と統合順を決める。新たな全件修正の作り直しはしない |
+| 9 つの作業が一律に blocked | repository 内の実装、権限/費用の承認、real acceptance、main への採用を別状態にする。承認不要の契約テスト・文書・証拠整理は進められる |
+| Contributor の制約を繰り返し確認するだけ | 解決可能な権限経路を比較して明示的な判断を求める。不可能な条件をコードで回避しない |
+| 脆弱な CLI の upstream release 待ちが唯一の出口に見える | ARM route の hosted-artifact / upload / completion を具体的な成果物として実証し、採用失敗時の戻り先も決める |
+| 各 Issue が workshop 全体の完了を待つ | original acceptance checklist へ証拠を 1 対 1 で結び付ける。関係ない optional HA・native client・tenant policy は全 Issue の共通前提にしない |
+| 計画が original Issue より厳しい条件を追加していた | #19 の required-check 設定方法と release 時の実 enforcement、#23 の文書整合と live platform 実証を区別する。条件の削除・書換えは maintainer の明示的な判断を残す |
+
+#1–#12 は完成済み文書の履歴として closed を維持する。今回見つかった現行文書の regression は #13–#23 に対応付け、古い Issue を機械的に再 open しない。全 Issue 解決は「11 open 件の受け入れ条件を満たし、採用済み source の証拠を maintainer が承認すること」と定義する。
+
+### 24.2. 権限を生み出すのでなく、必要な操作の担当を決める
+
+**推奨提案: 受講者は Contributor のまま、fresh resource は受講者が作り、必要な時点だけ権限担当者へ handoff する。** 事前作成済みアプリ・vault・DB を配る方式ではない。ただし、講師/管理者の関与そのものは発生するため、従来の「講師準備・関与なし」と同じ条件ではない。承認されなければ採用しない。
+
+| 経路 | 実現可能性・代償 | 判定 |
+|---|---|---|
+| A: strict Contributor のみ、支援なし、現行 security を維持 | MI の Key Vault role assignment を作れず、fresh deployment は完了不可。Entra consent も Azure Contributor では保証されない | 従来条件を維持する場合の正確な結果。全件完了ではなく、#13/#16 と依存する acceptance が未達 |
+| B: 必要時だけの権限担当者 handoff | 受講者は Contributor を維持。group-owned app / vault / MI を対象に必要な grant を担当者が実施し、受講者が起動・CRUD を検証する | **全件解決へ進む推奨案、未承認**。運営の小さな実行責務は必要 |
+| C: 条件付きの role assignment delegation | 対象 vault / role / exact MI principal と add/delete を制限した追加 RBAC を使う。最初の delegation 自体には権限担当者が必要 | 支援回数を減らす代替。Contributor「のみ」ではなく、追加権限と初期承認を明記する |
+| D: Key Vault RBAC を外す、secret を env/文書に直書き、全員 Owner | 見かけ上 unblock できても security と学習目的を損なう | 採用しない |
+
+B を採用する場合の実装は、既存 `keyvault-rbac.bicep` の責務分離を利用した **create → handoff → verify → deploy** の明示的な段階にする。main は現在この role assignment を無条件に呼ぶため、document だけでは Contributor deployment に変わらない。
+
+| 段階 | 担当・成果物 | 次へ進む条件 |
+|---|---|---|
+| Azure / Entra prerequisites | 環境担当が tenant/subscription、provider、region/SKU、registration/consent policy と実効権限を確認 | learner と権限担当者の操作範囲・費用上限・実施時間が確定。不明な policy を許可とみなさない |
+| Resource creation | learner が owned app registration を policy の許可範囲で作り、core infrastructure と MI を作成。必要な RBAC stage は未完として state に残す | exact RG / vault / MI ID を確認。stage が pending のまま healthy/deployment-ready と表示しない |
+| Scoped Azure handoff | 権限担当者が exact vault 上で exact App Service MI へ Key Vault Secrets User を割り当てる | role / principal / scope を照合し、propagation と Key Vault reference resolution を実測する |
+| Entra handoff（必要時だけ） | 自己同意が許可されない場合、Entra 担当者が owned Backend scope / Frontend app の同意を審査・実施 | Azure role と同意権限を混同せず、resource / scope / consentType / principalId を確認。共有 grant を削除・置換しない |
+| Resume / replay | learner が save/load を経て backend/frontend deployment と CRUD を継続 | 再実行で既存 grant を変更しない。権限不足・handoff 未完・伝播待ちを区別する |
+
+権限担当者へ渡す値は公開の resource / principal IDs と scope に限定し、secret、DB connection string、access token は渡さない。cleanup の resource 削除と owned Entra registration/grant の扱いも別にする。Core / RBAC stage は compiler parity、fresh/resume/redeploy、negative permission tests まで実装してから本線へ採用する。
+
+Microsoft の [constrained delegation](https://learn.microsoft.com/en-us/azure/role-based-access-control/delegate-role-assignments-overview) は対象 role / principal と add/delete の制限を認めるが、最初の role assignment を無権限で作れる仕組みではない。Key Vault Data Access Administrator も追加権限であり、それだけを「Contributor-only の解決」としない。[User consent](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/configure-user-consent) は app と permission policy に依存するため、owned custom API を作っただけで自己同意可能とは断定しない。Tenant-wide policy 変更は本計画でも行わない。
+
+### 24.3. SWA tooling の出口を、実行可能な成果物にする
+
+**推奨提案: Cloud Shell 本線で ARM ZIP route を実証し、合格すれば vulnerable npm SWA CLI を受講者の必須ツールから外す。** Backend App Service ZIP、SWA Standard / Linked Backend、runtime `/api`、MSAL は維持する。GitHub Actions を必須にしたり、ホスティング先を無関係なサービスへ変えたりしない。
+
+先に approval 不要の local fixture で request / polling / redaction contracts を実装できる。実 upload は approved artifact hosting / cost / Azure target が決まってから行う。既存 baseline に artifact Storage module はなく、利用可能な専用 Storage が存在すると仮定しない。
+
+| 成果物 | 実装・検証内容 |
+|---|---|
+| Prepared ZIP | shared runtime config writer / routing file を使い、秘密値不在、entry files、source SHA、checksum を検証。backend の ZIP と混同しない |
+| Owned hosting | 利用許可済みの専用 HTTPS artifact host、または別途承認した disposable Blob Storage を選ぶ。新規 Storage の費用・network reachability・upload 権限・短い read-only URL 期限・cleanup を明記 |
+| ARM transport | documented `properties.appZipUrl` を使う。explicit subscription/tenant/resource target、ARM OAuth、safe body handling を実装。URL query / token / raw reflective error をログへ出さない |
+| Bounded LRO | 200 と 202、Location / azure-asyncoperation、Retry-After、timeout、Failed/Canceled、malformed/untrusted polling destination を fixture と実 platform で検証する |
+| Release / rollback | terminal completion 後に UI + direct backend + SWA `/api` を検証。既知 revision の再 upload で復旧し、記事を保持し、owned archive を削除・失効する |
+| Supply chain / audit | 使用する Node/npm/Azure CLI/helper/hosted artifact の version と provenance を記録。両 app の全依存・production・lockfile・backend ZIP の audit=0 を再確認し、new helper dependency があれば同じ gate へ追加する |
+
+`appZipUrl` を service が取得できること、private artifact host の可否、実 completion / propagation は文書だけでは確定しない。試験が失敗したら runtime / auth / data architecture を変更して取り繕わず、contract mismatch と実 error の安全な分類を残す。戻り先は reviewed upstream CLI 修正版の実証、または inventory が確認できた公式 deployment route の別審査とする。期限のない force downgrade / fork 固定 / mutable native image を「安全な代替」として採用しない。
+
+採用時は #15 の「SWA CLI 導入」条件を、**選択した supported Cloud Shell deployment tool と全使用 dependency の検証**へ明示的に更新する審査が必要。CLI audit 6 件が直ったとは記載しない。まず本線・導入手順・scripts・reference・CI を一緒に変更し、それから obsolete CLI の upstream audit を別の追跡へ移す。必須 path に残る CLI を使いながら required audit を削除すること、`continue-on-error` / severity threshold で隠すことは不可。
+
+公式 Actions の native `stable` image は別の supply-chain 審査対象として保持する。ARM 本線の採用だけでその任意経路が検証済みになるわけではない。未実証の optional path は reference / unsupported-for-this-release と明記し、正式にサポートする経路へ昇格する場合は別途 acceptance を行う。
+
+### 24.4. 全 11 open Issues の残作業・担当・閉じる証拠を固定する
+
+担当は役割で示す。実際の実施者・日程・環境・予算が未確定の項目を、担当済み・承認済みとしない。Source / CI は #48 の候補があり、main には未採用という共通状態から始める。
+
+| Issue | 既存候補・残作業 | 主担当 | 閉じるための証拠・依存 |
+|---|---|---|---|
+| #13 | #28/#47 の権限分離・signed token を採用。自己同意の実成否と、必要時の限定 admin handoff を検証 | Entra 担当 + app 担当 | R0/R2 で実 user sign-in、Backend scope、resource/consentType/principalId、401/403 と authenticated API を確認。原 Issue の admin 手順も検証し、B 方針は別途承認 |
+| #14 | #26/#46/#48 の Unicode・persistence・routing を採用。Azure/browser で同じ入力を確認 | app 担当 | R2 で JA/ZH/KO draft/published 201、emoji/symbol fallback、同名/他 author、URL encoding、既存 URL、本文/要約/tags、edit/delete。DB fixture を Azure compatibility の代用にしない |
+| #15 | #41 の public locks / production ZIP を採用。ARM route か supported CLI remediation を実証し、採用 route の導入・監査を更新 | app/tooling 担当 + maintainer | R1/R2 で public clean install、全 audit scopes=0、実 build/upload/routing/MSAL/CRUD。旧 CLI audit failure は履歴に保持し、条件変更は承認後だけ |
+| #16 | #29/#36 の preflight/single writer を採用。core → RBAC handoff → verified resume を追加 | IaC 担当 + Azure 権限担当 | R0/R2/R3 で Contributor denial と必要時支援による起動/CRUD、exact role/scope/MI、再 deploy の不変性。A 維持なら本項は未達 |
+| #17 | #37 の観測/recovery を採用。B1/M25/HA=false の baseline restart/redeploy/known-revision を実行 | operations 担当 | R3 で障害前後の記事・auth CRUD、UTC/monotonic duration、429/transport/5xx の分類、stable dual-path health。採用していない paid HA/DR の実行は前提にしない |
+| #18 | #32/#45 の error/redaction/cleanup を採用。現物の failed deploy と owned cleanup を確認 | scripts/operations 担当 | R1 の fixture negatives と R2/R4 の実 success/failure/no-existence、非 0 exit、secret-safe output。共有・空・foreign target を拒否する |
+| #19 | #25/#30/#33/#39–#42/#44/#46 の最終 CI を採用。現行 selected-tool gate と required-check 手順を整える | CI 担当 + maintainer | R1 の credential-free positive/intentional failure、public source/audit/API error、Bicep parity、Pages/learner contract。設定方法の文書を Issue 証拠とし、実 ruleset enforcement は release gate で別確認 |
+| #20 | #31 の versioned JSON state を採用。新規・途中再接続・A 以外の group を実行 | learner-flow 担当 | R2/R3/R4 で tenant/subscription/RG/cwd/params の復元、wrong target 拒否、clone/using path、owned cleanup。他 group は別 state/owned RG を使う |
+| #21 | #35/#46–#48 の healthy/API/config を採用。real logs/KV/DB/telemetry を実測 | app + operations 担当 | R2/R3 で direct と SWA path、startup、login/CRUD、private DNS/KV resolution/DB connectivity、telemetry delay と recovery 後 smoke。raw connection/token を記録しない |
+| #22 | #34 の catalog/quota/progress を採用。実 subscription の quota/capacity と deployment を確認 | Azure 環境 + IaC 担当 | R0/R2 で region/SKU/quota/担当、Running/Failed/Succeeded、Succeeded 前の outputs 未保存、approved alternate parameter の費用/機能差。preflight を capacity 保証にしない |
+| #23 | #36/#38/#40/#43/#45 の JA/EN baseline/optional を採用。選択した handoff/tool を図/費用/entry に同期 | docs 担当 | R1 の build/links/diagram/compiled ARM、R2 の実 baseline との照合、R5 の portal navigation。無条件 HA/production-ready 表現を外し、closed #1–#12 の有用内容を保持 |
+
+Issue を閉じる前に original checklist の各項目へ、採用 commit、結果、safe evidence link、検証者、残る optional 制約を追記する。必要条件を満たしていない項目は unchecked のまま。local test のみで足りる項目にまで real tenant の待ち時間を増やさず、real environment が必要な項目は mock で閉じない。
+
+### 24.5. 深い PR stack を、レビュー可能な release candidate に変える
+
+#24–#48 を番号順に merge する計画は採用しない。独立 track の途中 PR、mirror candidate、後段で解消した conflict、candidate provenance を持つため、途中 source を一時的に main へ入れると失敗や旧契約が戻り得る。
+
+推奨する統合手順は次のとおり。
+
+1. `origin/main` と #48 final head を固定し、issue → acceptance → final files/commits の map を作る。#27/#30 の古い mirror source を final locks で置き換えたことを明記する。
+2. 新しく **main 向けの統合 candidate PR** を、reviewed final source と今回承認された追加成果物から作る。既存 issue-focused PR/commit は traceability と review の材料として保持し、同じ修正を再実装しない。
+3. App・IaC/security・scripts・docs の coherent commit groups で diff をレビューする。既存 PR の superseded / incorporated 関係は説明するが、自動 close / merge / rebase はしない。古い draft candidate を個別に先行 merge しない。
+4. exact candidate SHA で clean CI と rehearsal を実行する。source を変更したら影響する checks / rehearsal を再実行し、以前の SHA の成功を新しい source の成功へ転用しない。
+5. Maintainer が安全なまとまりの採用、必要な required checks、release revision、Issue closure を承認する。先に独立して採用可能な docs/test がある場合も、動かない中間 manifest/lockfile を main に入れない。
+
+統合 PR を作ること自体は GitHub merge の承認ではない。現時点では既存 PRs を変更・閉鎖・merge していない。#24 は plan の更新入口として維持する。
+
+### 24.6. 共通 rehearsal で複数 Issue の acceptance を一度に集める
+
+Run ID、UTC、source SHA、公開 tool versions、実効 role/scope、選択 parameter、safe result summaries を同じ証拠系列へまとめる。HAR / token / secret / connection string / SAS / 他受講者情報は公開しない。Private environment IDs は session 内で保持し、公開教材の既定値へ流用しない。
+
+| Run | 手順と measurable outcome | 対象 |
+|---|---|---|
+| R0: Readiness / negative permissions | learner の role と registration/consent を確認。権限不足、wrong tenant、unavailable SKU、quota 未確認を明確に止める。権限担当者・許可範囲・予算を確定 | #13/#16/#18/#20/#22 |
+| R1: Exact candidate / credential-free CI | public `npm ci`、全 audit scopes/ZIP、unit + indexed DB + exact runtime request、native、Bicep artifact、intentional failures、Pages/links を実行 | #14/#15/#18/#19/#23 |
+| R2: Fresh Cloud Shell / real app | Day 0→core/handoff→backend/frontend→login/CRUD。保存後に別 Cloud Shell session から復元。direct/SWA health と JA/ZH/KO/emoji/symbol/legacy article を確認 | #13–#16/#18/#20–#23 |
+| R3: Reconnect / idempotence / recovery | 再 deploy で role/state/URL/data を保持。owned App Service restart/redeploy/known revision 復旧、stable health と同じ記事を検証。A 以外の group の別 state を使う | #14/#16–#18/#20/#21 |
+| R4: Failure / owned cleanup | 空/foreign target 拒否、実失敗の非 0、dedicated RG の deletion/no-existence、owned artifact の削除/失効、必要時の owned Entra cleanup を担当別に確認 | #13/#15/#18/#20 |
+| R5: Independent learner / teaching fit | 別実施者が documented permissions と handoff だけで実行。日本語 portal/navigation、copy/progress/mobile を確認し、各段階の実 elapsed time を記録 | #19–#23 と workshop release |
+
+R2/R3 は private endpoint の存在や public health だけでは合格にしない。App Service 側の private DNS・Key Vault reference resolution・実 DB connection/CRUD を確認し、public DB connectivity が意図せず有効になっていないことを service の supported controls と実 behavior で検証する。telemetry は operation/time と実流入を対応付け、未流入・遅延を区別する。
+
+R4 の cleanup は approved dedicated targets だけで行う。soft-delete / retained artifact / Entra objects など残存するものの owner と処理方針を記録し、RG 不在を「すべて消去」と同義にしない。最初の rehearsal が自グループで成功しても、別実施者の成功まで workshop-wide release を承認しない。
+
+### 24.7. 実行順、費用、学習時間を gate で管理する
+
+以下の期間は **担当者・権限・環境・予算が確保された後の作業量の目安**。承認待ち、tenant consent、service provisioning、quota/capacity 待ち、学習者日程を含む納期の保証ではない。
+
+P0 の意思決定と P1 の credential-free 作業は並行して進める。P2 は該当する権限・tool/host・費用方針の承認を実際の前提とし、P3 は合格した candidate と authorized environment、P4 は rehearsal evidence を前提とする。
+
+| 順序 | 作業・目安 | 開始条件 / 終了条件 |
+|---|---|---|
+| P0: 決定と受け入れ map・1–2 人日 | A/B/C の権限方式、ARM/CLI の tool route、host/budget/cleanup、検証者を決める | Original checklist と proposed changes を承認し、実施者・scope・費用上限が確定 |
+| P1: 承認不要の契約作業・2–3 人日 | candidate map、ARM fixture contracts、handoff/state/replay の設計、docs/CI acceptance を整理 | R1 の候補が再現可能。cloud writes なしで実施でき、P0 の実承認を待って全作業を止めない |
+| P2: 承認した経路の実装・2–4 人日 | core/RBAC phase、selected frontend deployment、hosting/expiry、required tool gate、文書を一貫して接続 | R1 合格、unapproved fallback なし、rollback と cleanup 手順あり |
+| P3: 統合 / cloud rehearsal・2–4 人日 | main 向け candidate review、R0/R2/R3/R4、発見した blocker の修正 | exact SHA の acceptance map を満たす。新たな capacity 不足は環境担当へ戻す |
+| P4: Independent pilot / release・1–2 人日と実施枠 | R5、real teaching-time feedback、safe final evidence、maintainer adoption | Issue ごとの承認と採用済み revision。自動 merge / close は行わない |
+
+4 時間 classroom の教材では、readiness/権限依頼、platform provisioning、CRUD、recovery、cleanup の実時間を分けて記録する。Provisioning や handoff 待ちが枠を超えるなら、Day 0 readiness を受講者自身の事前課題として明記するか、exercise scope / time allocation を調整する。講師が resource を事前作成したことを「準備なし」に見せたり、未観測の作業時間を約束したりしない。
+
+新たな blog 機能、Container Apps/Functions/database 置換、VM ベースの迂回、paid HA/secondary region はこの critical path に追加しない。B1/M25/HA=false の baseline に固定し、artifact host の費用を明示的に追加承認する。利用可能な region/SKU の変更は環境担当が top-level parameters、機能、費用を確認して採用し、自動 fallback にしない。
+
+### 24.8. 完了判定と、承認されない場合の正確な結論
+
+**Issue acceptance、main adoption、workshop release は別の gate**。受け入れ可能な成果物は staged review に進め、採用済み source の checks と safe evidence を整えて maintainer が Issue を閉じる。全 Issue を閉じても、optional 経路の未検証事項・upstream の履歴・tenant policy の違いを消さない。
+
+全件解決へ進むための最初の意思決定は、(1) restricted privilege handoff / constrained delegation を許容するか、(2) hosted ARM ZIP route と必要な費用・tool criteria を許容するか、である。GitHub merge/Issue close と paid optional HA は引き続き別承認とする。
+
+**(1) が承認されず strict Contributor-only / 支援なしを維持する場合、現行 fresh MI/Key Vault RBAC architecture の全件完了は実現できない。** その場合も repository 内の修正・テスト・文書・review は進められるが、#16 と依存する real acceptance を「解決済み」としない。(2) が承認されない場合は supported upstream CLI remediation を審査し、audit failure と live acceptance を保持する。条件の矛盾を unchecked のまま隠すより、解決経路の選択と責任分界を明確にする。
