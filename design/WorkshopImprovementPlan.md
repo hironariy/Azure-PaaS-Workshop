@@ -10,11 +10,13 @@
 
 2026-10-11 の再確認では全 23 Issues のうち #1–#12 は closed、#13–#23 の 11 件は open、#24–#48 の 25 PRs は未マージ。2026-10-12 に #49 の ARM frontend candidate を追加した。main への自動採用は行わず、修正候補の成功を受講者が使う main の改善や Issue 解決と混同しない。
 
-**今後は追加の局所修正を積み続けるのでなく、意思決定 → 検証済み candidate の統合 → 共通 Azure rehearsal → Issue 単位の受け入れ → release の順で進める。** 第 24 節の解決案のうち、権限担当者 handoff は採用しない。最新の決定と実装は [第 25 節](#arm-implementation-decision) を参照し、第 1–24 節は従来の提案・証拠を保持する。
+**今後は追加の局所修正を積み続けるのでなく、採用単位の整理 → main 向け review / CI → 承認された merge → 共通 Azure rehearsal → Issue 単位の受け入れ → release の順で進める。** 最新の merge 方針は [第 26 節](#pr-merge-strategy) を参照する。第 24 節の権限担当者 handoff は採用しない。承認済みの権限・tool 選択と実装は [第 25 節](#arm-implementation-decision)、第 1–24 節は従来の提案・証拠として保持する。
 
 現在の選択は **restricted privilege handoff / 追加 RBAC を導入しない**ことと、**documented ARM ZIP deployment を実装・検証する**こと。許可済み owned HTTPS host を利用する前提で準備・送信を分離し、host が未確定なら送信を止める。strict Contributor-only / 講師準備・関与なし / fresh MI + Key Vault RBAC をすべて維持したまま全 Issue を解決できる、とは約束しない。
 
 最新の到達点: #41 の public application provenance / audit / production ZIP、#46 の実 MongoDB persistence、#47 の署名付き API token、#48 の runtime API/config に続き、#49 で ARM ZIP upload / trusted bounded LRO / exact HTML と public readiness を実装した。**Legacy SWA CLI audit と Contributor/Entra/hosted artifact/live Azure の完成条件は未達**。実装した経路と実 cloud acceptance は区別する。
+
+2026-10-12 の merge 再調査では **26 PRs が open、#25–#49 の全 head は #49 の履歴に含まれる**。推奨は #24 の計画文書を先に審査し、main 向けのアプリ改善と運用/ARM 統合を別の採用単位にすること。現在の赤い統合候補をそのまま merge せず、旧 mirror / CI の途中 PR も順番に merge しない。この文書は merge / close / required-check 設定変更の承認ではない。
 
 対象: [Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop) の Issue #13–#23
 
@@ -705,3 +707,143 @@ Actual public runner も source `aea1192371773d3bacf3319d70cd4117319ea77a` で�
 実 Azure acceptance の前に、owned HTTPS host、費用/期限/cleanup、exact deployed SWA と healthy backend、許可された registration/consent を確定する必要がある。現在は authorized RG が未作成で、① A のまま fresh Key Vault RBAC を完了できない。既存の許可済み完成環境があると仮定して勝手に他の RG/SWA へ upload しない。
 
 実装・credential-free verification と公開 PR は進められるが、上記の不足を隠して #15/#16/#21 を閉じない。Host を指定することは resource/permission 作成の承認ではなく、① A を変更する場合も別の明示的な決定が必要である。
+
+<a id="pr-merge-strategy"></a>
+
+## 26. #24–#49 の merge 計画を、採用単位と gate で管理する
+
+2026-10-12 時点の調査に基づく提案。**今回実施するのは計画の保存・共有まで**であり、新しい統合 PR の作成、既存 PR の retarget / ready 化、merge / close、repository settings の変更、Azure 操作は行わない。第 24.5 節の単一統合案を、先行採用できる改善と保留すべき運用改善に分けて具体化する。
+
+### 26.1. 現在の source、checks、保護設定を固定する
+
+| 対象 | 確認結果 |
+|---|---|
+| main | `005cc191d970b7ee3374ad73452270ebacb98eef`。26 PRs はいずれも未マージ |
+| 計画 PR #24 | 更新前 head `5b975176e7c512876513f9954157556e22d229fd`。main 向け・non-draft・check run なし |
+| 最終実装 PR #49 | head `b5d578891bb641d5618e17c770564bc35ed69b66`、base は #48 の branch。main 向けの PR ではない |
+| main → #49 | 109 files、8,741 additions / 4,002 deletions。小さい ARM-only 変更ではなく、全 track の累積差分 |
+| 履歴の包含 | `git merge-base --is-ancestor` で #25–#49 の全 head が #49 に含まれることを確認。#24 の上記 head は含まれないが、今回の更新前の計画文書 blob は同一 |
+| #49 final CI | [native run 38207418201](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38207418201) は 68 tests / success。[quality run 38207418631](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38207418631) は非 CLI の 7 jobs が success、旧 CLI audit と overall が failure |
+| Review / mergeability | 全 PR に recorded approval はなく、`reviewDecision` は空。全 PR の `MERGEABLE` は Git の技術的判定にすぎず、採用許可ではない |
+| main の保護 | Branch API は `protected: false`、classic protection API は `404 Branch not protected`、repository rulesets と main の effective rules はともに 0 件。権限不足による取得失敗ではない |
+| Merge 方法 / branch 削除 | merge commit / squash / rebase はすべて許可。`delete_branch_on_merge: false`。設定は変更していない |
+| main の workflow source | `.github/workflows/` に存在するのは Pages のみ。Quality / script quality の workflow 登録と branch 上の実行実績があっても、main にその workflow source が採用済みとはいえない |
+
+保護設定がないことは赤い CI を通してよい理由にならない。設定変更が未承認でも、maintainer の merge checklist で review / exact-source checks を必須にする。実行時には remote main、PR head/base、check runs、review、rules を再取得する。
+
+### 26.2. 推奨順序は「計画 → アプリ改善 → 運用統合 → workshop release」
+
+全 PR を番号順に merge することも、#49 の base だけを main に変更して即 merge することも推奨しない。後者は差分を 109 files に広げ、旧 CLI audit failure と Azure 未検証事項を解消しない。**全件の live acceptance を待たずに、独立して正しく検証できるアプリ改善を先に採用する**。
+
+| Wave | 採用単位と source | Merge 前の条件 / 採用後の扱い |
+|---|---|---|
+| M0: 計画 | #24 を main 向けの独立 docs PR として review | 最新 A/B 決定・本節・内部リンク・docs-only diff を確認して別途 merge 承認。計画文書だけの採用で、アプリ修正や Issue 解決を主張しない |
+| M1: アプリ改善 | 最新 main から新しい main 向け PR を作り、#49 の最終アプリ・必要な helpers / tests・対応する credential-free CI を選択移植 | Public locks、Unicode、署名付き JWT、runtime config、実 DB persistence を同じ PR で検証。関連 checks はすべて green。採用は development / maintenance 改善で、旧 deploy route や workshop を承認しない |
+| M2: 運用・IaC・ARM 統合 | M1 採用後の main から、#49 の残りの state / preflight / deployment / diagnostics / recovery / Bicep / optional Actions / JA-EN docs を一貫した PR にする | 全 native / application / Bicep / workflow / docs checks を再実行。現状の旧 CLI audit failure を引き継ぐなら draft のまま保留。ARM 実送信の未検証・① A の制約は消さない |
+| M3: Workshop release | 採用 source に対する R0–R5 と Issue ごとの original acceptance | 正しい権限・host・環境・独立 learner evidence が必要。① A の fresh RBAC 制約が残る限り「全員が Day 0–Cleanup を完了できる release」は承認しない |
+
+M1 は #25 や #41 をそのまま単独 merge する案ではない。古い head には後続の auth / runtime 修正がなく、#27/#30 の mirror candidate を含む中間状態もある。**最終 source の必要な一式から、新しい standalone candidate を作る**。既存 main の deployment に残る未解消事項は README / developer entry に明示し、「M1 の CI が green だから Azure deploy も安全」と解釈させない。
+
+M1 の選択範囲は `materials/backend/`、`materials/frontend/` の最終 tracked changes と、`scripts/check-public-lock.cjs`、`scripts/configure-frontend.cjs`、対応する helper tests、`scripts/test/backend-integration.test.cjs`。CI は最終 application / public provenance / production ZIP / fixture DB / runtime writer の契約を保持する。必要な imports / fixture / configuration を差分で確かめ、関連コードだけ移して test や validation を落とさない。統合候補向け `docs/application-testing.md` を丸ごと移して未採用 scripts を案内せず、採用範囲に合う説明を添える。
+
+M2 の移植では M0 の最新計画を保持し、#49 に保存された古い版で上書きしない。Source は共通でも新 candidate の tree は移植後の main との組合せになるため、以前の integrated run をそのまま採用証拠にしない。
+
+M1 で deployment-tool / operational jobs を未採用とするのは **PR scope の分離**であり、既存の #42–#49 の audit job を削除・skip・`continue-on-error` にして green 化することではない。M1 は CLI を install / deploy せず、application audits は全 scope / ZIP で zero を要求する。#15 の tooling acceptance は open のまま、M2 の blocker として引き継ぐ。この境界自体も maintainer が review し、承認しなければ M1 を含む merge を保留する。
+
+依存関係を安全に分離できないことが新 candidate の CI / review で判明したら、M1 の強行採用はしない。代替は **main 向けの単一統合 candidate** にまとめ、全 gate が合格するまで保留すること。既存 stack の base を順次変えて、重複 diff / conflicts を増やす方式へ戻らない。
+
+### 26.3. 全 26 PR の disposition を明示する
+
+「包含」は最終 source の履歴にあるという意味で、レビュー済み・main 採用済み・自動 closure 可能という意味ではない。下表は proposed disposition であり、いずれの PR も現在は open のまま維持する。
+
+| PR | 成果物 | 推奨 disposition |
+|---|---|---|
+| #24 | 改善戦略 | M0 の独立採用候補。計画の最新版を他 candidate と同期する |
+| #25 | Application test foundation | M1 に最終形を包含。旧 test-only head を先行 merge しない |
+| #26 | Unicode slug / URL / collisions | M1 に tests と together。既存 URL と auth 境界を保持 |
+| #27 | 初期 dependency remediation | Historical / superseded candidate。Mirror source の単独採用は禁止、#41 の public locks を使う |
+| #28 | Self-service consent docs | M2 の identity / learner docs に包含。Non-draft / main base でも自己同意の実証ではない |
+| #29 | Permission preflight | M2 に包含。Contributor の denial を成功へ置換しない |
+| #30 | 初期 application CI | Historical / superseded candidate。App failures を後段で解消した最終契約へ置換 |
+| #31 | Cloud Shell state | M2 の deployment / docs と atomic に包含 |
+| #32 | Explicit errors / cleanup | M2 に包含。旧 scripts と新 state の混在を避ける |
+| #33 | Native script CI | M2 に包含。M1 の helper tests も scope に応じて別途実行する |
+| #34 | PaaS preflight | M2 に包含。Quota / regional capacity の保証とはしない |
+| #35 | Smoke / diagnostics | M2 に包含。Public health と authenticated CRUD を区別 |
+| #36 | IaC / baseline alignment | M2 に Bicep source / compiled artifact / docs を together |
+| #37 | Measurable recovery | M2 に probe / learner steps を包含。Real recovery acceptance は別 gate |
+| #38 | Component baselines | M2 の JA/EN baseline / optional 整合に包含 |
+| #39 | Public package evidence CI | M1 に最終 verifier / evidence 契約を採用。旧 failing locks とは切り離す |
+| #40 | Operational references | M2 に包含。採用した scripts / architecture と一致させる |
+| #41 | Public lockfiles / production ZIP | M1 の最終 public dependency source。旧 head 単体を完成形としない |
+| #42 | Deployment-tool evidence | M2 の unresolved audit を可視化。歴史を保持し、失敗を隠さない |
+| #43 | Validation / documentation contract | M2 に包含。Workshop-ready の誤表示を避ける |
+| #44 | Integrated tracks / conflict fixes | 最終 source の統合根拠として保存。Conflict resolution を M1/M2 の移植時に落とさない |
+| #45 | Optional Actions corrections | M2 の templates に包含。Cloud Shell 本線と別の承認・実証 |
+| #46 | Real persisted database tests | M1 に application / fixture / CI を together。Azure DB の実証とは区別 |
+| #47 | Signed Backend API token | M1 に audience / delegated scope / negative tests を together |
+| #48 | Runtime API/config | M1 に runtime dispatch / validation / retry tests を together |
+| #49 | ARM ZIP route | M2 の final operational source。Host / live acceptance /旧 audit のため現状は hold |
+
+M1 採用後も、複数の採用範囲や中間 source を含む #27/#30/#39/#41 などは機械的に一括 close しない。採用済み・未採用の hunk / acceptance を確認する。M2 または単一統合 candidate の採用後、maintainer の承認で incorporated / superseded PR を整理し、新 PR と採用 commit をリンクする。`gh pr close` で閉じた PR を「merged」と報告しない。
+
+### 26.4. Review と exact-source CI を merge の必須条件にする
+
+| Review surface | 確認する契約 |
+|---|---|
+| Application | Unicode / encoded routes / preserved URLs / sanitization、draft / ownership、署名付き API audience / scope、runtime config の再読込・invalid-root 拒否、actual fixture persistence。実 build の browser routing / style smoke で Tailwind 移行の表示互換性を確認し、real consent / Azure CRUD と混同しない |
+| Supply chain / CI | Public npm provenance、clean Node 24 installs、all / production / lockfile / extracted ZIP audits、pinned Actions、実行された tests、秘密値不要の CI |
+| Scripts / IaC | Validated state / target、bounded failure / cleanup、single Key Vault writer、RBAC 保持、Bicep 0.44.1 artifact parity、ARM remote ZIP / checksum / trusted LRO / no fallback |
+| Learner docs | Day 0–Cleanup の continuity、① A / ② B、SKU / costs / private networking、blocked / not-run 表示、JA/EN / links / Pages |
+
+担当者の氏名はここで仮定しない。Maintainer が上記の review 担当を割り当て、実装者による self-check と別の recorded review を用意する。#49 の「68 tests / 非 CLI 7 jobs success」は参照証拠であり、新しい main 向け PR の合格証ではない。
+
+Merge 前には、PR の **head SHA、最新 base main SHA、CI が実行した synthetic merge SHA または checkout SHA** と実際の tree を記録する。Base 更新、source 移植、conflict resolution、workflow / dependency 変更後は必要な checks を再実行する。新 candidate でも backend / database / frontend の現行 15 / 8 / 14 tests の契約を維持するが、件数だけで合格にせず、test names / failures / artifacts を確認する。
+
+現行 workflows は top-level `pull_request.paths` を使う。これをそのまま required checks にすると、docs-only PR などで workflow が起動せず pending のままになることがある。Required にする workflow は **PR では path filter を外し、毎回実行する**案を基本とする。Push の絞り込みは別に扱う。設定時には workflow title でなく実際の check-run 名を取得し、app / helper / docs-only の各 PR で checks が生成されることを確認する。
+
+Branch protection / ruleset 設定の追加は別承認。M1 では採用する application / public-source / database / helper / workflow checks、M2 ではそれに native / Bicep / relevant tool checks を加えて、すべて成功させる。Admin bypass、force merge、audit threshold 緩和、registry error の success 化を解決手段にしない。
+
+### 26.5. 旧 CLI audit と実 Azure acceptance の扱いを分ける
+
+M2 の現状は **merge-ready ではない**。公式 `@azure/static-web-apps-cli@2.0.10` の actual public audit は high 5 / low 1 / total 6 package-level findings。ARM implementation が CLI を呼ばなくても、final workflow が旧 CLI zero-audit を要求している以上、overall failure は残る。
+
+M2 の tool gate を満たす経路は次のどちらかを別途 review する。
+
+| 経路 | 必要な根拠 |
+|---|---|
+| Upstream CLI を修正済み版へ更新 | 公開 release / tree / integrity、clean audit zero、CLI loading / 実 deployment、互換性と docs の確認。単なる version 置換や未公開 fix の推測では不可 |
+| 承認済み B を検証して旧 route を正式退役 | ARM の real prepare / host upload / POST / completion / readiness / rollback / object expiry-deletion、採用する他の deployment tools の inventory / audit、learner / optional docs の整合。旧 CLI support と gate の対象変更を maintainer が明示的に承認 |
+
+② B の実装承認だけでは、旧 route の退役や #15 の original zero-audit criteria 変更は承認されていない。現状では host / real target / acceptance が不足し、① A の fresh RBAC blocker も残るため、退役済み・実証済みとは扱わない。基準変更が必要なら original checklist の変更理由と evidence を Issue に記録し、過去の CLI findings を「修正済み」と言い換えない。
+
+Credential-free code acceptance と workshop release も別である。Live 未検証コードを development-only として採用する提案は可能だが、該当 checks を失敗のまま merge する許可にはならない。採用する場合、README だけでなく実際の learner entry / Day 0 / 該当手順に blocker と not-verified を表示する。① A を維持したまま全件が解決するという新しい約束を追加しない。
+
+### 26.6. Merge 方法、branch 整理、rollback を先に決める
+
+M0 / M1 / M2 を新しい standalone 採用単位として扱う場合は **squash merge** を基本提案とする。各 wave の最終 tree を一つの commit にし、PR body に元 PR / source SHA / 採用範囲を記録する。既存 stack を一件ずつ squash して、child branches がそのままつながると仮定しない。
+
+単一統合 candidate を #49 の履歴から作る代替案では **merge commit** を提案する。元 PR heads の ancestry を保存できるが、旧 mirror / failing CI を含む中間履歴も入ることを review する。Final tree が正しいことが gate であり、履歴に過去の failure があることと現行 source の failure は区別する。Stack 全体の rebase / force-push は証拠 SHA を変えるため標準手順にしない。
+
+どちらでも GitHub の indirect merge 判定・stacked base の挙動を仮定して一括 close しない。採用後に各 PR の実際の status / base / head を再取得する。自動判定で閉じた PR があっても、それを Issue acceptance と混同しない。既存 branch は incorporation map と rollback source の確認まで保持し、削除は別承認とする。
+
+Rollback は **新しい revert PR** で行う。Squash の採用 commit は `git revert <adoption-commit>`、通常の main-targeted merge commit は first parent が main であることを確認して `git revert -m 1 <merge-commit>`。Revert tree も必要な CI / docs review を通す。`reset --hard` / force-push で main や evidence を消さない。
+
+Revert は main の source を戻すだけで、Azure / Entra / database / artifact host を戻さない。App の既存記事や slug を書き換えず、runtime / artifacts / DB compatibility を確認する。Known-good backend ZIP、frontend ZIP/receipt、public runtime IDs と revision、parameter versions を秘密値なしで別に記録し、cloud rollback / cleanup は承認済み target と実行権限がある場合だけ実施する。旧 main へ戻すと古い dependency / auth defect も戻るため、security review と必要な forward fix を検討する。
+
+### 26.7. 採用後の確認と Issue closure は別の承認にする
+
+Merge 直後に main の exact commit、CI、Pages publication と internal navigation を確認する。現在の Pages workflow は `materials/docs/**` 等の main push で公開されるため、M2 の merge は learner content の自動公開を伴う。Workshop release 未承認なら、その公開内容が development / blocked の状態を正確に示すことを **merge 前** に review する。M0 の `design/` 文書だけの merge は現在の Pages path filter を起動しない。
+
+Root の application deploy は optional workflow templates であり、merge を実 Azure deployment と扱わない。新 candidate で root active deploy workflow を追加するなら、別の approval / OIDC / environment guard の review が必要。今回の計画はその追加を要求しない。
+
+| Adoption point | Issue の扱い |
+|---|---|
+| M0 | #23 の計画成果物を採用したことだけを記録。Issue 全体は open |
+| M1 | #14 の app contract、#15 の application dependencies、#19 の app CI、#13 の API token、#21 の runtime config の進捗を追記。Original checklist と採用 exact SHA を照合し、条件を満たした Issue だけ別途 closure review |
+| M2 | #16/#18/#20/#22/#23 と operational parts の採用 evidence を追記。Permission / host / real Azure / recovery の未達項目は unchecked |
+| M3 | R0–R5 と Issue 別 acceptance / maintainer approval に基づく release と closure。① A の未解消 blocker があれば blocked のまま |
+
+PR body は未達 Issue に `Refs #N` を使い、`Fixes` / `Closes` による premature closure を避ける。Issue を閉じる場合は採用 SHA、実際の検証者、safe run links、original checklist の充足を記録する。
+
+**次の実行単位は M0 の review と M1 の main 向け candidate 作成であり、merge そのものは別の明示的な承認を待つ。** 追加承認がなければ本計画と既存 PR の evidence を保存した状態で止め、CI failure や Contributor-only の矛盾を自動 bypass して backlog を減らさない。
