@@ -264,14 +264,17 @@ printf 'Tenant: %s / Frontend: %s / Backend: %s\n' "$TENANT_ID" "$FRONTEND_CLIEN
 
 期待値は `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_TENANT_ID`、`ENTRA_BACKEND_CLIENT_ID` が含まれることです。
 
-`window.__APP_CONFIG__` が正しいのに同じエラーが続く場合は、古いデプロイスクリプトで Vite の development bundle をデプロイしている可能性があります。`git pull` 後に `./scripts/deploy-frontend.sh "$RESOURCE_GROUP"` を再実行してください。スクリプトは `NODE_ENV=production` を強制し、development bundle が混入した場合はデプロイ前に停止します。また、このワークショップ本線では Static Web Apps 組み込み認証の `/.auth/login/aad` ではなく、アプリ画面の **Sign in with Microsoft** ボタンから MSAL でログインします。
+`window.__APP_CONFIG__` が正しいのに同じエラーが続く場合は、古いデプロイスクリプトで Vite の development bundle をデプロイしている可能性があります。`git pull` 後に [ARM frontend 手順](day-1-deploy-frontend.ja.html) で ZIP を prepare し直し、許可済み保管先へ upload して deploy してください。スクリプトは `NODE_ENV=production` を強制し、development bundle が混入した場合はデプロイ前に停止します。また、このワークショップ本線では Static Web Apps 組み込み認証の `/.auth/login/aad` ではなく、アプリ画面の **Sign in with Microsoft** ボタンから MSAL でログインします。
 
 対処:
 
 ```bash
 workshop_state_load deployed || exit 1
-./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
+FRONTEND_ZIP="$WORKSHOP_STATE_DIR/frontend-$(node -p 'require("node:crypto").randomUUID()').zip"
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP" || exit 1
 ```
+
+この時点では未デプロイです。上記 ARM 手順で hosted ZIP / completion / readiness / cleanup を確認し、CLI に自動 fallback しません。
 
 ## フロントエンド build が失敗する
 

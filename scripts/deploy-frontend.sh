@@ -1,5 +1,6 @@
 #!/bin/bash
 # Usage: ./scripts/deploy-frontend.sh <saved-resource-group>
+# Legacy CLI route; the ARM candidate is deploy-frontend-arm.sh (no automatic fallback).
 
 set +x
 set -euo pipefail

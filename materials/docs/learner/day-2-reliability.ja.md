@@ -8,7 +8,7 @@ title: "Day 2: 信頼性と復旧"
 
 ## 1. 実施条件と障害前のデータを確認する
 
-[Day 1 の検証](day-1-validation.ja.html) を完了し、実 deploy / release、自己同意、認証付き CRUD、telemetry を確認したグループだけ実施します。Contributor-only / 事前準備なしで #16 の RBAC prerequisite を満たせない場合、または #15 の公開依存・SWA CLI 検証がブロック中なら、演習の成功は未検証です。管理者成功に置き換えません。共有アプリ・実ユーザーデータには障害注入しません。
+[Day 1 の検証](day-1-validation.ja.html) を完了し、実 deploy / release、自己同意、認証付き CRUD、telemetry を確認したグループだけ実施します。Contributor-only / 支援なしで #16 の RBAC prerequisite を満たせない場合、または #15 の公開依存・選択した ARM upload 経路の検証がブロック中なら、演習の成功は未検証です。管理者成功に置き換えません。共有アプリ・実ユーザーデータには障害注入しません。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -91,11 +91,18 @@ Cloud Shell 1 で再度観測を開始してから、Cloud Shell 2 で同じ sou
 
 ```bash
 bash "$WORKSHOP_REPO_DIR/scripts/deploy-backend.sh" "$RESOURCE_GROUP" "$APP_SERVICE_NAME" || exit 1
-bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend.sh" "$RESOURCE_GROUP" || exit 1
+FRONTEND_ZIP="$WORKSHOP_STATE_DIR/frontend-$(node -p 'require("node:crypto").randomUUID()').zip"
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP" || exit 1
+```
+
+[Frontend 手順](day-1-deploy-frontend.ja.html) に従い、この ZIP を許可済み保管先の一意な object へ upload して temporary read-only URL を取得します。保管先・費用・cleanup が未承認なら演習を止めます。その後:
+
+```bash
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" deploy "$FRONTEND_ZIP" || exit 1
 node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
 ```
 
-backend は一時 ZIP を削除するため、rollback は **既知 revision と lockfile からの rebuild** です。upload acceptance、古い instance の healthy と今回の release 完了を分け、Deployment Center の今回の時刻・成功状態・deployment ID と、対象 frontend 内容を照合します。registry / artifact が再取得不能なら rollback capability は未確認であり、演習を始めません。データを失う schema migration・password rotation・app registration 再作成はこの演習に含めません。
+backend は一時 ZIP を削除するため、rollback は **既知 revision と lockfile からの rebuild** です。frontend は source revision / checksum を含む ZIP と receipt を保持できます。ARM completion 後に exact index/public readiness を確認し、保管先の owned object を削除・URL を失効します。upload acceptance、古い instance の healthy と今回の release 完了を分け、Deployment Center の今回の時刻・成功状態・deployment ID と、対象 frontend 内容を照合します。registry / artifact が再取得不能なら rollback capability は未確認であり、演習を始めません。データを失う schema migration・password rotation・app registration 再作成はこの演習に含めません。
 
 インフラの再現性も確認する場合は、[Day 1](day-1-deploy-infrastructure.ja.html) の同じ PARAM_FILE / names / context で validate → deploy → outputs 確認を実施します。既存 secret を再生成しません。これは RBAC / policy / quota と追加承認条件を満たした場合の確認であり、local compilation だけで idempotence 成功としません。
 

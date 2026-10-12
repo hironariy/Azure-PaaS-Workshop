@@ -4,119 +4,95 @@ title: "Day 1: フロントエンドをデプロイ"
 
 # Day 1: フロントエンドをデプロイ
 
-Cloud Shell 上で React フロントエンドを build し、Static Web Apps にデプロイします。設定値は `index.html` に `window.__APP_CONFIG__` として注入します。
+Cloud Shell で React を build し、[公式 ARM ZIP API](https://learn.microsoft.com/en-us/rest/api/appservice/static-sites/create-zip-deployment-for-static-site?view=rest-appservice-2025-05-01) へ送る経路です。SWA CLI の導入・deployment token の取得は不要です。Runtime config、SWA Standard、Linked Backend `/api`、MSAL は維持します。
 
-## 1. 変数を復元する
+**現在の境界:** ZIP の保管先と実 Azure upload は別途確認が必要です。この実装の local/CI fixture 成功は、workshop-ready や #15 完了の証拠ではありません。Contributor のみ・管理者支援なしという条件も変更せず、fresh Key Vault RBAC の prerequisite を満たせない場合は Day 0 で止めます。SWA CLI の既知の audit failure は解消したと扱いません。
+
+## 1. 変数とツールを確認する
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
 export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
 source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
 workshop_state_load deployed || exit 1
-
-echo "$SWA_NAME"
-echo "$SWA_HOSTNAME"
-```
-
-## 2. Node.js、npm、SWA CLI を確認する
-
-```bash
 node --version
 npm --version
-
-az extension add --name staticwebapp --upgrade
-
-npm config set prefix "$HOME/.npm-global"
-export PATH="$HOME/.npm-global/bin:$PATH"
-grep -q ".npm-global/bin" ~/.bashrc || echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
-
-npm install -g @azure/static-web-apps-cli@2.0.10
-swa --version
-```
-
-Node.js 24 LTS を推奨します。古い場合は講師に相談してください。
-
-**依存関係の未解決事項（#15）:** SWA CLI 2.0.10 の実際の依存ツリーには、アプリ本体とは別に npm audit の指摘が残っています。アプリの audit が 0 件でもデプロイツールまで解決したことにはなりません。強制 downgrade や非互換 override は行わず、利用前に組織のポリシーを確認してください。全依存関係で 0 件を要求する環境では、この CLI によるデプロイは修正版または検証済みの代替手段が用意されるまでブロックされます。
-
-## 3. フロントエンド runtime config の値を確認する
-
-`scripts/deploy-frontend.sh` は version 付き JSON state から Entra ID と対象 SWA を読み込み、引数の RG・現在の subscription/tenant と一致することを確認します。旧 `deploy-frontend.local.env` は実行・自動移行しません。Client ID は公開設定値でシークレットではありません。
-
-```bash
+az version
+command -v zip
+command -v unzip
+printf 'SWA: %s\nHost: %s\n' "$SWA_NAME" "$SWA_HOSTNAME"
 printf 'Tenant: %s\nFrontend: %s\nBackend: %s\n' "$TENANT_ID" "$FRONTEND_CLIENT_ID" "$BACKEND_CLIENT_ID"
 ```
 
-## 4. フロントエンドを build して Static Web Apps にデプロイする
+Node.js 24 と Cloud Shell Bash を使います。State は version 付き JSON で、旧 `deploy-frontend.local.env` は実行しません。Client IDs は公開設定ですが、token・接続文字列は表示しません。
 
-既存の `scripts/deploy-frontend.sh` は、SWA 名と deployment token の取得、React build、runtime config 注入、Static Web Apps deploy まで実行します。
+## 2. 新しい frontend ZIP と receipt を作る
 
-```bash
-chmod +x scripts/deploy-frontend.sh
-./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
-```
-
-スクリプトは `staticwebapp.config.json` も `dist/` にコピーします。これにより SPA fallback と `/api/*` の Linked Backend routing 設定が Static Web Apps に反映されます。
-
-期待値:
-
-```text
-Deployment Complete!
-Frontend URL: https://<swa-hostname>
-```
-
-runtime config が Static Web Apps に反映されたことを確認します。`ENTRA_FRONTEND_CLIENT_ID` が空、`null`、または `window.__APP_CONFIG__=null;` のままだと、ログイン時に `AADSTS900144` が発生します。
+ZIP 名は毎回 UUID で変えます。ZIP と隣の `.json` receipt を保存して、再接続や再試行でも同じ artifact を使ってください。既存 ZIP / receipt は上書きしません。
 
 ```bash
-curl -fsS "https://${SWA_HOSTNAME}" \
-  | grep -o 'window.__APP_CONFIG__=[^<]*' \
-  | grep 'ENTRA_FRONTEND_CLIENT_ID'
+FRONTEND_ZIP="$WORKSHOP_STATE_DIR/frontend-$(node -p 'require("node:crypto").randomUUID()').zip"
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" \
+  "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP" || exit 1
+printf 'ZIP: %s\nReceipt: %s.json\n' "$FRONTEND_ZIP" "$FRONTEND_ZIP"
 ```
 
-表示されない場合は、JSON state の ID と Day 0 の登録を確認し、このページの手順 1 から再実行します。
+期待値は JSON の **`status: "prepared_not_deployed"`**、source revision、SHA-256、bytes です。これはデプロイ成功ではありません。`sourceDirty: true` の場合、未コミットの変更を含む可能性があるため、known-good release の証拠には使わず、変更をレビュー・commit してから新しい ZIP を準備します。他人の変更を reset / stash で消しません。
 
-値が表示されるのにログインで `AADSTS900144` が続く場合は、`git pull` 後にこのページの手順 4 を再実行してください。古い手順では Cloud Shell の `NODE_ENV=development` が Vite build に引き継がれると、`window.__APP_CONFIG__` が無視される development bundle がデプロイされることがありました。このアプリは MSAL でログインするため、`/.auth/login/aad` には直接アクセスしません。
+スクリプトは public registry の `npm ci --include=dev` → production build → routing copy → shared runtime config writer の順に実行します。ZIP の root に `index.html`、`staticwebapp.config.json`、`assets/` を配置し、3 IDs と `API_BASE_URL: "/api"`、routing、一意の config を検証します。Hidden/symlink files は拒否し、50 MiB を上限とします。
 
-## 5. スクリプトの中身を確認する
+## 3. 許可済みの保管先へ ZIP だけを置く
 
-`scripts/deploy-frontend.sh` は、React build、Static Web Apps 設定、runtime config 注入、SWA CLI deploy を順番に実行します。
+ARM API は local file の直接送信ではなく、**Azure service が読み取れる HTTPS ZIP URL** を要求します。
 
-| 処理 | スクリプトが行うこと | 意図 |
-|---|---|---|
-| 設定読み込み | `paas-workshop.json` をデータとして検証・復元する | 保存値をシェルコードとして実行せず、対象を再利用する |
-| 必須値検証 | `ENTRA_TENANT_ID`、`ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_BACKEND_CLIENT_ID` が空でないことを確認する | 未設定のまま build/deploy して認証エラーになることを防ぐ |
-| Static Web Apps 情報取得 | 保存した SWA 名を明示的な subscription/RG で取得し hostname を比較する | `[0]` で別アプリを選ばず、CLI の失敗を「未作成」と扱わない |
-| フロントエンド build | `materials/frontend` に移動し、`npm ci --include=dev --registry=https://registry.npmjs.org` と `NODE_ENV=production npm run build -- --mode production` を実行する | 公開 lockfile の build 用依存関係を復元し、Cloud Shell の環境変数に左右されず本番成果物を作成する |
-| SWA routing 設定 | `staticwebapp.config.json` を `dist/` にコピーする | SPA fallback と `/api/*` の Linked Backend routing を Static Web Apps に反映する |
-| runtime config 注入 | Actions と共通の `configure-frontend.cjs` が 3 UUID と 1 個だけの placeholder を検証し、Entra 設定と `API_BASE_URL: "/api"` を注入する | 同じ artifact contract を使い、ID 欠落・曖昧な代入をデプロイ前に停止する |
-| Static Web Apps deploy | token を直前に取得し、`SWA_CLI_DEPLOYMENT_TOKEN` をそのプロセスだけに渡し、debug と `--verbose` を `log` に固定する | 環境で `silly` が設定されていても token を verbose log に出さず、production 環境へアップロードする |
+先に、所有・利用が許可された保管先、費用、upload/read 権限、URL の有効期限、削除方法を確認してください。保管先がなければここで止めます。このスクリプトは Storage を作成せず、共有 Cloud Shell storage や GitHub を勝手に公開しません。新規 Storage、追加ロール、費用は別承認です。
 
-`SWA_TOKEN` はデプロイ権限を持つシークレットです。末尾を含め一切表示しません。#41 を含む検証済み stack ではアプリの公開 npm source と audit=0 を確認していますが、CLI の既知の依存脆弱性は別の未解決事項です（#15）。ローカルの stub テストは実際の SWA deploy 成功を証明しません。
+許可済み保管先の upload 機能で、**手順 2 の ZIP だけ**を新しい一意の object 名へ upload します。Receipt は手元に保持し、archive/object は deployment 完了まで変更・上書きしません。組織の仕組みで短期・read-only の URL を取得し、upload・ARM の最大 15 分・readiness の最大 3 分に余裕を加えた有効期限を確保します。有効期限を無期限にしません。
 
-CLI を使わない Microsoft の公式 deployment action は [GitHub Actions の任意経路](day-1-github-actions-alternative.ja.html) で説明します。Frontend だけの切替に追加の Entra identity / role assignment は不要ですが、既存 baseline の権限制約・CLI audit の zero 条件・実 cloud acceptance を解消したという意味ではありません。
+URL は secret を含み得ます。Issue、チャット、shell history、command argument に貼らず、次の非表示入力だけに渡します。Bearer token は保管先へ送信しません。Redirect 先の URL や ZIP を自動で信頼しません。
 
-## 6. SWA URL を確認する
+## 4. ARM で送信し、今回の release を確認する
 
 ```bash
-echo "Frontend: https://$SWA_HOSTNAME"
-echo "API via SWA: https://$SWA_HOSTNAME/api/health"
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" \
+  "$RESOURCE_GROUP" deploy "$FRONTEND_ZIP" || exit 1
 ```
 
-ブラウザーの開発者ツールで Network を開き、投稿一覧を再読み込みします。
-投稿一覧のリクエストが **表示中の SWA host の `/api/posts`** に送られることを確認してください。
-`API_BASE_URL: "/api"` の実行時設定を使い、古い `.env.local` の API host に送信したり、
-`/api/api/posts` のように prefix を二重に付けたりしません。
+表示された prompt に temporary HTTPS URL を入力します。入力は非表示です。再接続した場合、`FRONTEND_ZIP` に保存済み ZIP の exact path を設定してから実行します。URL を環境変数やコマンド引数へ保存しません。
+
+スクリプトが確認する順序:
+
+| 段階 | 確認すること |
+|---|---|
+| Local artifact / context | receipt・SHA-256・size・runtime IDs・routing、saved subscription/tenant と実 Azure target |
+| Hosted artifact | URL を credential なしで取得し、local ZIP と bytes / SHA-256 が一致すること |
+| ARM upload | Azure CLI で matching ARM token を取得し、`properties.appZipUrl` だけを ZIP URL として送る。Token/SAS/response body をログに出さない |
+| Completion | 200 と 202 を区別し、202 は trusted operation の terminal success を待つ。最大 15 分 / 120 polls、各 request 最大 30 秒 |
+| Release / public readiness | 最大 3 分 / 6 attempts で direct health、SWA `/api/health`、published list、runtime config を確認。配信 `index.html` が exact prepared ZIP と一致すること |
+
+期待値は JSON の **`status: "arm_release_public_checks_passed"`** と **`workshopReady: false`** です。古い instance が healthy なだけ、202 だけ、違う HTML が配信された場合は成功にしません。POST の自動再送はしないため、timeout 後は Azure operation 状態を確認してから再試行します。
+
+実ブラウザーで MSAL sign-in、Backend scope、Unicode draft/published CRUD、既存 URL、private DB/KV、telemetry は [Day 1 の検証](day-1-validation.ja.html) で別途確認します。
+
+## 5. Artifact を削除・失効する
+
+今回の release が確認できたら、手順 3 の保管先で **今回 upload した object だけ**を削除し、temporary URL を失効します。所有者の方法で不在/失効を確認し、URL をログへ出しません。スクリプトは generic HTTPS host の削除権限を持たないため、これを自動で完了扱いしません。
+
+Known-good rollback 用の local ZIP / receipt は必要な期間だけ保持し、再 deploy 時は承認済みの保管先へ同じ bytes を upload して新しい短期 URL を作ります。ZIP の内容を変更した場合は新規 artifact として prepare し直します。
+
+## 6. 症状別に切り分ける
 
 | 症状 | 確認と対処 |
 |---|---|
-| 古い host に送信される | 配信中の `index.html` の公開 runtime config とデプロイ対象を確認し、正しい保存済み state で再デプロイして再読み込みする |
-| 必須 Entra 設定のエラー | `paas-workshop.json` の Day 0 identity と対象 context を確認し、`scripts/deploy-frontend.sh` を再実行する。不正な設定を保持したまま通信を続行しない |
-| 正しい host の `/api/health` が失敗する | Backend 自体の health と Linked Backend の接続を [アプリを検証](day-1-validation.ja.html) で分けて確認する |
+| 保管先がない／upload 権限がない | 未承認 Storage の作成・追加権限付与はしない。許可済み保管先・費用・cleanup を確定するまで止める |
+| Hosted ZIP の checksum / HTTP エラー | exact ZIP、URL 有効期限、read 権限、redirect 不使用を確認。ARM POST 前の失敗なので token/target を変更して回避しない |
+| ARM HTTP 401/403 | saved tenant/subscription、token context と exact SWA への deploy 権限を確認。Contributor を自動昇格しない |
+| Unsupported polling / Retry-After | safe error と operation 状態を確認。別 host へ token を送らず、completion を未確認とする |
+| ARM 完了後に readiness が失敗 | exact HTML の配信、direct backend と Linked Backend を分けて確認。ZIP を再送する前に current operation/release を確認する |
+| 必須 Entra 設定が異なる | Day 0 identity/state を確認し、新しい ZIP を prepare・upload する。既存 receipt を書き換えない |
+| 古い host や `/api/api/posts` に送信される | ブラウザー Network で **現在の SWA host の `/api/posts`** を確認。exact HTML・runtime `/api`・配信 revision を照合する |
 
-Authorization header、access token、秘密を含む URL をログや Issue に貼らないでください。
-
-## GitHub Actions を使う場合
-
-Cloud Shell で手動デプロイせず GitHub Actions で backend/frontend をデプロイしたい場合は、任意の代替手順として [GitHub Actions でデプロイ（代替）](day-1-github-actions-alternative.ja.html) を参照してください。
+Legacy `scripts/deploy-frontend.sh` は SWA CLI 経路として履歴・互換性のため保持しますが、この ARM 手順からは実行しません。CLI audit の未解消を無視して fallback しないでください。[公式 GitHub Actions](day-1-github-actions-alternative.ja.html) は別の任意経路で、native image inventory と実 deploy の検証は別です。
 
 ## 次に進む
 

@@ -82,8 +82,17 @@ export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
 export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
 source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
 workshop_state_load deployed || exit 1
-bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend.sh" "$RESOURCE_GROUP" || exit 1
+FRONTEND_ZIP="$WORKSHOP_STATE_DIR/frontend-$(node -p 'require("node:crypto").randomUUID()').zip"
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP" || exit 1
 ```
+
+許可済み HTTPS 保管先へこの ZIP だけを upload してから、次を実行し、temporary URL を非表示 prompt に入力します。保管先・費用が未承認ならここで止めます。
+
+```bash
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" deploy "$FRONTEND_ZIP" || exit 1
+```
+
+詳しい completion / readiness / owned artifact 削除手順は [Frontend deployment](../learner/day-1-deploy-frontend.ja.html) を参照します。ARM 経路から SWA CLI は実行しません。
 
 ## App Service logs
 

@@ -117,6 +117,22 @@ Default unit tests remain fast and database-free.
 
 ## Candidate dependency maintenance
 
+The ARM frontend candidate is exercised without Azure or artifact-host
+credentials by `node --test scripts/test/swa-arm-deployment.test.cjs`.
+Tests create actual ZIPs and receipts, run checksum/config/target validation,
+and exercise the production transport/LRO/readiness state machine with fixture
+HTTP responses. They cover redirects, foreign polling targets, failures,
+timeouts, attempt limits, stale HTML, token-context mismatch and secret-safe
+errors. Shell preparation tests use fake npm/Azure, real ZIP tools and real
+configuration writing. Token-boundary tests invoke a fake Azure executable;
+they do not use a real access token.
+
+The runtime uses Node built-ins, existing Azure CLI and ZIP tools; no new npm
+dependency is added. The separate legacy SWA CLI audit remains visible and
+failing. These tests do not prove service-side URL reachability, actual Azure
+upload, artifact expiry/deletion, Entra/browser or Contributor-only fresh RBAC.
+The approved hosted artifact and real release acceptance remain necessary.
+
 Use Node 24's built-in watch mode for backend development (`npm run dev`).
 The candidate frontend keeps React 18 and uses React Router 7's declarative
 routes and Tailwind 4's PostCSS plugin. Tailwind's JavaScript configuration is

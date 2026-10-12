@@ -8,6 +8,8 @@ A hands-on workshop for learning Azure PaaS patterns through building and deploy
 
 > **Current deployment entry:** Start with the [Cloud Shell quickstart](materials/docs/learner/cloud-shell-quickstart.ja.md) and the linked Day 0/Day 1 guides. Current deploy scripts require versioned JSON state with a verified subscription/tenant and exact resource targets. Legacy `deploy-frontend.local.env` and token-argument instructions further below are historical; do not use them with the current scripts. [Cleanup](materials/docs/learner/cleanup.ja.md) confirms dedicated ownership and actual Azure deletion and never recursively deletes the checkout.
 
+> **Frontend tooling candidate:** The [ARM ZIP deployment guide](materials/docs/learner/day-1-deploy-frontend.ja.md) uses `deploy-frontend-arm.sh` without npm SWA CLI or a SWA deployment token. It requires an approved, owned HTTPS artifact host; it does not create Storage or grant roles. ARM completion, hosted checksum, exact deployed HTML and public readiness are checked separately. Live upload/browser acceptance is still pending, legacy CLI advisories remain unresolved, and strict Contributor-only fresh Key Vault RBAC remains blocked.
+
 > 📚 **Workshop Series - Day 2**
 > 
 > This workshop is part of a **2-day Azure workshop series**:

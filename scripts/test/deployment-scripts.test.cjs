@@ -24,7 +24,8 @@ function fixture(t) {
   }
   for (const name of ['workshop-state.sh', 'workshop-state.cjs', 'workshop-deploy-common.sh',
     'deploy-backend.sh', 'deploy-frontend.sh', 'cleanup-workshop.sh', 'workshop-setup.sh',
-    'check-role-assignment-permission.cjs', 'configure-frontend.cjs']) {
+    'check-role-assignment-permission.cjs', 'configure-frontend.cjs', 'deploy-frontend-arm.sh',
+    'deploy-swa-arm.cjs', 'check-workshop-app.cjs']) {
     fs.copyFileSync(path.join(repository, 'scripts', name), path.join(checkout, 'scripts', name));
   }
   fs.writeFileSync(path.join(checkout, 'README.md'), 'Owned fixture');
@@ -33,7 +34,8 @@ function fixture(t) {
     fs.writeFileSync(path.join(checkout, 'materials', app, 'package.json'), '{"name":"fixture"}');
     fs.writeFileSync(path.join(checkout, 'materials', app, 'package-lock.json'), '{"lockfileVersion":3}');
   }
-  fs.writeFileSync(path.join(checkout, 'materials/frontend/staticwebapp.config.json'), '{}');
+  fs.copyFileSync(path.join(repository, 'materials/frontend/staticwebapp.config.json'),
+    path.join(checkout, 'materials/frontend/staticwebapp.config.json'));
   const values = {
     WORKSHOP_REPO_DIR: checkout, WORKSHOP_STATE_DIR: state,
     LOCATION: 'japaneast', SWA_LOCATION: 'eastasia', BASE_NAME: 'blogapp', GROUP_ID: 'B',
@@ -51,6 +53,10 @@ const fail=(message)=>{console.error(message);process.exit(9)};
 const result=(value)=>{console.log(typeof value==='string'?value:JSON.stringify(value));process.exit(0)};
 const marker=(name)=>path.join(process.env.MOCK_ROOT,name);
 if(tool==='sleep')process.exit(0);
+if(tool==='git'){
+ if(args.includes('rev-parse'))result('1111111111111111111111111111111111111111');
+ result('');
+}
 if(tool==='npm'){
  if(scenario==='build-fail')fail('Build failed fixture');
  if(args.includes('build')){
@@ -130,7 +136,7 @@ if(args[0]==='ad'){
 }
 fail('Unexpected Azure mock command: '+args.join(' '));
 `;
-  for (const tool of ['az', 'npm', 'swa', 'curl', 'sleep']) {
+  for (const tool of ['az', 'npm', 'swa', 'curl', 'sleep', 'git']) {
     fs.writeFileSync(path.join(bin, tool), mock, { mode: 0o755 });
   }
   const env = { ...process.env, ...values, PATH: `${bin}:${process.env.PATH}`,
@@ -256,6 +262,36 @@ test('frontend token lookup failure is visible and never calls SWA or reports co
   assert.match(result.stderr, /Token lookup rejected/);
   assert.doesNotMatch(result.stdout, /Deployment Complete/);
   assert.equal(calls().some((call) => call.tool === 'swa'), false);
+});
+
+test('ARM preparation uses public build and saved identities without deployment tokens or Azure writes', (t) => {
+  const { env, run, calls } = fixture(t);
+  const archive = path.join(env.MOCK_ROOT, 'frontend.zip');
+  const result = run('deploy-frontend-arm.sh', [group, 'prepare', archive]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /prepared_not_deployed/);
+  assert.doesNotMatch(result.stdout, /Deployment Complete|arm_release_public_checks_passed/);
+  assert(fs.existsSync(archive));
+  const receipt = JSON.parse(fs.readFileSync(`${archive}.json`, 'utf8'));
+  assert.equal(receipt.target.group, group);
+  assert.equal(receipt.target.frontend, frontend);
+  assert.equal(receipt.sourceRevision, '1111111111111111111111111111111111111111');
+  assert.equal(calls().some((call) => call.tool === 'swa' || call.args.includes('secrets') ||
+    call.args.includes('get-access-token') || call.args[0] === 'rest'), false);
+  const repeat = run('deploy-frontend-arm.sh', [group, 'prepare', archive]);
+  assert.notEqual(repeat.status, 0);
+  assert.match(repeat.stderr, /not be overwritten/);
+});
+
+test('ARM wrapper rejects foreign targets, missing URLs and unexpected arguments before submission', (t) => {
+  for (const args of [[group], [group, 'prepare'], ['rg-other', 'prepare', 'fixture.zip'],
+    [group, 'deploy', 'fixture.zip'], [group, 'deploy', 'fixture.zip', 'PRIVATE_URL_FIXTURE']]) {
+    const { run, calls } = fixture(t);
+    const result = run('deploy-frontend-arm.sh', args);
+    assert.notEqual(result.status, 0);
+    assert.doesNotMatch(result.stdout + result.stderr, /PRIVATE_URL_FIXTURE/);
+    assert.equal(calls().some((call) => call.args.includes('get-access-token') || call.args[0] === 'rest'), false);
+  }
 });
 
 test('cleanup validates ownership, waits for actual absence and retains local state', (t) => {
