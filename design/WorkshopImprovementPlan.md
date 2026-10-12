@@ -2,19 +2,19 @@
 
 作成日: 2026-10-09
 
-再評価日: 2026-10-11
+再評価日: 2026-10-12
 
-状態: 従来の実装計画は承認済み。**第 24 節の解決戦略は再提案であり、権限・tooling・費用・merge の変更は未承認**。
+状態: **①は A（Contributor のみ・管理者支援なし）を維持、②は B（ARM ZIP 経路の実装）で進めると決定済み**。Storage 作成・追加費用・権限変更・merge/close は未承認。
 
 ### 現在の解決方針を先に読む
 
-全 23 Issues を再確認し、#1–#12 は closed、#13–#23 の 11 件は open。#24–#48 の 25 PRs はすべて未マージで、main は引き続き `005cc191d970b7ee3374ad73452270ebacb98eef`。修正候補の成功を、受講者が使う main の改善や Issue 解決と混同しない。
+2026-10-11 の再確認では全 23 Issues のうち #1–#12 は closed、#13–#23 の 11 件は open、#24–#48 の 25 PRs は未マージ。2026-10-12 に #49 の ARM frontend candidate を追加した。main への自動採用は行わず、修正候補の成功を受講者が使う main の改善や Issue 解決と混同しない。
 
-**今後は追加の局所修正を積み続けるのでなく、意思決定 → 検証済み candidate の統合 → 共通 Azure rehearsal → Issue 単位の受け入れ → release の順で進める。** 詳細は [第 24 節](#all-issue-resolution) を現在の判断基準とし、第 1–23 節は従来の方針と証拠を保持する。
+**今後は追加の局所修正を積み続けるのでなく、意思決定 → 検証済み candidate の統合 → 共通 Azure rehearsal → Issue 単位の受け入れ → release の順で進める。** 第 24 節の解決案のうち、権限担当者 handoff は採用しない。最新の決定と実装は [第 25 節](#arm-implementation-decision) を参照し、第 1–24 節は従来の提案・証拠を保持する。
 
-最優先の提案は、受講者の Contributor を維持した **必要時だけの限定的な権限担当者 handoff** と、Cloud Shell から使う **documented ARM ZIP deployment の実証**。前者は「講師関与なし」の条件変更、後者は hosted artifact と費用・監査条件の決定を必要とする。承認前には本線へ組み込まない。strict Contributor-only / 講師準備・関与なし / fresh MI + Key Vault RBAC をすべて維持したまま全 Issue を解決できる、とは約束しない。
+現在の選択は **restricted privilege handoff / 追加 RBAC を導入しない**ことと、**documented ARM ZIP deployment を実装・検証する**こと。許可済み owned HTTPS host を利用する前提で準備・送信を分離し、host が未確定なら送信を止める。strict Contributor-only / 講師準備・関与なし / fresh MI + Key Vault RBAC をすべて維持したまま全 Issue を解決できる、とは約束しない。
 
-最新の到達点: #41 の public application provenance / audit / production ZIP は実 CI で解消。#46 の実 MongoDB persistence に続き、#47 で署名付き API token の audience/permission 判定、#48 で runtime API routing と failed-config cache を修正した。documented ARM ZIP deployment も代替候補へ追加した。**SWA CLI audit と Contributor/Entra/live Azure の完成条件は未達**。最新の根拠と残る判断は第 17–23 節を参照する。
+最新の到達点: #41 の public application provenance / audit / production ZIP、#46 の実 MongoDB persistence、#47 の署名付き API token、#48 の runtime API/config に続き、#49 で ARM ZIP upload / trusted bounded LRO / exact HTML と public readiness を実装した。**Legacy SWA CLI audit と Contributor/Entra/hosted artifact/live Azure の完成条件は未達**。実装した経路と実 cloud acceptance は区別する。
 
 対象: [Azure-PaaS-Workshop](https://github.com/hironariy/Azure-PaaS-Workshop) の Issue #13–#23
 
@@ -667,3 +667,41 @@ P0 の意思決定と P1 の credential-free 作業は並行して進める。P2
 全件解決へ進むための最初の意思決定は、(1) restricted privilege handoff / constrained delegation を許容するか、(2) hosted ARM ZIP route と必要な費用・tool criteria を許容するか、である。GitHub merge/Issue close と paid optional HA は引き続き別承認とする。
 
 **(1) が承認されず strict Contributor-only / 支援なしを維持する場合、現行 fresh MI/Key Vault RBAC architecture の全件完了は実現できない。** その場合も repository 内の修正・テスト・文書・review は進められるが、#16 と依存する real acceptance を「解決済み」としない。(2) が承認されない場合は supported upstream CLI remediation を審査し、audit failure と live acceptance を保持する。条件の矛盾を unchecked のまま隠すより、解決経路の選択と責任分界を明確にする。
+
+<a id="arm-implementation-decision"></a>
+
+## 25. ① A / ② B の決定を反映し、ARM 経路を実装する
+
+2026-10-11 に① A（Contributor のみ・管理者支援なし）が選択され、2026-10-12 の「今回は②はBで進めてください」で ARM ZIP implementation を進める方針が確定した。第 24 節の handoff / constrained delegation の推奨は採用しない。②の実装承認を、①の条件変更、新規有料 Storage、追加権限、tenant policy、GitHub merge/close の承認に広げない。
+
+### 25.1. #49 の実装と学習する手順
+
+#49（base: #48）の implementation source は `aea1192371773d3bacf3319d70cd4117319ea77a`。後段 candidate の read-only/CI/ZIP/runtime helpers を再利用し、新しい npm dependency、SWA deployment token、native CLI wrapper は追加しない。
+
+| 段階 | 実装 |
+|---|---|
+| Prepare | `deploy-frontend-arm.sh <saved-RG> prepare <new.zip>` が public `npm ci` / production build / shared config writer を使う。Root routing/assets、private ZIP/receipt、source SHA/dirty flag、bytes/SHA-256 を検証。既存 artifact は上書きしない |
+| Owned host | 利用許可済みの HTTPS host へ exact ZIP だけを immutable object 名で置く。保管先・費用・upload/read・期限・削除が未確定なら停止。Storage の作成・共有 clouddrive の公開は行わない |
+| Deploy | 同じ wrapper の `deploy <prepared.zip>` に temporary URL を非表示 stdin で入力する。Local receipt / current target と hosted checksum を照合してから matching ARM OAuth で documented `properties.appZipUrl` を送る |
+| Completion | 200/202 を区別。Selected site / subscription の trusted ARM operation のみを最大 15 分 / 120 polls、1 request 最大 30 秒で確認。Failed/Canceled、unknown/malformed state、unsafe polling/redirect、timeout は非 0。POST を自動再送しない |
+| Readiness | ARM completion 後、最大 3 分 / 6 attempts。既存 shared helper で direct/SWA health、published list、runtime IDs を確認し、配信 index が exact prepared ZIP と一致することを追加検証 |
+| Cleanup / rollback | Host owner が今回の object だけを削除し temporary URL を失効する。Generic host を勝手に削除できないため未実施なら明記。Known-good local ZIP/receipt は必要期間だけ保持し、再 upload 時は新しい短期 URL を使う |
+
+Token / SAS / reflected response / transport error は表示せず、Bearer は artifact host へ送らない。新しい route から legacy CLI に自動 fallback しない。公開 readiness の成功でも `workshopReady: false`、browser/consent/authenticated CRUD/private data/telemetry/owned artifact cleanup は `notVerified` に残す。
+
+Day 1 の frontend、Day 2 の redeploy、troubleshooting、quick reference、JA/EN entry、developer testing、quality path filters を同期した。Legacy `deploy-frontend.sh` と CLI audit は履歴・互換性/未解消の追跡として保持し、本 route の導入を「CLI の 6 findings が直った」とは説明しない。実 upload が未確認のまま zero-advisory release を承認しない。
+
+### 25.2. Local evidence と live acceptance の境界
+
+- **68 native tests** が成功。17 ARM regressions は本物の ZIP/receipt、production state machine、loopback HTTP server を使う native fetch、redirect refusal、token context/CLI-error redaction、exact HTML/public readiness の成功と失敗を扱う。既存 49 tests と wrapper の 2 tests を維持する。
+- Real production frontend build を shared runtime writer と routing copy で処理し、ZIP/receipt/checksum の生成と再検証が成功。検証用 public IDs だけを使い、`sourceDirty: true` の fixture artifact を real release の証拠にはしない。
+- Changed learner/reference の **36 Bash fences / 21 internal links**、actionlint、Pages build が成功。先に routing file をコピーしなかった artifact probe は拒否され、wrapper と同じ copy 後に成功した。欠落を success-shaped fallback で補わない。
+- Authorized read-only Azure preflight は再び **exit 3 / RG absent / required roleAssignments/write not reported allowed**。Isolated Contributor principal の実証ではなく現在の caller の結果。Azure resources / app registrations / grants / hosted object の作成・変更は行っていない。
+
+Actual public runner も source `aea1192371773d3bacf3319d70cd4117319ea77a` で確認した。Native run `38207260390` は **68 tests / success**、quality run `38207260391` は **backend15 / database8** と frontend/application/public provenance/Bicep/workflow validation の 7 jobs が成功。取得した CLI audit artifact は **high5 / low1 / total6 package-level findings** で、当該 job と overall は failure。現在の CI の成功/失敗を旧日付の証拠で代用せず、ARM candidate の追加で legacy audit を隠さない。
+
+### 25.3. 次に必要な入力と停止条件
+
+実 Azure acceptance の前に、owned HTTPS host、費用/期限/cleanup、exact deployed SWA と healthy backend、許可された registration/consent を確定する必要がある。現在は authorized RG が未作成で、① A のまま fresh Key Vault RBAC を完了できない。既存の許可済み完成環境があると仮定して勝手に他の RG/SWA へ upload しない。
+
+実装・credential-free verification と公開 PR は進められるが、上記の不足を隠して #15/#16/#21 を閉じない。Host を指定することは resource/permission 作成の承認ではなく、① A を変更する場合も別の明示的な決定が必要である。
