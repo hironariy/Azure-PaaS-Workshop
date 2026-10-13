@@ -6,6 +6,10 @@
 
 状態: **①は A（Contributor のみ・管理者支援なし）を維持、②は B（ARM ZIP 経路の実装）で進めると決定済み**。2026-10-13 に merge 戦略の実行と Owner アカウントによる指定 Azure 環境の検証が承認された。新規 artifact host の費用、tenant policy、branch settings、Issue closure は別承認。
 
+**2026-10-13 の追加承認と最新の実測:** ユーザーは残存脆弱性を認識したうえで SWA CLI による機能検証の継続を承認した。CLI 2.0.10 で既存の検証用 SWA への実配備が成功し、公開 HTML の一致、直接 / SWA 経由の API 正常応答、未認証の書き込み拒否、デスクトップ / モバイル表示、MSAL の認証開始を確認した。承認された実 URL の SPA リダイレクト URI 追加も、既存 URI を保持して実施・読み戻し済み。CLI 依存関係の High 5 件・Low 1 件は残り、この承認は監査 gate の免除や #15 の解決ではない。ARM 候補は代替として保持する。
+
+B1 クオータは引き上げ後に上限100を確認し、Owner で baseline インフラ、バックエンド、Key Vault reference、telemetry、再起動後の health を実測済み。以下の quota0 / フロントエンド未配備の記録は過去の状態である。**本人のサインイン・同意・認証 CRUD、Contributor-only の fresh deployment、全 Cloud Shell 手順の連続完走は未確認**。①A は変更せず、赤い #51 を採用しない。受講者ページと配備スクリプトには、実 URL の SPA 登録、既存 URI の保持、token 非表示、正しい作業ディレクトリ、終了コードに依存しない公開後確認を反映する。
+
 ### 現在の解決方針を先に読む
 
 実行状況は [第 27 節](#merge-execution-evidence) を参照する。#24（計画）、#50（アプリ）、#52（ポータル入口の注意書き）は main へ採用済み。運用/ARM の #51 は draft / 未マージ。実環境では Owner の role preflight、catalog、Entra policy の読み取りが成功した一方、App Service 自身も B1 上限0を報告した。Quota の解消前にリソースを作成せず、別 SKU / region へ自動 fallback しない。赤い tool gate と Contributor-only の未達条件を通過扱いにしない。

@@ -58,15 +58,20 @@ echo "https://$SWA_HOSTNAME"
 
 1. 画面のサインインボタンを選択します。
 2. Microsoft Entra ID のログイン画面に遷移することを確認します。
-3. ログイン後にアプリへ戻ることを確認します。
+3. 受講者本人のアカウントでログインします。ユーザー同意が表示され、テナントの方針が許可する場合は本人が内容を確認して同意します。
+4. ログイン後に同じアプリへ戻ることを確認します。
 
-失敗する場合は、Frontend SPA app registration に `https://<swa-hostname>` が redirect URI として登録されているか確認します。
+サポートによる本人認証の代行や、無条件の管理者同意はこの確認に含めません。管理者の承認が必要と表示された場合は、Azure Owner / Contributor であることだけでは解消できないため、ブロックとして記録します。
+
+`AADSTS50011` などの戻り先エラーの場合は、Day 0 で作成した Frontend アプリの **SPA** 設定に、現在ブラウザーで開いている `https://$SWA_HOSTNAME` が登録されているか確認します。localhost のみ、別の SWA hostname、または Web 設定だけへの登録では、このアプリの戻り先を満たしません。
 
 ```bash
 az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
   --query "spa.redirectUris" -o jsonc
 ```
+
+不足している場合は、[インフラ配備の手順 7](day-1-deploy-infrastructure.ja.html)を再実行し、既存 URI を保持して実 URL を追加します。Entra への遷移成功だけでは同意・API token・認証 CRUD が完了したとは判断しません。
 
 ## 6. CRUD を確認する
 

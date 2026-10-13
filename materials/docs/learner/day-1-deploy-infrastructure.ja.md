@@ -155,15 +155,51 @@ echo "Static Web App: https://$SWA_HOSTNAME"
 
 ## 7. Static Web Apps URL を Entra ID に追加する
 
+Day 0 で自分のグループが作成した Frontend アプリ登録に、手順 6 で取得した実際の SWA URL を **SPA のリダイレクト URI** として追加します。Azure への配備だけでは、この登録は自動更新されません。アプリは `window.location.origin` をログイン後の戻り先に使います。
+
+既存の localhost や他のリダイレクト URI は保持します。共有アプリや別グループの Client ID は使わないでください。この操作は自分のアプリ登録の設定であり、テナントの管理者同意やポリシー変更ではありません。Azure Contributor と Entra アプリの所有権は別の権限です。
+
+`SUBSCRIPTION_ID` は現在選択中のサブスクリプションから取得し、Day 0 に保存した `TENANT_ID` と一致することを確認します。既定のサブスクリプションは変更しません。
+
 ```bash
-REDIRECT_URIS="$(jq -nc --arg swa "https://$SWA_HOSTNAME" '["http://localhost:4280", $swa, ($swa + "/")]')"
+if ! ACCOUNT_JSON="$(az account show -o json)"; then
+  echo "Azure のログイン状態を確認できません。" >&2
+  exit 1
+fi
+if ! SUBSCRIPTION_ID="$(jq -er --arg tenant "$TENANT_ID" \
+  'select(.tenantId == $tenant) | .id | select(type == "string" and length > 0)' \
+  <<< "$ACCOUNT_JSON")"; then
+  echo "現在のテナントが Day 0 の TENANT_ID と一致しません。更新を中止します。" >&2
+  exit 1
+fi
+export SUBSCRIPTION_ID
+if [ -z "$SWA_HOSTNAME" ] || [ "$SWA_HOSTNAME" = null ]; then
+  echo "手順 6 の SWA_HOSTNAME を確認してください。" >&2
+  exit 1
+fi
 
-FRONTEND_OBJECT_ID="$(az ad app show \
+if ! FRONTEND_APP_JSON="$(az ad app show \
+  --subscription "$SUBSCRIPTION_ID" \
   --id "$FRONTEND_CLIENT_ID" \
-  --query id -o tsv)"
+  -o json)"; then
+  echo "Frontend アプリ登録を取得できません。テナント、Client ID、アプリの所有権を確認してください。" >&2
+  exit 1
+fi
 
-if [ -z "$FRONTEND_OBJECT_ID" ]; then
-  echo "FRONTEND_OBJECT_ID を取得できませんでした。FRONTEND_CLIENT_ID=$FRONTEND_CLIENT_ID を確認してください。"
+if ! FRONTEND_OBJECT_ID="$(jq -er --arg client "$FRONTEND_CLIENT_ID" \
+  'select(.appId == $client) | .id | select(type == "string" and length > 0)' \
+  <<< "$FRONTEND_APP_JSON")"; then
+  echo "Frontend アプリ登録の Client ID と Object ID を確認できませんでした。" >&2
+  exit 1
+fi
+
+if ! REDIRECT_URIS="$(jq -ce --arg swa "https://$SWA_HOSTNAME" '
+  (.spa.redirectUris // []) |
+  if type == "array" and all(.[]; type == "string") then
+    (. + [$swa] | unique)
+  else error("SPA redirectUris must be an array of strings") end
+' <<< "$FRONTEND_APP_JSON")"; then
+  echo "既存の SPA リダイレクト URI を読み取れないため、更新を中止します。" >&2
   exit 1
 fi
 
@@ -174,18 +210,22 @@ SPA_PATCH="$(jq -nc --argjson redirectUris "$REDIRECT_URIS" '{
 }')"
 
 az rest \
+  --subscription "$SUBSCRIPTION_ID" \
   --method PATCH \
   --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
   --body "$SPA_PATCH"
 ```
 
-確認します。
+読み戻して、実際の SWA URL が含まれ、既存 URI が残っていることを確認します。
 
 ```bash
 az ad app show \
+  --subscription "$SUBSCRIPTION_ID" \
   --id "$FRONTEND_CLIENT_ID" \
   --query "spa.redirectUris" -o jsonc
 ```
+
+期待値は、既存の `http://localhost:4280` などに加えて `https://$SWA_HOSTNAME` が表示されることです。同じ手順を繰り返しても同じ URI は重複追加されません。`Insufficient privileges` が出た場合は別の共有アプリに切り替えず、Day 0 の自分のアプリ登録とテナントを確認します。
 
 ## 8. App Service の作成状態を確認する
 
