@@ -7,6 +7,8 @@ English version: [README.md](./README.md)
 
 このリポジトリは、マルチユーザー ブログ アプリケーションを Azure PaaS で構築しながら、App Service、Static Web Apps、Azure DocumentDB、Key Vault、Managed Identity、Application Insights などのマネージドサービス設計・デプロイ・運用を学ぶためのハンズオン教材です。
 
+> **採用状況:** アプリ改善と credential-free tests を、deployment / IaC / learner 手順の改善とは分けて採用しています。アプリ CI の成功は Azure deployment や workshop-ready の証拠ではありません。旧 SWA CLI の advisories、fresh Contributor-only の Key Vault RBAC 制約、browser consent、real Azure acceptance は未解消です。既存 deployment 手順を実証済みの完走経路として扱わないでください。[採用戦略](design/WorkshopImprovementPlan.md#pr-merge-strategy) と [アプリ検証](docs/application-testing.md) を参照してください。
+
 ## まずどこから始めるか
 
 | 利用者 | 入口 | 目的 |

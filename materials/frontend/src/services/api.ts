@@ -14,6 +14,7 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { getMsalInitPromise, getMsalInstance } from '../config/msalInstance';
 import { createApiRequest } from '../config/authConfig';
+import { getConfig } from '../config/appConfig';
 
 /**
  * Authentication mode for API requests
@@ -73,6 +74,19 @@ export interface CreatePostData {
   tags?: string[];
   status?: 'draft' | 'published';
   featuredImageUrl?: string;
+}
+
+export function getCreatePostErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    switch (error.response?.status) {
+      case 400: return 'Check your title and content. The title must contain text after formatting is removed.';
+      case 401: return 'Your session has expired. Sign in again before retrying.';
+      case 403: return 'You do not have permission to create this post.';
+      case 409: return 'An article URL could not be allocated. Please retry.';
+      case 429: return 'Too many requests. Wait a moment before retrying.';
+    }
+  }
+  return 'Failed to create post. Your input is preserved; please try again.';
 }
 
 /**
@@ -138,12 +152,27 @@ async function getAccessToken(mode: AuthMode = 'optional'): Promise<string | nul
   }
 }
 
+function getApiTransportBaseUrl(): string {
+  let base: URL;
+  try {
+    base = new URL(getConfig().apiBaseUrl, window.location.origin);
+  } catch (error) {
+    if (error instanceof TypeError) throw new Error('Invalid API base URL');
+    throw error;
+  }
+  if (!['http:', 'https:'].includes(base.protocol) ||
+      base.username || base.password || base.search || base.hash) {
+    throw new Error('API base URL must be HTTP(S) without credentials, query parameters or fragments');
+  }
+  const prefix = base.pathname.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+  return base.origin + prefix;
+}
+
 /**
  * Create axios instance with interceptors
  */
 function createApiClient(): AxiosInstance {
   const client = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '',
     timeout: 30000,
     headers: {
       'Content-Type': 'application/json',
@@ -153,6 +182,7 @@ function createApiClient(): AxiosInstance {
   // Request interceptor to add auth token based on authMode
   client.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
+      config.baseURL = getApiTransportBaseUrl();
       const authMode = config.authMode || 'optional';
       const token = await getAccessToken(authMode);
       if (token) {
@@ -236,7 +266,7 @@ export async function getMyPosts(
  * Auth: Optional - works without auth for published posts, requires auth for drafts
  */
 export async function getPost(slug: string): Promise<Post> {
-  const response = await api.get<Post>(`/api/posts/${slug}`, {
+  const response = await api.get<Post>(`/api/posts/${encodeURIComponent(slug)}`, {
     authMode: 'optional',
   });
   return response.data;
@@ -258,7 +288,7 @@ export async function createPost(data: CreatePostData): Promise<Post> {
  * Auth: Required - must be authenticated and post author
  */
 export async function updatePost(slug: string, data: Partial<CreatePostData>): Promise<Post> {
-  const response = await api.put<Post>(`/api/posts/${slug}`, data, {
+  const response = await api.put<Post>(`/api/posts/${encodeURIComponent(slug)}`, data, {
     authMode: 'required',
   });
   return response.data;
@@ -269,7 +299,7 @@ export async function updatePost(slug: string, data: Partial<CreatePostData>): P
  * Auth: Required - must be authenticated and post author
  */
 export async function deletePost(slug: string): Promise<void> {
-  await api.delete(`/api/posts/${slug}`, {
+  await api.delete(`/api/posts/${encodeURIComponent(slug)}`, {
     authMode: 'required',
   });
 }

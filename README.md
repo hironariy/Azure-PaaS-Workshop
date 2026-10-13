@@ -4,7 +4,9 @@
 
 日本語版: [README.ja.md](./README.ja.md)
 
-A hands-on workshop for learning Azure PaaS patterns through building and deploying a production-ready web application.
+A hands-on workshop for learning Azure PaaS patterns through building and deploying a web application.
+
+> **Adoption status:** application maintenance improvements and credential-free tests are being adopted separately from deployment, IaC and learner-path improvements. A green application CI run does not establish Azure deployment or workshop readiness. Legacy SWA CLI advisories, the fresh Contributor-only Key Vault RBAC limitation, browser consent and real Azure acceptance remain unresolved. Do not use the existing deployment instructions as a verified end-to-end learner path. See [the adoption strategy](design/WorkshopImprovementPlan.md#pr-merge-strategy) and [application testing](docs/application-testing.md).
 
 > 📚 **Workshop Series - Day 2**
 > 
@@ -45,7 +47,7 @@ A hands-on workshop for learning Azure PaaS patterns through building and deploy
 
 ### 1.1 About This Workshop
 
-This workshop is designed for engineers who want to learn **Azure Platform as a Service (PaaS)** patterns by building a real-world, production-ready web application.
+This workshop is designed for engineers who want to learn **Azure Platform as a Service (PaaS)** patterns by building a real-world web application.
 
 **Target Audience:**
 - Engineers with 3-5 years of experience (particularly those familiar with AWS)

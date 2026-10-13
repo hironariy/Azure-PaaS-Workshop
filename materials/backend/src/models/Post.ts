@@ -7,6 +7,7 @@
  */
 
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { randomUUID } from 'node:crypto';
 
 export interface IPost extends Document {
   title: string;
@@ -93,13 +94,16 @@ postSchema.index({ title: 'text', content: 'text', tags: 'text' });
  * Generate slug from title
  */
 export function generateSlug(title: string): string {
-  return title
+  const normalized = title
+    .normalize('NFKC')
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, '') // Remove non-word chars
+    .replace(/[^\p{L}\p{N}\p{M}\s-]/gu, '')
     .replace(/\s+/g, '-') // Replace spaces with -
-    .replace(/-+/g, '-') // Replace multiple - with single -
-    .substring(0, 100); // Limit length
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const slug = Array.from(normalized).slice(0, 100).join('').replace(/-+$/g, '');
+  return slug || `post-${randomUUID()}`;
 }
 
 export const Post = mongoose.model<IPost>('Post', postSchema);

@@ -2,11 +2,13 @@
 
 作成日: 2026-10-09
 
-再評価日: 2026-10-12
+再評価日: 2026-10-13
 
-状態: **①は A（Contributor のみ・管理者支援なし）を維持、②は B（ARM ZIP 経路の実装）で進めると決定済み**。Storage 作成・追加費用・権限変更・merge/close は未承認。
+状態: **①は A（Contributor のみ・管理者支援なし）を維持、②は B（ARM ZIP 経路の実装）で進めると決定済み**。2026-10-13 に merge 戦略の実行と Owner アカウントによる指定 Azure 環境の検証が承認された。新規 artifact host の費用、tenant policy、branch settings、Issue closure は別承認。
 
 ### 現在の解決方針を先に読む
+
+実行状況は [第 27 節](#merge-execution-evidence) を参照する。#24 は main へ採用済み。#50 が main 向けアプリ改善候補で、実環境では Owner の role preflight と catalog が成功した一方、B1 quota が 0 と報告された。Quota の解消前にリソースを作成せず、別 SKU / region へ自動 fallback しない。
 
 2026-10-11 の再確認では全 23 Issues のうち #1–#12 は closed、#13–#23 の 11 件は open、#24–#48 の 25 PRs は未マージ。2026-10-12 に #49 の ARM frontend candidate を追加した。main への自動採用は行わず、修正候補の成功を受講者が使う main の改善や Issue 解決と混同しない。
 
@@ -847,3 +849,37 @@ Root の application deploy は optional workflow templates であり、merge �
 PR body は未達 Issue に `Refs #N` を使い、`Fixes` / `Closes` による premature closure を避ける。Issue を閉じる場合は採用 SHA、実際の検証者、safe run links、original checklist の充足を記録する。
 
 **次の実行単位は M0 の review と M1 の main 向け candidate 作成であり、merge そのものは別の明示的な承認を待つ。** 追加承認がなければ本計画と既存 PR の evidence を保存した状態で止め、CI failure や Contributor-only の矛盾を自動 bypass して backlog を減らさない。
+
+<a id="merge-execution-evidence"></a>
+
+## 27. 承認済み merge の実行と Owner 実環境の確認を記録する
+
+2026-10-13 のユーザー指示で第26節の merge 戦略の実行と、指定 Azure 環境での learner steps 検証が承認された。ログイン済み Owner の正例検証は、Contributor-only の learner 条件を変更した証拠ではない。環境識別子は session-local に保存し、教材の既定値へ流用しない。
+
+### 27.1. M0 の採用と M1 の main 向け candidate
+
+#24 の exact head `f9222cb7f0340695c64bf548f54c224c89d1aade` を squash merge し、main の採用 commit `fe12f12a50e1595d35e7799a9e656e9ef1404d3b` を確認した。Docs-only の採用で branch は保持、Issue closure / settings 変更 / admin bypass は行わない。
+
+#50 はこの main を base に、#49 の最終 application source と coupled helpers/tests を移植した新しい standalone candidate。Implementation commit `d8a4cc1237dab6a91415c4148fc93e8da64ce88a` の [actual runner 38330469358](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38330469358) は **7 jobs success**。Backend15 / frontend14 / fixture database8 / helper7、public provenance、application all/production/lock scopes と extracted backend ZIP の zero findings、build/type/lint、active workflow validation を確認した。
+
+Separate-context の read-only code review は significant issues なし。これは independent human learner rehearsal や real Azure consent/CRUD の代替ではない。Local clean installs は public npm transport の `ENOTCONN` で失敗しており、local application tests/build 成功とは記録しない。
+
+Browser acceptance 用には CI が実際に生成・設定した frontend build と source revision を artifact に保存する。Public fixture GUIDs のみを使い、deployment artifact / real sign-in の証拠にしない。Browser smoke と最新 head の全 checks が完了するまで #50 は draft を維持する。Workflow / docs-only 変更後も exact head で checks を再実行する。
+
+### 27.2. 実 Azure で確認できた learner steps と新しい停止条件
+
+ここで実行したのは **#49 の learner candidate と production helpers** であり、現在公開中の main / Pages に operational 手順を採用済みという意味ではない。CLI 実行環境は local Bash/macOS/Node24 で、Cloud Shell / Azure Files 自体の実機検証とは区別する。
+
+| 確認 | 実際の結果 / 境界 |
+|---|---|
+| CLI context / target | ユーザー指定 tenant/subscription と一致。専用検証 RG は未作成、既存 resource を変更していない |
+| Learner role preflight | 教材の production helper を実 CLI で実行し **exit0**。Parent subscription の permissions は roleAssignments/write を allowed と報告。Owner の結果であり isolated Contributor negative test ではない |
+| Provider / region / Linux B1 catalog | 教材の production helper が **18 checks success**、`deploymentReady: false`。登録状態や advertised region と quota / capacity は区別 |
+| App Service B1 quota | `az quota list` と個別 `az quota show` が primary region の **B1 limit 0 / applicable true / Instances** を報告 |
+| Quota usage | 同 scope の B1 usage は **-1 / applicable false**。Usage 不明を 0 / 無制限に読み替えず、available capacity を計算しない |
+| Bicep | Exact #49 source を Bicep0.44.1 で compile し、distributed `main.json` と byte parity 成功。既存 unused-param warnings は可視化 |
+| Real deployment / app | 未実施。Validation/what-if、実 resource / private DNS / Key Vault / DocumentDB / Entra / browser CRUD / telemetry / recovery は未合格 |
+
+**Owner で role assignment が許可されても、B1 の作成枠が確保されたとはいえない。** 現在の quota response は baseline 1 instance の readiness を満たす根拠にならないため、費用が発生する provisioning 前に停止する。必要なのは対象 region / Linux B1 の quota/support 確認と、その解消後の actual usage / validate / what-if。B1 quota increase、別 region、上位 SKU は自動で選択・実行しない。
+
+M25 tier / SWA Standard eligibility、許可済み HTTPS artifact host / expiry / cleanup も未確定。Storage を勝手に作成せず、前の CLI audit failure を隠して deployment に進まない。実 Cloud Shell / Azure Files 上の state persistence と独立受講者の完走は引き続き別の acceptance。

@@ -78,24 +78,38 @@ async function validateToken(token: string): Promise<AuthenticatedUser> {
   if (!decoded || typeof decoded === 'string') {
     throw new Error('Invalid token format');
   }
+  const version = typeof decoded.payload === 'string' ? undefined : decoded.payload.ver;
+  if (version !== '1.0' && version !== '2.0') {
+    throw new jwt.JsonWebTokenError('Unsupported access token version');
+  }
 
   // Get signing key
   const signingKey = await getSigningKey(decoded.header);
 
   // Verify token
-  // Require the API resource URI as audience to avoid accepting SPA ID tokens
-  // Accept both v1.0 (sts.windows.net) and v2.0 (login.microsoftonline.com/.../v2.0) issuers
-  // to support different Entra ID app registration configurations
-  const validIssuers: [string, ...string[]] = [
-    `https://login.microsoftonline.com/${config.entraTenantId}/v2.0`,
-    `https://sts.windows.net/${config.entraTenantId}/`,
-  ];
+  // Bind each supported token version to its issuer and API audience representation.
+  const audience: [string, ...string[]] = version === '2.0'
+    ? [config.entraClientId]
+    : [config.entraClientId, `api://${config.entraClientId}`];
+  const issuer = version === '2.0'
+    ? `https://login.microsoftonline.com/${config.entraTenantId}/v2.0`
+    : `https://sts.windows.net/${config.entraTenantId}/`;
 
   const payload = jwt.verify(token, signingKey, {
     algorithms: ['RS256'],
-    audience: `api://${config.entraClientId}`,
-    issuer: validIssuers,
-  }) as jwt.JwtPayload;
+    audience,
+    issuer,
+  });
+
+  if (typeof payload === 'string' ||
+      typeof payload.oid !== 'string' || !payload.oid.trim() ||
+      typeof payload.sub !== 'string' || !payload.sub.trim() ||
+      typeof payload.scp !== 'string' || !payload.scp.trim()) {
+    throw new jwt.JsonWebTokenError('A delegated user access token is required');
+  }
+  if (!payload.scp.split(' ').includes('access_as_user')) {
+    throw ApiError.forbidden('Missing delegated API permission: access_as_user');
+  }
 
   // Extract user info from token
   // v1.0 tokens use 'upn' and 'unique_name', v2.0 uses 'preferred_username' and 'email'
@@ -106,8 +120,8 @@ async function validateToken(token: string): Promise<AuthenticatedUser> {
     ?? '';
   
   return {
-    oid: payload.oid as string,
-    sub: payload.sub as string,
+    oid: payload.oid,
+    sub: payload.sub,
     name: (payload.name as string) ?? 'Unknown',
     email,
     preferredUsername: (payload.preferred_username as string) ?? (payload.upn as string) ?? '',
