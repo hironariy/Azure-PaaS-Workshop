@@ -8,7 +8,7 @@
 
 ### 現在の解決方針を先に読む
 
-実行状況は [第 27 節](#merge-execution-evidence) を参照する。#24 は main へ採用済み。#50 が main 向けアプリ改善候補で、実環境では Owner の role preflight と catalog が成功した一方、B1 quota が 0 と報告された。Quota の解消前にリソースを作成せず、別 SKU / region へ自動 fallback しない。
+実行状況は [第 27 節](#merge-execution-evidence) を参照する。#24（計画）、#50（アプリ）、#52（ポータル入口の注意書き）は main へ採用済み。運用/ARM の #51 は draft / 未マージ。実環境では Owner の role preflight、catalog、Entra policy の読み取りが成功した一方、App Service 自身も B1 上限0を報告した。Quota の解消前にリソースを作成せず、別 SKU / region へ自動 fallback しない。赤い tool gate と Contributor-only の未達条件を通過扱いにしない。
 
 2026-10-11 の再確認では全 23 Issues のうち #1–#12 は closed、#13–#23 の 11 件は open、#24–#48 の 25 PRs は未マージ。2026-10-12 に #49 の ARM frontend candidate を追加した。main への自動採用は行わず、修正候補の成功を受講者が使う main の改善や Issue 解決と混同しない。
 
@@ -848,7 +848,7 @@ Root の application deploy は optional workflow templates であり、merge �
 
 PR body は未達 Issue に `Refs #N` を使い、`Fixes` / `Closes` による premature closure を避ける。Issue を閉じる場合は採用 SHA、実際の検証者、safe run links、original checklist の充足を記録する。
 
-**次の実行単位は M0 の review と M1 の main 向け candidate 作成であり、merge そのものは別の明示的な承認を待つ。** 追加承認がなければ本計画と既存 PR の evidence を保存した状態で止め、CI failure や Contributor-only の矛盾を自動 bypass して backlog を減らさない。
+**第26節の初期計画では M0 の review と M1 の main 向け candidate 作成を次の実行単位とした。** 2026-10-13 の承認に基づく実際の採用結果は第27節に記録する。未達の M2/M3 は追加の evidence / 必要な承認を待ち、CI failure や Contributor-only の矛盾を自動 bypass して backlog を減らさない。
 
 <a id="merge-execution-evidence"></a>
 
@@ -864,7 +864,7 @@ PR body は未達 Issue に `Refs #N` を使い、`Fixes` / `Closes` による p
 
 Separate-context の read-only code review は significant issues なし。これは independent human learner rehearsal や real Azure consent/CRUD の代替ではない。Local clean installs は public npm transport の `ENOTCONN` で失敗しており、local application tests/build 成功とは記録しない。
 
-Browser acceptance 用には CI が実際に生成・設定した frontend build と source revision を artifact に保存する。Public fixture GUIDs のみを使い、deployment artifact / real sign-in の証拠にしない。Browser smoke と最新 head の全 checks が完了するまで #50 は draft を維持する。Workflow / docs-only 変更後も exact head で checks を再実行する。
+この candidate 準備時点では、browser acceptance 用に CI が実際に生成・設定した frontend build と source revision を artifact に保存した。Public fixture GUIDs のみを使い、deployment artifact / real sign-in の証拠にしない。Browser smoke と最新 head の全 checks が完了するまで #50 は draft を維持し、Workflow / docs-only 変更後も exact head で checks を再実行した。実際の採用は27.3に記録する。
 
 ### 27.2. 実 Azure で確認できた learner steps と新しい停止条件
 
@@ -883,3 +883,49 @@ Browser acceptance 用には CI が実際に生成・設定した frontend build
 **Owner で role assignment が許可されても、B1 の作成枠が確保されたとはいえない。** 現在の quota response は baseline 1 instance の readiness を満たす根拠にならないため、費用が発生する provisioning 前に停止する。必要なのは対象 region / Linux B1 の quota/support 確認と、その解消後の actual usage / validate / what-if。B1 quota increase、別 region、上位 SKU は自動で選択・実行しない。
 
 M25 tier / SWA Standard eligibility、許可済み HTTPS artifact host / expiry / cleanup も未確定。Storage を勝手に作成せず、前の CLI audit failure を隠して deployment に進まない。実 Cloud Shell / Azure Files 上の state persistence と独立受講者の完走は引き続き別の acceptance。
+
+### 27.3. M1 の実採用と M2 の保留条件
+
+#50 final head `373775a00ef21bf4c69da15278068004b661bc28` の [actual run 38330949972](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38330949972) は全7 jobs success。CI frontend artifact の source `dbdc8b6a2d8211b767bed559bbe3f00aeef8bb89` は GitHub の synthetic merge ref と一致した。
+
+この実 build を private-profile Chrome と loopback fixture API で検証した。Desktop1280 は3 columns、actual mobile390 は1 column、両方で document width が viewport と一致し overflow なし。Heading30px / white cards / radius8px / Azure button/tag styling を computed style と screenshot で確認。Production React router と encoded Japanese API URL で記事本文を表示した。CLI window-size だけでは actual viewport500だったため、390 と誤記せず CDP device metrics で測り直した。
+
+Browser/public acceptance と exact CI を記録後、#50 を guarded squash merge。Main adoption commit は `73cd103580a4f4b28cb6ec2caedb6cdc2fec695d`。Fixture server は停止済み。これは real MSAL login / Azure CRUD / learner 完走の合格ではなく、Issue closure はしていない。
+
+Local Bash の別 process で base state の init / atomic save / restore を実 CLI context と照合し、state mode600を確認した。Azure Files 上の検証と同一視しない。
+
+M2 はこの採用済み main を base に、#49 の残る operational source を移植する。M1 の最新 plan / application / browser artifact evidence と新 helper tests を保持し、quality と native の PR path filter は外す。旧 CLI audit と Bicep parity を明示的に gate へ加え、helper checks と full native checks を区別する。旧 CLI findings、B1 quota、host/live acceptance が未達なら draft を維持する。
+
+### 27.4. Main の持続的 checks と再確認時の context drift
+
+Main `73cd103580a4f4b28cb6ec2caedb6cdc2fec695d` の [post-merge run 38331324319](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38331324319) も全7 jobs success。M2 local の full native は **70 tests success**、active/optional workflow actionlint と GitHub Pages build が成功した。M1 の2つの standalone runtime-writer tests を削除せず、#49 の68 testsに加えて保持する。
+
+検証途中で CLI の **default subscription / tenant が別の context に変わった**ことを検知した。指定 subscription の `az account show --subscription` は引き続き指定 tenant と一致するが、default を使う production catalog helper は expected exit1 / context mismatch で停止した。共有環境の default を勝手に戻していない。個別 quota usage show は explicit subscription で再実行し、`usage -1 / applicable true` を報告した。以前の usage list の flag と区別し、どちらも usage が不明であることを保持する。
+
+Dedicated RG の absence は explicit subscription で再確認した。Azure resources / registrations / grants / host objects / quota updates を作成・変更していない。教材の quota commands に explicit subscription と tenant-error の停止条件を追加し、context drift を成功・quota量へ読み替えない。
+
+### 27.5. 公開入口の注意書きと App Service 自身の quota を再確認する
+
+独立した docs-only #52 を main `e2325084fdccea11e075387f238e4f1a66a43ee1` に guarded squash merge。PR [38333534673](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38333534673) は全7 checks success、Pages [38333671950](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38333671950) は build/deploy success。公開ポータルを HTTP 取得し、未完走・Contributor 制約・無断 SKU/region/権限変更をしない注意書きの反映を確認した。CSS/JS/デプロイコードは不変。隔離 Chrome で20 links / iframe / progress reload / actual clipboard / storage unavailable fallback / 実測1280+390表示を確認した。
+
+M2 #51 はこの main を取り込み、検証 snapshot `b55b6c22ab0163b0b27941dcabfd82407096cbe2` の [quality38333735296](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38333735296) は9 jobs中8 success、legacy CLI audit failure。実 artifact は high5 / low1 / total6（npm package-level 集計）。[native38333735364](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38333735364) は70 tests / 70 pass / 0 fail。古い stack を一括 merge/closeせず、M2 draft / hold を維持する。追補後は新 head の CI が必要で、この snapshot を新 head の合格証に流用しない。
+
+追加の read-only 調査では、[App Service 自身の Get Usages In Location API](https://learn.microsoft.com/rest/api/appservice/get-usages-in-location/list?view=rest-appservice-2026-07-15) も primary region の **B1 currentValue0 / limit0 / Instances** を報告した。Quota API の usage-1 と別の観測として保持し、unknown を0へ読み替えていない。B1作成枠を確認できない理由は catalog metadata だけではなく、App Service 側の上限にも残る。他 SKU の上限が表示されても、承認済み baseline とその瞬間の容量の根拠にはしない。
+
+Explicit selected account は指定 tenant/subscription と一致する一方、既定 context は再確認時も不一致。共有 default は変更しない。B1増枠と一時 artifact host の追加費用・所有範囲について確認を求めたが、この時点ではユーザー不在で未承認。自動申請や新規 Storage 作成はせず、実 provisioning / consent / CRUD / telemetry / recovery / independent learner acceptance を未達のまま保持する。
+
+### 27.6. Entra policy の読み取りと Contributor の実定義を切り分ける
+
+指定 subscription を明示して Graph 用 token を取得し、CLI 応答の tenant が指定 target と一致することを確認したうえで、公式 [Get authorizationPolicy](https://learn.microsoft.com/graph/api/authorizationpolicy-get?view=graph-rest-1.0) を GET。実応答は **HTTP200** で、default registration permission と assigned consent-policy の shape を確認した。Tokenやtenant固有のpolicy値は公開・commitせず、private session artifactに必要最小限を保存した。Azure CLIはtoken取得でsubscriptionとtenantの同時指定を受け付けなかったため、subscription指定と返却tenantの照合へ修正し、実際の成功応答を採用した。
+
+Policyを読めたことは、全受講者のアプリ登録権限、実際のpermission grant、workshop SPAのhuman MSAL consent/sign-inを証明しない。App registrations / grants / tenant policy を変更せず、#13の未達条件を保持する。Azure Owner とGraph/Entraの権限を同一視しない。
+
+対象subscriptionから取得した実際のbuilt-in Contributor定義でも、`Microsoft.Authorization/*/Write` が除外されていることを確認した。これはplatform定義の照合であり、isolated Contributor principalによるnegative deployment testではない。現在のKey Vault RBAC構成でfresh role assignmentが必要なことと、① AのContributor-only/no-preparation条件の矛盾は、Owner正例やquota増枠では解消しない。自動elevation・access policyへの置換・秘密値の露出で回避せず、workshop-ready/Issue closureを未達のまま保持する。
+
+### 27.7. 最新の運用候補と今回の実行結果を確定する
+
+#51 の検証 head `c36ab6d15ffb96b5a48546d3371157f1dc8be528` / base `e2325084fdccea11e075387f238e4f1a66a43ee1` / synthetic `f44da9c1df8da3d4b59d3b65146f343f5b6796c8` の [quality38335898167](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38335898167) は9 jobs中8 success、[native38335899806](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38335899806) は70 tests / 70 pass / 0 fail。実際の同runのCLI audit artifactはhigh5 / low1 / total6。#51はdraft / holdのまま、過去の結果を将来headの合格証に流用しない。
+
+今回の実行で採用したのは計画・アプリ・入口の注意書きであり、実Azureでは作成前の必要権限 / catalog / quota / Entra policyを照合した。停止条件を確認した結果、Azure resources / app registrations / grants / tenant policy / host upload / quota requestを作成・変更していない。M2のoperational sourceや新しいDay0診断手順は、この記録文書だけの採用ではmainへ入らない。
+
+全Issue解決・workshop-ready・Cloud Shell/Azure Files完走は未達。再開にはB1 quota/support、許可済みartifact host、対象context、実validate/what-if・デプロイ・human consent/CRUD・private data・telemetry/recovery・独立受講者のevidenceが必要。① Aと現行Key Vault構成の矛盾は別途解決が必要で、追加権限や別architectureを無断採用しない。計画・採用記録をmainで読めることと、これらの完成条件の充足を区別する。
