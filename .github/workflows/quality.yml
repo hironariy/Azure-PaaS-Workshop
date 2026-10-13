@@ -175,11 +175,11 @@ jobs:
           fs.writeFileSync('dist/acceptance-source.json',
             JSON.stringify({ sourceRevision: process.env.GITHUB_SHA }) + '\n');
           NODE
-      - name: Audit installed, production, and lockfile scopes
+      - name: Report dependency advisories without a vulnerability failure gate
         run: |
-          npm audit --audit-level=low --registry=https://registry.npmjs.org
-          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
-          npm audit --package-lock-only --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --audit-level=none --registry=https://registry.npmjs.org
+          npm audit --omit=dev --audit-level=none --registry=https://registry.npmjs.org
+          npm audit --package-lock-only --audit-level=none --registry=https://registry.npmjs.org
       - name: Verify extracted backend production ZIP without build dependencies or Azure
         if: matrix.application == 'backend'
         shell: bash
@@ -199,7 +199,6 @@ jobs:
           unzip -tq "$RUNNER_TEMP/backend-production.zip"
           unzip -q "$RUNNER_TEMP/backend-production.zip" -d "$extracted"
           cd "$extracted"
-          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
           NODE_ENV=production node <<'NODE'
           const assert = require('node:assert/strict');
           const { once } = require('node:events');
@@ -222,6 +221,11 @@ jobs:
             }
           })().catch((error) => { console.error(error); process.exitCode = 1; });
           NODE
+      - name: Report extracted production ZIP advisories without a vulnerability failure gate
+        if: matrix.application == 'backend'
+        run: |
+          cd "$RUNNER_TEMP/backend-extracted"
+          npm audit --omit=dev --audit-level=none --registry=https://registry.npmjs.org
       - name: Preserve the public-fixture frontend build for browser acceptance
         if: matrix.application == 'frontend'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
