@@ -51,9 +51,9 @@ az account show --output table
 Cloud Shell の `~/clouddrive` は Azure Files にマウントされた永続領域です。一方、Node.js の `npm install` / build は Azure Files 上だと遅くなりやすいため、リポジトリ本体は `~/Azure-PaaS-Workshop` に配置します。セッションをまたいで残したい変数やパラメータファイルだけを `~/clouddrive/paas-workshop` に保存します。
 
 ```bash
-export WORKSHOP_REPO_DIR="$HOME/Azure-PaaS-Workshop"
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-export ENV_FILE="$WORKSHOP_STATE_DIR/paas-workshop.env"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+export ENV_FILE="$WORKSHOP_STATE_DIR/paas-workshop.json"
 
 mkdir -p "$WORKSHOP_STATE_DIR"
 
@@ -102,31 +102,29 @@ Node.js が古い、`npm` または `zip` が見つからない場合は講師�
 以降のページでは、次の環境変数を使います。`GROUP_ID` は講師から指定された値に変更してください。
 
 ```bash
-export LOCATION="japaneast"
-export SWA_LOCATION="eastasia"
-export BASE_NAME="blogapp"
-export GROUP_ID="A"
-export RESOURCE_GROUP="rg-${BASE_NAME}-${GROUP_ID}-paas-workshop"
-export PARAM_FILE="$WORKSHOP_STATE_DIR/dev.local.bicepparam"
-export TENANT_ID="$(az account show --query tenantId -o tsv)"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+if [ -f "$ENV_FILE" ]; then
+  workshop_state_load base || exit 1
+else
+  export LOCATION="japaneast"
+  export SWA_LOCATION="eastasia"
+  export BASE_NAME="blogapp"
+  export GROUP_ID="A"
+  export RESOURCE_GROUP="rg-${BASE_NAME}${GROUP_ID:+-${GROUP_ID}}-paas-workshop"
+  export PARAM_FILE="$WORKSHOP_STATE_DIR/dev.local.bicepparam"
+  export SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+  export TENANT_ID="$(az account show --query tenantId -o tsv)"
+  workshop_state_init || exit 1
+fi
 ```
 
-共通変数を Azure Files 側に保存します。
+保存形式は version 付き JSON です。既存ファイルを無条件に上書きせず、保存は一時ファイルから atomic rename します。`source` するのはリポジトリ内の既知の helper だけで、保存した値をシェルコードとして実行しません。秘密値は保存しません。
 
-```bash
-cat > "$ENV_FILE" <<EOF
-export WORKSHOP_REPO_DIR="$WORKSHOP_REPO_DIR"
-export WORKSHOP_STATE_DIR="$WORKSHOP_STATE_DIR"
-export ENV_FILE="$ENV_FILE"
-export LOCATION="$LOCATION"
-export SWA_LOCATION="$SWA_LOCATION"
-export BASE_NAME="$BASE_NAME"
-export GROUP_ID="$GROUP_ID"
-export RESOURCE_GROUP="$RESOURCE_GROUP"
-export PARAM_FILE="$PARAM_FILE"
-export TENANT_ID="$TENANT_ID"
-EOF
-```
+state はリポジトリ外の専用ディレクトリに保存します。`/`、ホームディレクトリ自体、リポジトリ内は指定できません。JSON の秘密値非保存とは別に、`PARAM_FILE` は DB パスワードを含むため Git に追加・共有しないでください。Cloud Shell / Azure Files 上の権限と rename の実機確認は未完了です。ファイル操作が失敗した場合は停止し、保存成功と扱いません。
+
+RG 名は `rg-<BASE_NAME>-<GROUP_ID>-paas-workshop` に統一します。個人演習で `GROUP_ID=""` とした場合は `rg-<BASE_NAME>-paas-workshop` です。承認された専用 RG を使う場合は初期化前に上の `RESOURCE_GROUP` を変更してください。別グループ・別 tenant/subscription に切り替える場合は新しい `WORKSHOP_STATE_DIR` を選び、既存 state の対象を上書きしません。
+
+旧 `paas-workshop.env` は自動で実行・移行しません。既存の app ID や対象を手動で確認し、別の state ディレクトリで初期化してから必要な値を保存します。リポジトリの clone 先を変更した場合は、再接続時も実際の `WORKSHOP_REPO_DIR` を指定してください。
 
 確認します。
 
@@ -134,15 +132,17 @@ EOF
 echo "$WORKSHOP_REPO_DIR"
 echo "$WORKSHOP_STATE_DIR"
 echo "$RESOURCE_GROUP"
+echo "$SUBSCRIPTION_ID"
 echo "$TENANT_ID"
 ```
 
 Cloud Shell のセッションが切れた場合は、次で復元できます。
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load base || exit 1
 ```
 
 ## 次に進む

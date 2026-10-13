@@ -37,6 +37,63 @@
 
 ## ワークショップ概要
 
+### 本線の成功条件を確認する
+
+本線は **Cloud Shell standard / ZIP、SWA Standard、App Service B1、DocumentDB M25 / HA=false** です。B1 の slots / zone redundancy、M25 の HA を有効と説明しません。Entra 認証は WAF 代替ではなく、published read / health と認証付き write の責任分界を説明します。IaaS 比較は [現行 revision](../design/IaaS-PaaS-ComparisonMatrix.md) の 3 data-bearing members / no arbiter を基準にし、PaaS baseline が同等の可用性を保証すると教えません。
+
+開始前に RBAC・tenant registration/自己同意・公開依存/CLI・provider/region/SKU/quota と費用を確認します。**Contributor-only / 主催者準備なし** で必要な role assignment を完了できない現状を、講師が事前に補って成功扱いにしません。文書 / mock / catalog / template build の成功は live readiness ではありません。
+
+各グループの到達点は [Day 1 の公開契約・browser CRUD・telemetry](../materials/docs/learner/day-1-validation.ja.md)、[Day 2 の時刻・復旧・data integrity](../materials/docs/learner/day-2-reliability.ja.md)、[owned cleanup](../materials/docs/learner/cleanup.ja.md) の証拠で判断します。復旧未観測は 0 秒成功でなく null、429 は DB failover でなく throttling、記事 viewCount は content integrity と別です。秘密値・token・本文・未加工 logs を収集しません。
+
+### 任意例外: 管理者が組織全体同意を行う
+
+本線は各グループの所有アプリと、ポリシーで許可されたブラウザー自己同意です。登録・同意が禁止されている環境では自己完結を保証しません。**以下は別途承認した管理者支援の例外**で、Contributor のみ・主催者の事前準備なしという条件を満たす手順ではありません。
+
+依頼者は対象 tenant、Frontend/Backend client ID、scope `access_as_user`、CLI バージョン、エラーコード・correlation ID、PIM の状態を提示します。トークンや秘密情報は渡しません。今回の独自 API delegated permission の組織全体同意は Cloud Application Administrator / Application Administrator 等の適切な権限で実行します。Azure Owner/Contributor やアプリ所有者だけでは不足します。PIM は付与済みの適切なロールのみ有効化し、受講者全員への管理者ロール付与は行いません。
+
+管理者は、依頼値を設定したうえで tenant と両アプリを確認します。共有アプリにはこの新規検証用コマンドを使用しません。
+
+```bash
+if [ -z "${TENANT_ID:-}" ] || [ -z "${FRONTEND_CLIENT_ID:-}" ] || [ -z "${BACKEND_CLIENT_ID:-}" ]; then
+  echo "依頼者の tenant と両 client ID を設定してから実行してください。"
+  exit 1
+fi
+current_tenant="$(az account show --query tenantId -o tsv)" || exit 1
+if [ "$current_tenant" != "$TENANT_ID" ]; then
+  echo "依頼された tenant と一致しません。停止します。"
+  exit 1
+fi
+az ad app show --id "$FRONTEND_CLIENT_ID" --query "{id:id,appId:appId,displayName:displayName}" -o jsonc || exit 1
+az ad app show --id "$BACKEND_CLIENT_ID" --query "{id:id,appId:appId,displayName:displayName}" -o jsonc || exit 1
+
+# 検索失敗と未作成を区別するため、一覧取得後に件数を判断する
+for client in "$BACKEND_CLIENT_ID" "$FRONTEND_CLIENT_ID"; do
+  principals="$(az ad sp list --filter "appId eq '$client'" -o json)" || exit 1
+  count="$(printf '%s' "$principals" | jq -r 'length')" || exit 1
+  if [ "$count" -eq 0 ]; then
+    az ad sp create --id "$client" --output none || exit 1
+  elif [ "$count" -ne 1 ]; then
+    echo "service principal が一意ではありません。停止します。"
+    exit 1
+  fi
+done
+
+existing="$(az ad app permission list-grants --id "$FRONTEND_CLIENT_ID" -o json)" || exit 1
+existing_count="$(printf '%s' "$existing" | jq -er 'if type == "array" then length else error("grant 一覧が配列ではありません") end')" || exit 1
+if [ "$existing_count" -ne 0 ]; then
+  echo "既存 grant があります。CLI による置換は行わず、個別にレビューしてください。"
+  exit 1
+fi
+
+az ad app permission grant \
+  --id "$FRONTEND_CLIENT_ID" --api "$BACKEND_CLIENT_ID" \
+  --scope access_as_user --consent-type AllPrincipals
+```
+
+実行後は [Day 0 の検証](../materials/docs/learner/day-0-entra-id.ja.md#day-1-のサインイン後に自己同意を検証する) と同じ client/resource object ID を確認し、この例外では `consentType: AllPrincipals`、`principalId: null`、`scope` に `access_as_user` があることを確認します。続けて Frontend サインインと認証付き記事作成を確認します。同時変更があり得る共有アプリには、上の確認だけでは置換リスクを排除できません。
+
+参考: [テナント全体への管理者同意](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/grant-admin-consent)、[Azure CLI grant](https://learn.microsoft.com/en-us/cli/azure/ad/app/permission#az-ad-app-permission-grant)。
+
 ### 進行形式の例
 
 | 形式 | 時間 | グループ規模 | メモ |
@@ -46,6 +103,8 @@
 | 自習 | 可変 | 個人 | README に沿って進行 |
 
 ### 推奨タイムライン（4時間想定）
+
+以下は進行案で、fresh Cloud Shell rehearsal の実測ではありません。起点は各グループの Day 0 context / permissions / consent / catalog 確認完了とし、待ち時間・telemetry delay・復旧・cleanup を含む実測で更新します。ブロックを時間内成功へ置き換えず、費用も 4 時間固定額として保証しません。
 
 | 時刻 | 目安 | 内容 |
 |------|------|------|
@@ -78,8 +137,8 @@ Day 1 を終えている参加者が多い場合は、比較ポイント（責�
 
 2. **運用負荷の削減**
    - OS パッチ適用が不要
-   - 高可用性が標準で組み込まれている
-   - オートスケールの機能が使いやすい
+   - 高可用性は採用 SKU / region / 明示設定に依存し、本線 M25 は HA=false
+   - オートスケールは対応 tier の任意設計であり、B1 本線で有効ではない
 
 3. **PaaS / IaaS の使い分け**
    - PaaS: ステートレスな Web アプリ / API、モダンアプリ
@@ -125,20 +184,18 @@ Day 1 を終えている参加者が多い場合は、比較ポイント（責�
    - 症状: “Invalid scope”
    - 対処: Backend API → “Expose an API” でスコープ作成
 
-**時短のヒント:** 参加者が Entra ID で詰まる場合、事前にアプリ登録を作って Client ID を配布する運用も検討してください。
+**権限境界:** 登録・自己同意が policy で禁止されている場合は本線の block と記録します。主催者が事前にアプリを作って配布した場合は別の管理者支援方式であり、Contributor-only / 事前準備なしの成功と数えません。
 
 ### Bicep デプロイ
 
-**目安時間:**
-- 初回: 約 10-15 分（DB が最も時間がかかりやすい）
-- 2回目以降: 約 3-5 分（差分更新）
+**時間の記録:** catalog / permissions / consent 完了後の create 開始から、今回の Succeeded と outputs 確認までを測定します。DB / endpoint / RBAC の provisioning と app readiness は別です。旧 10-15 分 / 3-5 分という目安を、新しい baseline の実測や保証として使いません。
 
 **待ち時間に説明するとよい内容:**
 1. VNet とサブネット（appservice / privateendpoint）
-2. DB と Private Endpoint（Public からアクセス不可）
+2. DB と Private Endpoint / DNS（effective public firewall / private route は実環境で別途確認）
 3. Key Vault と Private Endpoint（シークレット保管）
 4. App Service + VNet Integration（プライベートリソースへ接続）
-5. Static Web Apps（空で作成され、後でフロントをデプロイ）
+5. Static Web Apps Standard（空で作成され、後でフロントをデプロイ）
 
 **よくあるエラー:**
 
@@ -151,9 +208,9 @@ Day 1 を終えている参加者が多い場合は、比較ポイント（責�
 ### アプリデプロイ
 
 **バックエンド:**
-- スクリプト自体は ~2-3分
-- 初回起動は 60-90 秒かかることがある（VNet + Key Vault 参照の解決）
-- ヘルスチェックが落ちても、少し待って再試行で回復することが多い
+- build / upload acceptance / 今回の release 完了 / readiness を別時刻で確認する
+- bounded probe 後も失敗なら startup → MI / Key Vault → private DB を診断する
+- 旧 instance の health や固定 60-90 秒待機を新 release 成功の証拠としない
 
 **フロントエンド:**
 - デプロイ時に runtime config を `index.html` へ注入（セキュリティ上の設計）

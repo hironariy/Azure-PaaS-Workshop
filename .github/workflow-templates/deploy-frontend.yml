@@ -6,68 +6,94 @@ on:
       - main
     paths:
       - 'materials/frontend/**'
+      - 'scripts/configure-frontend.cjs'
+      - 'scripts/check-public-lock.cjs'
+      - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: deploy-frontend-${{ github.repository }}
+  cancel-in-progress: false
 
 env:
   FRONTEND_DIR: materials/frontend
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     name: Build and Deploy Frontend
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: '${{ env.FRONTEND_DIR }}/package-lock.json'
 
-      - name: Install dependencies
+      - name: Require the production branch and deployment token
+        env:
+          SWA_DEPLOYMENT_TOKEN: ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "Production deployment requires the main branch." >&2
+            exit 1
+          fi
+          if [ -z "$SWA_DEPLOYMENT_TOKEN" ]; then
+            echo "Missing SWA_DEPLOYMENT_TOKEN; no deployment was attempted." >&2
+            exit 1
+          fi
+
+      - name: Verify public sources and install build dependencies
         working-directory: ${{ env.FRONTEND_DIR }}
-        run: npm ci
+        run: |
+          node ../../scripts/check-public-lock.cjs package-lock.json
+          NODE_ENV=production npm ci --include=dev --no-fund --registry=https://registry.npmjs.org
 
       - name: Build
         working-directory: ${{ env.FRONTEND_DIR }}
-        run: npm run build
+        run: |
+          npm run type-check
+          npm run lint
+          npm test
+          npm audit --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --package-lock-only --audit-level=low --registry=https://registry.npmjs.org
+          NODE_ENV=production npm run build -- --mode production
 
       - name: Copy Static Web Apps config
         working-directory: ${{ env.FRONTEND_DIR }}
         run: cp staticwebapp.config.json dist/staticwebapp.config.json
 
-      - name: Fail if runtime config not configured
-        run: |
-          if [ -z "${{ vars.ENTRA_TENANT_ID }}" ] || [ -z "${{ vars.ENTRA_FRONTEND_CLIENT_ID }}" ] || [ -z "${{ vars.ENTRA_BACKEND_CLIENT_ID }}" ]; then
-            echo "Missing frontend runtime config."
-            echo "Set repo Variables: ENTRA_TENANT_ID, ENTRA_FRONTEND_CLIENT_ID, ENTRA_BACKEND_CLIENT_ID"
-            exit 1
-          fi
-
-      - name: Inject config into index.html
-        working-directory: ${{ env.FRONTEND_DIR }}
-        run: |
-          CONFIG_JSON=$(jq -c -n \
-            --arg tenant "${{ vars.ENTRA_TENANT_ID }}" \
-            --arg frontendClientId "${{ vars.ENTRA_FRONTEND_CLIENT_ID }}" \
-            --arg backendClientId "${{ vars.ENTRA_BACKEND_CLIENT_ID }}" \
-            '{ENTRA_TENANT_ID:$tenant,ENTRA_FRONTEND_CLIENT_ID:$frontendClientId,ENTRA_BACKEND_CLIENT_ID:$backendClientId,API_BASE_URL:"/api"}')
-
-          sed -i "s|window.__APP_CONFIG__=null;|window.__APP_CONFIG__=$CONFIG_JSON;|g" dist/index.html
-          echo "Config injected into index.html (no separate config.json)"
+      - name: Prepare the shared public runtime configuration
+        env:
+          ENTRA_TENANT_ID: ${{ vars.ENTRA_TENANT_ID }}
+          ENTRA_FRONTEND_CLIENT_ID: ${{ vars.ENTRA_FRONTEND_CLIENT_ID }}
+          ENTRA_BACKEND_CLIENT_ID: ${{ vars.ENTRA_BACKEND_CLIENT_ID }}
+        run: node scripts/configure-frontend.cjs materials/frontend/dist
 
       - name: Deploy to Static Web Apps
-        uses: Azure/static-web-apps-deploy@v1
+        uses: Azure/static-web-apps-deploy@4d27395796ac319302594769cfe812bd207490b1 # v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.SWA_DEPLOYMENT_TOKEN }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: '${{ env.FRONTEND_DIR }}/dist'
+          api_location: ''
+          output_location: ''
+          production_branch: main
           skip_app_build: true
           skip_api_build: true
+        env:
+          SKIP_DEPLOY_ON_MISSING_SECRETS: 'false'
+
+      - name: State the remaining learner acceptance checks
+        run: echo "Upload completed; separately verify the deployed release, runtime IDs, Linked Backend, browser CRUD and telemetry."

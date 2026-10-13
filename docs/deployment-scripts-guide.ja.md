@@ -2,6 +2,8 @@
 
 このドキュメントは Azure PaaS Workshop で使用するデプロイスクリプトについて説明します。これらのスクリプトは、バックエンド API を Azure App Service へ、フロントエンドを Azure Static Web Apps へデプロイする作業を自動化します。
 
+> **旧実装の参照資料:** 以下の `.env`・token 引数・固定成果物削除の例は現行スクリプトでは実行しません。最新の [Backend](../materials/docs/learner/day-1-deploy-backend.ja.md)、[Frontend](../materials/docs/learner/day-1-deploy-frontend.ja.md)、[Cleanup](../materials/docs/learner/cleanup.ja.md) が実行手順です。現行版は version 付き JSON state の subscription/tenant/RG/リソースを検証し、`npm ci` を使い、CLI エラーを明示して停止します。token は SWA プロセスの環境だけに渡し、末尾も表示しません。backend はこの実行の一時成果物だけを削除し、上限付きの HTTP 200 + `status: healthy` を検査します。health は新 release の完了証拠ではありません。
+
 ---
 
 ## 目次

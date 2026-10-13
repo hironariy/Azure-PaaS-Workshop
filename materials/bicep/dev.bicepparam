@@ -25,13 +25,13 @@ using 'main.bicep'
 // Required Parameters
 // =============================================================================
 
-param location = 'japanwest'
+param location = 'japaneast'
 param environment = 'dev'
 param baseName = 'blogapp'
 
 // Deployment mode
 // - 'standard': existing workshop flow (App Service code deployment + SWA linked backend)
-// - 'fastpath-container': prebuilt container image on App Service (no SWA linked backend deployment)
+// - 'fastpath-container': prebuilt container image on App Service, with SWA linked backend
 param deploymentMode = 'standard'
 
 // REQUIRED only when deploymentMode = 'fastpath-container'

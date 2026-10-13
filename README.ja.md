@@ -7,7 +7,7 @@ English version: [README.md](./README.md)
 
 このリポジトリは、マルチユーザー ブログ アプリケーションを Azure PaaS で構築しながら、App Service、Static Web Apps、Azure DocumentDB、Key Vault、Managed Identity、Application Insights などのマネージドサービス設計・デプロイ・運用を学ぶためのハンズオン教材です。
 
-> **採用状況:** アプリ改善と credential-free tests を、deployment / IaC / learner 手順の改善とは分けて採用しています。アプリ CI の成功は Azure deployment や workshop-ready の証拠ではありません。旧 SWA CLI の advisories、fresh Contributor-only の Key Vault RBAC 制約、browser consent、real Azure acceptance は未解消です。既存 deployment 手順を実証済みの完走経路として扱わないでください。[採用戦略](design/WorkshopImprovementPlan.md#pr-merge-strategy) と [アプリ検証](docs/application-testing.md) を参照してください。
+> **採用状況:** #24 と #50 で計画・アプリ改善を main に採用しました。アプリ CI の成功は Azure deployment / workshop-ready の証拠ではなく、残る運用/ARM candidate は未採用です。Owner 検証では B1 quota limit が 0、usage は取得不能と報告され、quota/support 確認まで provisioning を止めています。旧 CLI advisories、fresh Contributor-only の Key Vault RBAC 制約は未解消です。[実行記録](design/WorkshopImprovementPlan.md#merge-execution-evidence) を参照してください。
 
 ## まずどこから始めるか
 
@@ -33,11 +33,15 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 | 8 | [Day 2: 監視と運用](materials/docs/learner/day-2-operations.ja.md) | App Service logs、Key Vault reference、Managed Identity、Application Insights、Log Analytics |
 | 9 | [Day 2: 信頼性と復旧](materials/docs/learner/day-2-reliability.ja.md) | ヘルスチェック、restart、再デプロイ可能性、BCDR 観点 |
 | 10 | [Cleanup](materials/docs/learner/cleanup.ja.md) | Resource Group、Entra ID app registration、Cloud Shell 作業ファイルの削除 |
-| 11 | [GitHub Actions でデプロイ（代替）](materials/docs/learner/day-1-github-actions-alternative.ja.md) | backend/frontend を GitHub Actions で build/deploy する任意パス |
+| 11 | [GitHub Actions でデプロイ（代替）](materials/docs/learner/day-1-github-actions-alternative.ja.md) | Frontend のみなら SWA CLI / 追加 SP 不要。Backend は追加権限が必要な OIDC-only の任意パス |
 | 12 | [トラブルシューティング](materials/docs/learner/troubleshooting.ja.md) | Cloud Shell、Provider、Entra ID、Bicep、App Service、SWA の症状別確認 |
 | 13 | [クイックリファレンス](materials/docs/reference/quick-reference-card.ja.md) | 変数、主要 URL、ヘルスチェック、ログ、redirect URI、Cleanup コマンド |
 
 通常のワークショップ参加では、ローカル PC に Azure CLI、Azure PowerShell、Bicep CLI、Node.js、Docker、WSL、PowerShell をインストールする必要はありません。CLI とデプロイ作業は Azure Cloud Shell Bash を標準にします。
+
+**Frontend tooling の更新候補:** [ARM ZIP deployment](materials/docs/learner/day-1-deploy-frontend.ja.md) は npm SWA CLI / SWA deployment token を使わず、prepared ZIP を許可済み HTTPS 保管先から公式 API に渡します。Storage 作成・追加ロール付与は行いません。Checksum、ARM completion、exact HTML と公開 readiness を確認しますが、保管先・実 upload・browser acceptance は未検証です。Legacy CLI の audit failure と Contributor-only の制約を解決済みとは扱いません。
+
+**開始前の権限確認:** Azure Contributor/Owner は Entra の登録・同意権限ではありません。本線はグループ専用アプリを作成し、許可されたブラウザー自己同意を使います。テナントポリシーで登録・同意が禁止されていれば自己完結はブロックです。また、現行 Bicep の Key Vault ロール割り当てには Contributor に含まれない `Microsoft.Authorization/roleAssignments/write` が必要なため、**Contributor のみ・主催者の事前準備なしでは新規構成を完了できません**。費用の発生する操作前に [Day 0 の前提条件](materials/docs/learner/day-0-prerequisites.ja.md) を確認し、制約を記録します。受講者への過剰な管理者権限付与や Key Vault RBAC 無効化で回避しません。
 
 ## ワークショップ概要
 
@@ -86,6 +90,8 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 このワークショップでは、フロントエンドを Azure Static Web Apps、バックエンド API を Azure App Service、データベースを Azure DocumentDB / Cosmos DB for MongoDB vCore で構成します。Static Web Apps Linked Backend で `/api/*` を App Service にルーティングし、Key Vault、Managed Identity、Private Endpoints、Application Insights を組み合わせて PaaS らしいセキュリティと運用を学びます。
 
 Application Gateway、Bastion、VM への SSH、Azure Site Recovery などの IaaS 手順は、この PaaS ワークショップの受講者本線では使用しません。
+
+本線は **SWA Standard / App Service B1 / DocumentDB M25 / HA=false** です。B1 の deployment slots / zone redundancy、M25 の in-region HA は利用できません。図の 3 zone 背景は本線で有効な冗長性の保証ではありません。Key Vault 作成と MI の role assignment は別 module が所有し、RBAC の必須権限は維持します。費用は SWA Standard、DB storage、NAT / public IP / private endpoints、telemetry まで含め、実 region・通貨・見積日・稼働時間で [確認](materials/bicep/README.md#estimate-costs-for-the-actual-baseline) します。未更新の component design は歴史資料であり、本線は learner と [現行設計契約](design/RepositoryWideDesignRules.md#current-baseline-contract) を参照します。
 
 ## リポジトリ構成
 

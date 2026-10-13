@@ -2,6 +2,12 @@
 
 This guide explains how the Bicep templates in this workshop are structured, how to customize parameters, and how to operate deployments safely.
 
+The executable path is the [Japanese learner guide](learner/day-1-deploy-infrastructure.ja.html).
+Baseline: **B1 / M25 / HA=false / SWA Standard**, public App Service HTTPS and
+outbound VNet integration. B1 has no slots/zone redundancy; M25 has no HA.
+Contributor-only/no-organizer preparation remains blocked by the required role
+assignment, and Entra registration/consent is a separate policy plane.
+
 Directory:
 
 ```
@@ -12,6 +18,7 @@ materials/bicep/
     ├── network.bicep
     ├── monitoring.bicep
     ├── keyvault.bicep
+    ├── keyvault-rbac.bicep
     ├── cosmosdb.bicep
     ├── appservice.bicep
     ├── appservice-auth.bicep
@@ -29,7 +36,7 @@ The Bicep templates deploy this PaaS topology:
 3. Key Vault (with private endpoint)
 4. Cosmos DB for MongoDB vCore (with private endpoint)
 5. App Service (Linux) with VNet integration and managed identity
-6. Static Web Apps (with optional linked backend)
+6. Static Web Apps Standard with required linked backend
 7. EasyAuth override for API-safe behavior (`Return401`, excluded paths)
 
 Entry point:
@@ -85,11 +92,19 @@ Design intent:
 Creates:
 
 - Key Vault with private endpoint
-- RBAC path for App Service managed identity to read secrets
+- endpoint and DNS group; this is their sole writer
 
 Design intent:
 
 - no inline secrets in app settings or source files
+
+### `keyvault-rbac.bicep`
+
+Assigns Secrets User to the App Service MI on the **existing** vault, preserving
+scope/principal/role/deterministic GUID. It does not write the vault or endpoint.
+Contributor cannot perform roleAssignments/write. Do not skip RBAC or downgrade
+to access policies. The pinned cluster API does not expose publicNetworkAccess;
+verify effective DB firewall/DNS/routes, not just endpoint existence.
 
 ## 3.4 `cosmosdb.bicep`
 
@@ -126,7 +141,7 @@ Creates:
 
 Design intent:
 
-- simple frontend hosting path; optional direct SWA-to-App Service routing capability
+- orchestrator requires Standard; standalone Free is only for deployments without a linked backend
 
 ## 3.7 `appservice-auth.bicep`
 
@@ -156,36 +171,55 @@ Recommended workflow:
 3. Keep `deploymentMode = 'standard'` for the learner path.
 4. Keep local overrides in non-committed local parameter files.
 
+Use the state directory's private PARAM_FILE with a generated `using` path.
+Generate its password only on first creation, preserve it on repeat, and never
+print/store secrets in JSON state or Git. Existing M30+ deployments must preserve
+their actual tier explicitly; the fresh M25 default is not a downgrade command.
+M30+ cannot scale back to M25.
+
 ---
 
 ## 5. Deployment Commands (Reference)
 
-Validate before deployment:
+Only run after permissions/consent/provider/region/quota/tier/capacity/cost checks:
 
 ```bash
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load identity || exit 1
 az deployment group validate \
-  --resource-group <resource-group-name> \
-  --template-file materials/bicep/main.bicep \
-  --parameters materials/bicep/dev.local.bicepparam
+  --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" \
+  --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
+  --parameters "$PARAM_FILE" || exit 1
 ```
 
 Deploy:
 
 ```bash
 az deployment group create \
-  --resource-group <resource-group-name> \
-  --template-file materials/bicep/main.bicep \
-  --parameters materials/bicep/dev.local.bicepparam
+  --subscription "$SUBSCRIPTION_ID" --name main \
+  --resource-group "$RESOURCE_GROUP" \
+  --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
+  --parameters "$PARAM_FILE" || exit 1
 ```
 
 Read outputs:
 
 ```bash
 az deployment group show \
-  --resource-group <resource-group-name> \
+  --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query properties.outputs
+  --query '{state:properties.provisioningState,started:properties.timestamp,outputs:properties.outputs}' \
+  -o jsonc || exit 1
 ```
+
+Confirm this operation's start/correlation ID/Succeeded, not previous outputs.
+Failure/cancellation is not permission to save state or deploy code. Regenerate
+distributed main.json with **Bicep 0.44.1** and check exact artifact parity.
+Compilation alone is not live validation or idempotence.
 
 ---
 
@@ -213,7 +247,7 @@ When updating templates:
 
 ## 8. Post-Deployment Tasks (Operational)
 
-- retrieve SWA deployment token if needed for frontend deployment pipeline
+- use the state-scoped frontend script, which passes its token through environment without printing it
 - deploy backend ZIP artifact to App Service
 - validate `/health` and `/api/health`
 - confirm Key Vault secret resolution works in App Service runtime

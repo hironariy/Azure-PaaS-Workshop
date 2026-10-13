@@ -43,7 +43,13 @@ The application requires **two app registrations** in Microsoft Entra ID:
 ## Prerequisites
 
 - Azure subscription with access to Microsoft Entra ID
-- Permission to create app registrations (Application Administrator or Global Administrator role)
+- Permission to create and manage your own app registrations (tenant registration policy or Application Developer, for example). Azure Contributor/Owner does not confer this permission.
+- User-consent policy permitting the requested delegated scope. App ownership and permission requests do not establish actual consent or tenant-wide consent authority.
+
+The [Cloud Shell learner path](../materials/docs/learner/day-0-entra-id.ja.md)
+uses group-owned applications and browser self-consent where policy permits.
+Blocked registration/consent must be recorded, not bypassed. Do not replace
+existing grants on shared applications with repeated CLI `Principal` grants.
 
 ## Step 1: Get Your Tenant ID
 
@@ -147,13 +153,18 @@ Your API permissions should now show:
 - `Microsoft Graph` > `User.Read` (default)
 - `PaaS BlogApp Backend API` > `access_as_user`
 
-### 3.5 Grant Admin Consent (Optional but Recommended)
+### 3.5 Consent at First Sign-in; Administrator Exception
 
-If you have admin rights:
-1. Click **Grant admin consent for [Your Organization]**
-2. Click **Yes** to confirm
+For the self-service path, use MSAL sign-in and consent as the individual user
+where tenant policy permits. Verify the grant's Backend service principal
+object ID, `Principal` consent type, user `principalId`, and `access_as_user`
+scope as described in the learner guide. A permission request is not a grant.
 
-This prevents users from seeing a consent prompt on first login.
+If administrator approval is required, self-service is blocked. An authorized
+Cloud Application Administrator/Application Administrator can optionally grant
+tenant-wide consent for this custom delegated API after reviewing the isolated
+apps and existing grants. This assisted exception is not Contributor-only
+completion and is not a reason to grant administrator roles to all learners.
 
 ### 3.6 Summary - Frontend Values
 
@@ -224,11 +235,12 @@ VITE_API_CLIENT_ID=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
 
 #### "Consent required" error
 
-**Cause**: User hasn't consented to API permissions.
+**Cause**: Consent is absent or tenant policy blocks the user's request.
 
 **Fix**: 
-1. Grant admin consent in Azure Portal (Step 3.5), or
-2. Have users consent on first login
+1. Confirm the tenant, owned apps, requested API/scope, and redirect URI.
+2. Use browser consent if policy permits; record administrator-approval restrictions.
+3. Use the explicitly assisted administrator exception only when separately authorized. Do not blindly replace existing grants.
 
 ## Production Configuration
 
@@ -255,7 +267,7 @@ Add these as **Application Settings** (or use Key Vault references):
 1. **Use separate app registrations** for Frontend and Backend
 2. **Don't expose client secrets** - SPA uses PKCE, no secrets needed
 3. **Limit redirect URIs** - Only add URIs you actually use
-4. **Use admin consent** for organizational apps to avoid user consent prompts
+4. **Separate self-consent and tenant-wide consent**; respect policy and use the least privilege appropriate to the chosen scenario
 5. **Review permissions** regularly and remove unused ones
 
 ## Quick Reference

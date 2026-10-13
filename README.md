@@ -6,7 +6,11 @@
 
 A hands-on workshop for learning Azure PaaS patterns through building and deploying a web application.
 
-> **Adoption status:** application maintenance improvements and credential-free tests are being adopted separately from deployment, IaC and learner-path improvements. A green application CI run does not establish Azure deployment or workshop readiness. Legacy SWA CLI advisories, the fresh Contributor-only Key Vault RBAC limitation, browser consent and real Azure acceptance remain unresolved. Do not use the existing deployment instructions as a verified end-to-end learner path. See [the adoption strategy](design/WorkshopImprovementPlan.md#pr-merge-strategy) and [application testing](docs/application-testing.md).
+> **Adoption status:** #24 and #50 adopted the plan and application maintenance improvements. A green application CI run is not Azure deployment or workshop acceptance. The remaining operational/ARM candidate is not yet adopted. The Owner rehearsal reported B1 quota limit 0 with unavailable usage; provisioning is blocked pending quota/support confirmation. Legacy CLI advisories and the fresh Contributor-only Key Vault RBAC limitation remain unresolved. See [the execution evidence](design/WorkshopImprovementPlan.md#merge-execution-evidence).
+
+> **Current deployment entry:** Start with the [Cloud Shell quickstart](materials/docs/learner/cloud-shell-quickstart.ja.md) and the linked Day 0/Day 1 guides. Current deploy scripts require versioned JSON state with a verified subscription/tenant and exact resource targets. Legacy `deploy-frontend.local.env` and token-argument instructions further below are historical; do not use them with the current scripts. [Cleanup](materials/docs/learner/cleanup.ja.md) confirms dedicated ownership and actual Azure deletion and never recursively deletes the checkout.
+
+> **Frontend tooling candidate:** The [ARM ZIP deployment guide](materials/docs/learner/day-1-deploy-frontend.ja.md) uses `deploy-frontend-arm.sh` without npm SWA CLI or a SWA deployment token. It requires an approved, owned HTTPS artifact host; it does not create Storage or grant roles. ARM completion, hosted checksum, exact deployed HTML and public readiness are checked separately. Live upload/browser acceptance is still pending, legacy CLI advisories remain unresolved, and strict Contributor-only fresh Key Vault RBAC remains blocked.
 
 > 📚 **Workshop Series - Day 2**
 > 
@@ -373,7 +377,7 @@ You need access to the following:
 
 | Account | Purpose | How to Get |
 |---------|---------|------------|
-| **Microsoft Azure** | Cloud platform | [Free Account](https://azure.microsoft.com/free/). Workshop attendees must have an active subscription with Owner or Contributor role. |
+| **Microsoft Azure** | Cloud platform | [Free Account](https://azure.microsoft.com/free/). Contributor can manage resources but cannot create the Key Vault RBAC assignment required by a fresh deployment. Contributor-only/no-organizer-preparation completion is currently blocked. |
 | **Microsoft Entra ID** | Authentication | Included with Azure subscription |
 | **GitHub** (optional) | Clone repository, CI/CD | [Sign Up](https://github.com/join) |
 
@@ -395,16 +399,20 @@ You need access to the following:
 > **How to check if you have permission:**
 > 1. Go to [Azure Portal](https://portal.azure.com) → Microsoft Entra ID → App registrations
 > 2. Click "+ New registration"
-> 3. If you see the registration form, you have permission ✅
+> 3. The form is only an initial indication; creation and management of your own isolated app must actually succeed.
 > 4. If you see an error or the button is disabled, contact your IT administrator ❌
 >
-> **For Workshop Organizers:**
-> If participants cannot create app registrations, you have two options:
-> 1. **Ask IT admin** to assign the "Application Developer" role to participants
-> 2. **Pre-create app registrations** and share the Client IDs with participants
+> Azure Owner/Contributor does not confer Entra registration or consent rights.
+> Application Developer/app ownership does not authorize tenant-wide consent.
+> The learner path uses separate owned apps and browser self-consent only where
+> tenant policy permits it; `type: User` does not bypass that policy.
+> If registration or consent is blocked, record the blocker rather than elevating
+> every learner or replacing grants on shared apps. Administrator-prepared apps
+> are an explicitly different, assisted scenario—not proof of self-service.
 >
 > **For Personal/Free Azure Accounts:**
-> If you created your own Azure account, you are automatically the Global Administrator and can create app registrations without any additional setup.
+> Check the actual tenant and effective roles; a subscription role or account type
+> alone does not establish Entra registration/consent permissions.
 
 #### 2.1.4 Clone the Repository
 
@@ -527,9 +535,11 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
    - Check the box next to `access_as_user`
    - Click "Add permissions"
 
-3. **(Optional) Grant Admin Consent**
-   - If you're an admin, click "Grant admin consent for [Your Organization]"
-   - This prevents users from needing to consent individually
+3. **Consent at first sign-in**
+   - Use the application's MSAL sign-in flow for individual consent if tenant policy permits.
+   - If administrator approval is required, the self-service path is blocked.
+   - Tenant-wide consent is an optional administrator exception; do not run learner CLI grants or overwrite existing shared grants.
+   - See the [learner consent checks](materials/docs/learner/day-0-entra-id.ja.md) for request versus grant, resource object ID, `consentType`, and `principalId` verification.
 
 </details>
 
@@ -1181,10 +1191,26 @@ Invoke-RestMethod "https://$swaHostname/api/health" | ConvertTo-Json
 
 ### 2.5 Advanced Path: GitHub Actions (Alternative)
 
-<details>
-<summary>🚀 <strong>GitHub Actions Deployment Details (Not Verified)</strong></summary>
+Use the current [optional Actions learner guide](materials/docs/learner/day-1-github-actions-alternative.ja.md)
+for executable setup. Frontend-only deployment uses Microsoft's official action
+with a prebuilt artifact, without SWA npm CLI or a new Entra service principal.
+Backend uses a credential-free build job and a separate **OIDC-only** deploy job;
+creating its scoped Contributor grant still requires additional authorization.
+Neither route solves the Contributor-only fresh Key Vault assignment constraint.
 
-> ⚠️ **Note:** This section describes CI/CD deployment using GitHub Actions. This method has not been fully verified and is provided as an alternative for teams who prefer automated deployments.
+The templates have pinned action revisions, public locked installs, main-only
+deployment, shared runtime-config/health validation and the `dist/src/app.js`
+production ZIP layout. The native deployment client's upstream image remains a
+mutable `stable` tag; supported deployment does not prove its complete immutable
+inventory, zero tooling advisories, or real Azure/browser acceptance.
+
+<details>
+<summary>🚀 <strong>Historical OIDC setup notes (not the current learner runbook)</strong></summary>
+
+> ⚠️ **Note:** The older OIDC examples below are preserved for reference, not
+> copy-and-run setup. Use the linked learner guide's saved context, permission
+> gates, exact targets, repository validation and token handling. No live
+> deployment or Contributor-only acceptance is claimed.
 
 GitHub Actions can automate deployments on every push to the main branch.
 
@@ -1208,9 +1234,10 @@ cp .github/workflow-templates/deploy-frontend.yml .github/workflows/
 
 - If a commit changes `materials/backend/**`, **only** the backend workflow runs.
 - If a commit changes `materials/frontend/**`, **only** the frontend workflow runs.
-- If a commit changes other paths only, **no workflows run**.
+- Changes to the enabled workflow and its shared helper/source-guard paths also trigger the corresponding workflow.
+- Manual production dispatch must select `main`; other branches fail explicitly.
 
-The backend workflow supports **OIDC (default)** and **Service Principal secret (optional)**.
+The current backend workflow supports **OIDC only**. It does not read the old `AZURE_CREDENTIALS` fallback.
 
 ---
 
@@ -1297,14 +1324,24 @@ Go to your repository → **Settings** → **Secrets and variables** → **Actio
 |--------|-------|
 | `SWA_DEPLOYMENT_TOKEN` | SWA deployment token |
 
-Get `SWA_DEPLOYMENT_TOKEN` from Azure:
+The current guide transfers `SWA_DEPLOYMENT_TOKEN` from the saved SWA to the
+selected repository Secret via stdin. Never use `[0]` to select a different
+site or print the token:
 
 ```bash
-SWA_NAME=$(az staticwebapp list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)
-az staticwebapp secrets list \
-  --resource-group "$RESOURCE_GROUP" \
-  --name "$SWA_NAME" \
-  --query "properties.apiKey" -o tsv
+set +x
+SWA_DEPLOYMENT_TOKEN="$(az staticwebapp secrets list --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" --name "$SWA_NAME" --query properties.apiKey -o tsv)" || exit 1
+if [ -z "$SWA_DEPLOYMENT_TOKEN" ] || [ "$SWA_DEPLOYMENT_TOKEN" = null ]; then
+  unset SWA_DEPLOYMENT_TOKEN
+  echo "Deployment token unavailable." >&2
+  exit 1
+fi
+if ! printf '%s' "$SWA_DEPLOYMENT_TOKEN" | gh secret set SWA_DEPLOYMENT_TOKEN --repo "$GITHUB_REPO"; then
+  unset SWA_DEPLOYMENT_TOKEN
+  exit 1
+fi
+unset SWA_DEPLOYMENT_TOKEN
 ```
 
 ---
@@ -1345,27 +1382,14 @@ gh workflow run deploy-frontend.yml --ref main
 
 ---
 
-## (Optional Fallback): Service Principal Secret (`AZURE_CREDENTIALS`)
+## Removed fallback: Service Principal Secret (`AZURE_CREDENTIALS`)
 
-If you can’t use OIDC in your tenant/policy, you can use a classic service principal secret instead.
-
-1. Create a service principal scoped to your resource group:
-
-```bash
-az ad sp create-for-rbac \
-  --name "github-actions-blogapp-<TeamName>" \
-  --role contributor \
-  --scopes /subscriptions/<subscription-id>/resourceGroups/<Resource-Group-Name> \
-  --json-auth
-```
-
-2. Add a GitHub Actions secret:
-
-| Secret | Value |
-|--------|-------|
-| `AZURE_CREDENTIALS` | JSON output from the command above |
-
-The backend workflow will automatically use `AZURE_CREDENTIALS` only if OIDC variables are not set.
+The current template does not create or consume long-lived service-principal
+credentials. Configure the three public OIDC IDs as repository **Variables**,
+not Secrets. If tenant policy or grant permissions block OIDC setup, stop the
+optional backend route rather than introducing a secret or substituting
+organizer preparation. Frontend-only deployment is separate. Existing legacy
+secrets are not automatically read, deleted or migrated.
 
 </details>
 
@@ -1523,22 +1547,20 @@ const config = window.__APP_CONFIG__ || await fetchConfig();
 
 ## 5. Cost Estimate
 
-Estimated costs (Japan East region, dev configuration):
+The current dev baseline is **SWA Standard**, App Service B1 and DocumentDB
+M25/HA=false. Free SWA cannot provide its App Service linked backend. B1 has
+no deployment slots or zone redundancy; M25 is Dev/Test without in-region HA.
 
-| Resource | SKU | Monthly Cost |
-|----------|-----|--------------|
-| Static Web Apps | Free | $0 |
-| App Service | B1 | ~$13 |
-| Azure DocumentDB | M25 | ~$100 |
-| Key Vault | Standard | ~$1 |
-| VNet / Private Endpoints | - | ~$10 |
-| NAT Gateway | Standard | ~$45 |
-| Application Insights | Free tier | $0 |
-| **Total (Dev)** | | **~$170/month** |
+Create a dated estimate in the [Azure pricing calculator](https://azure.microsoft.com/pricing/calculator/)
+using the actual resource regions, currency, duration and subscription offer.
+Include database storage, Key Vault operations, private endpoints, NAT gateway,
+public IP/data processing and telemetry ingestion/retention. SWA has a separate
+supported region. See the [baseline cost checklist](materials/bicep/README.md#estimate-costs-for-the-actual-baseline).
 
-> ⚠️ **Important**: Remember to delete resources after the workshop to avoid charges!
-> 
-> For a 4-hour workshop, expected cost is approximately **$0.50 - $1.00**.
+A four-hour price cannot be guaranteed by dividing an old monthly total:
+fixed/minimum fees, provisioning/cleanup duration, transfer and tax also matter.
+Use [verified cleanup](materials/docs/learner/cleanup.ja.md); stopping the
+application alone does not remove billable infrastructure.
 
 ---
 

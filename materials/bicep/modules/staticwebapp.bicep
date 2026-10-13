@@ -2,7 +2,7 @@
 // Static Web Apps Module - Azure Static Web Apps with Linked Backend
 // =============================================================================
 // This module creates:
-// - Azure Static Web Apps (Free tier for workshop)
+// - Azure Static Web Apps (Standard for the workshop linked backend)
 // - Linked Backend to App Service for API routing
 // - GitHub deployment configuration is handled separately via GitHub Actions
 //
@@ -27,7 +27,7 @@ param uniqueSuffix string
   'Free'
   'Standard'
 ])
-param sku string = 'Free'
+param sku string = 'Standard'
 
 @description('App Service resource ID for Linked Backend')
 param linkedBackendResourceId string = ''

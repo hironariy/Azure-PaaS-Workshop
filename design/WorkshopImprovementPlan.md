@@ -8,7 +8,7 @@
 
 ### 現在の解決方針を先に読む
 
-実行状況は [第 27 節](#merge-execution-evidence) を参照する。#24 は main へ採用済み。#50 が main 向けアプリ改善候補で、実環境では Owner の role preflight と catalog が成功した一方、B1 quota が 0 と報告された。Quota の解消前にリソースを作成せず、別 SKU / region へ自動 fallback しない。
+実行状況は [第 27 節](#merge-execution-evidence) を参照する。#24 と #50 は main へ採用済み。実環境では Owner の role preflight と catalog が成功した一方、B1 quota が 0 と報告された。Quota の解消前にリソースを作成せず、別 SKU / region へ自動 fallback しない。運用/ARM の残りは main 向けの draft candidate として再検証し、赤い tool gate を通して merge しない。
 
 2026-10-11 の再確認では全 23 Issues のうち #1–#12 は closed、#13–#23 の 11 件は open、#24–#48 の 25 PRs は未マージ。2026-10-12 に #49 の ARM frontend candidate を追加した。main への自動採用は行わず、修正候補の成功を受講者が使う main の改善や Issue 解決と混同しない。
 
@@ -883,3 +883,23 @@ Browser acceptance 用には CI が実際に生成・設定した frontend build
 **Owner で role assignment が許可されても、B1 の作成枠が確保されたとはいえない。** 現在の quota response は baseline 1 instance の readiness を満たす根拠にならないため、費用が発生する provisioning 前に停止する。必要なのは対象 region / Linux B1 の quota/support 確認と、その解消後の actual usage / validate / what-if。B1 quota increase、別 region、上位 SKU は自動で選択・実行しない。
 
 M25 tier / SWA Standard eligibility、許可済み HTTPS artifact host / expiry / cleanup も未確定。Storage を勝手に作成せず、前の CLI audit failure を隠して deployment に進まない。実 Cloud Shell / Azure Files 上の state persistence と独立受講者の完走は引き続き別の acceptance。
+
+### 27.3. M1 の実採用と M2 の保留条件
+
+#50 final head `373775a00ef21bf4c69da15278068004b661bc28` の [actual run 38330949972](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38330949972) は全7 jobs success。CI frontend artifact の source `dbdc8b6a2d8211b767bed559bbe3f00aeef8bb89` は GitHub の synthetic merge ref と一致した。
+
+この実 build を private-profile Chrome と loopback fixture API で検証した。Desktop1280 は3 columns、actual mobile390 は1 column、両方で document width が viewport と一致し overflow なし。Heading30px / white cards / radius8px / Azure button/tag styling を computed style と screenshot で確認。Production React router と encoded Japanese API URL で記事本文を表示した。CLI window-size だけでは actual viewport500だったため、390 と誤記せず CDP device metrics で測り直した。
+
+Browser/public acceptance と exact CI を記録後、#50 を guarded squash merge。Main adoption commit は `73cd103580a4f4b28cb6ec2caedb6cdc2fec695d`。Fixture server は停止済み。これは real MSAL login / Azure CRUD / learner 完走の合格ではなく、Issue closure はしていない。
+
+Local Bash の別 process で base state の init / atomic save / restore を実 CLI context と照合し、state mode600を確認した。Azure Files 上の検証と同一視しない。
+
+M2 はこの採用済み main を base に、#49 の残る operational source を移植する。M1 の最新 plan / application / browser artifact evidence と新 helper tests を保持し、quality と native の PR path filter は外す。旧 CLI audit と Bicep parity を明示的に gate へ加え、helper checks と full native checks を区別する。旧 CLI findings、B1 quota、host/live acceptance が未達なら draft を維持する。
+
+### 27.4. Main の持続的 checks と再確認時の context drift
+
+Main `73cd103580a4f4b28cb6ec2caedb6cdc2fec695d` の [post-merge run 38331324319](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38331324319) も全7 jobs success。M2 local の full native は **70 tests success**、active/optional workflow actionlint と GitHub Pages build が成功した。M1 の2つの standalone runtime-writer tests を削除せず、#49 の68 testsに加えて保持する。
+
+検証途中で CLI の **default subscription / tenant が別の context に変わった**ことを検知した。指定 subscription の `az account show --subscription` は引き続き指定 tenant と一致するが、default を使う production catalog helper は expected exit1 / context mismatch で停止した。共有環境の default を勝手に戻していない。個別 quota usage show は explicit subscription で再実行し、`usage -1 / applicable true` を報告した。以前の usage list の flag と区別し、どちらも usage が不明であることを保持する。
+
+Dedicated RG の absence は explicit subscription で再確認した。Azure resources / registrations / grants / host objects / quota updates を作成・変更していない。教材の quota commands に explicit subscription と tenant-error の停止条件を追加し、context drift を成功・quota量へ読み替えない。

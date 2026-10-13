@@ -237,7 +237,7 @@
 
 ## 8. 関連ドキュメント
 
-- `design/IaaS-to-PaaS-Migration-Changes.md`（設計比較の詳細）
+- `design/IaaS-to-PaaS-Migration-Changes.md`（現行の移行契約と、参考用に保持した旧設計案。旧コード例を実行手順としてコピーしない）
 - `materials/docs/bicep-guide.ja.md`（IaC 観点）
 - `materials/docs/monitoring-guide.ja.md`（監視観点）
 - `materials/docs/disaster-recovery-guide.ja.md`（BCDR 観点）
