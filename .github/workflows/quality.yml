@@ -222,6 +222,32 @@ jobs:
             }
           })().catch((error) => { console.error(error); process.exitCode = 1; });
           NODE
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const { execFileSync } = require('node:child_process');
+          const archive = path.join(process.env.RUNNER_TEMP, 'backend-production.zip');
+          const sourceTree = execFileSync('git', ['rev-parse', 'HEAD:materials/backend'], {
+            cwd: process.env.GITHUB_WORKSPACE, encoding: 'utf8',
+          }).trim();
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'backend-production-source.json'),
+            JSON.stringify({
+              sourceRevision: process.env.GITHUB_SHA,
+              backendSourceTree: sourceTree,
+              sha256: crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
+            }, null, 2) + '\n');
+          NODE
+      - name: Preserve audited backend production ZIP and source receipt
+        if: matrix.application == 'backend'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backend-production
+          path: |
+            ${{ runner.temp }}/backend-production.zip
+            ${{ runner.temp }}/backend-production-source.json
+          if-no-files-found: error
+          retention-days: 2
       - name: Preserve the public-fixture frontend build for browser acceptance
         if: matrix.application == 'frontend'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
