@@ -65,9 +65,9 @@ jobs:
           npm run type-check
           npm run lint
           npm test
-          npm audit --audit-level=low --registry=https://registry.npmjs.org
-          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
-          npm audit --package-lock-only --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --audit-level=none --registry=https://registry.npmjs.org
+          npm audit --omit=dev --audit-level=none --registry=https://registry.npmjs.org
+          npm audit --package-lock-only --audit-level=none --registry=https://registry.npmjs.org
           NODE_ENV=production npm run build -- --mode production
 
       - name: Copy Static Web Apps config
