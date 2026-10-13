@@ -7,7 +7,7 @@
 #
 # Prerequisites:
 #   - Azure CLI logged in
-#   - SWA CLI installed (npm install -g @azure/static-web-apps-cli)
+#   - SWA CLI installed (npm install -g @azure/static-web-apps-cli@2.0.10)
 #   - Entra ID app registrations created
 #   - Frontend config file created from template
 #
@@ -28,7 +28,10 @@
 #   6. Deploy to Static Web Apps
 # =============================================================================
 
+set +x
 set -e
+unset SWA_CLI_DEPLOYMENT_TOKEN SWA_TOKEN
+trap 'unset SWA_TOKEN' EXIT
 
 # Colors for output
 RED='\033[0;31m'
@@ -145,35 +148,49 @@ echo "Working directory: $(pwd)"
 echo ""
 echo -e "${YELLOW}Step 1: Querying Azure resources...${NC}"
 
-# Get SWA hostname
-SWA_HOSTNAME=$(az staticwebapp list \
-    --resource-group "$RESOURCE_GROUP" \
-    --query "[0].defaultHostname" -o tsv 2>/dev/null)
+AZURE_ARGS=()
+if [ -n "${SUBSCRIPTION_ID:-}" ]; then
+    AZURE_ARGS+=(--subscription "$SUBSCRIPTION_ID")
+fi
+if [ -z "${SWA_NAME:-}" ]; then
+    SWA_NAMES="$(az staticwebapp list "${AZURE_ARGS[@]}" \
+        --resource-group "$RESOURCE_GROUP" --query "[].name" -o json)"
+    SWA_NAME="$(node -e '
+      const names = JSON.parse(process.argv[1]);
+      if (!Array.isArray(names) || names.length !== 1 || typeof names[0] !== "string" || !names[0]) {
+        console.error("Set SWA_NAME from the saved deployment outputs; exactly one SWA is required otherwise.");
+        process.exit(1);
+      }
+      console.log(names[0]);
+    ' "$SWA_NAMES")"
+fi
+SWA_HOSTNAME="$(az staticwebapp show "${AZURE_ARGS[@]}" \
+    --resource-group "$RESOURCE_GROUP" --name "$SWA_NAME" \
+    --query defaultHostname -o tsv)"
 
-if [ -z "$SWA_HOSTNAME" ]; then
+if [ -z "$SWA_HOSTNAME" ] || [ "$SWA_HOSTNAME" = null ]; then
     echo -e "${RED}Error: No Static Web App found in resource group $RESOURCE_GROUP${NC}"
     exit 1
 fi
 echo "  SWA Hostname: $SWA_HOSTNAME"
 
 # Get SWA deployment token
-SWA_TOKEN=$(az staticwebapp secrets list \
+SWA_TOKEN=$(az staticwebapp secrets list "${AZURE_ARGS[@]}" \
     --resource-group "$RESOURCE_GROUP" \
-    --name "$(az staticwebapp list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)" \
-    --query "properties.apiKey" -o tsv 2>/dev/null)
+    --name "$SWA_NAME" --query "properties.apiKey" -o tsv)
 
-if [ -z "$SWA_TOKEN" ]; then
+if [ -z "$SWA_TOKEN" ] || [ "$SWA_TOKEN" = null ]; then
     echo -e "${RED}Error: Could not get SWA deployment token${NC}"
     exit 1
 fi
-echo "  SWA Token: ****$(echo "$SWA_TOKEN" | tail -c 8)"
+echo "  Deployment token acquired; no portion will be displayed."
 
 echo -e "${GREEN}✅ Azure resources found${NC}"
 
 # Step 2: Install dependencies and build
 echo ""
 echo -e "${YELLOW}Step 2: Building application...${NC}"
-npm install
+npm ci --include=dev --registry=https://registry.npmjs.org
 # Force a production Vite build even if the Cloud Shell profile has NODE_ENV=development.
 NODE_ENV=production npm run build -- --mode production
 
@@ -257,9 +274,37 @@ echo -e "${GREEN}✅ Config injected (no separate config.json file)${NC}"
 echo ""
 echo -e "${YELLOW}Step 5: Deploying to Static Web Apps...${NC}"
 
-swa deploy ./dist \
-    --deployment-token "$SWA_TOKEN" \
-    --env production
+SWA_CLI_DEBUG=log SWA_CLI_DEPLOYMENT_TOKEN="$SWA_TOKEN" \
+    swa deploy ./dist --env production --no-use-keychain --verbose log
+unset SWA_TOKEN
+
+FRONTEND_URL="https://$SWA_HOSTNAME"
+PUBLISHED_HTML="$(mktemp)"
+trap 'unset SWA_TOKEN; rm -f "$PUBLISHED_HTML"' EXIT
+FRONTEND_VERIFIED=false
+for attempt in {1..12}; do
+    if curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+        --output "$PUBLISHED_HTML" "$FRONTEND_URL/?workshop_deploy_check=$(date +%s)" \
+        && cmp -s dist/index.html "$PUBLISHED_HTML"; then
+        FRONTEND_VERIFIED=true
+        break
+    fi
+    echo "Published frontend does not yet match this build (attempt $attempt/12)."
+    if [ "$attempt" -lt 12 ]; then sleep 5; fi
+done
+if [ "$FRONTEND_VERIFIED" != true ]; then
+    echo "Error: Published frontend does not match dist/index.html; deployment is not verified." >&2
+    exit 1
+fi
+HEALTH_RESPONSE="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+    "$FRONTEND_URL/api/health")"
+node -e '
+  const health = JSON.parse(process.argv[1]);
+  if (health.status !== "healthy") {
+    console.error("Error: SWA linked backend is not healthy.");
+    process.exit(1);
+  }
+' "$HEALTH_RESPONSE"
 
 echo ""
 echo "=============================================="
