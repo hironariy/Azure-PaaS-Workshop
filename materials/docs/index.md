@@ -6,6 +6,11 @@ title: Azure PaaS Workshop 受講者ポータル
 
 <p class="wp-lead">このポータルは、Azure PaaS Workshop を <strong>Azure Cloud Shell (Bash)</strong> だけで進めるための受講者向け入口です。App Service、Static Web Apps、Cosmos DB/DocumentDB、Key Vault、Managed Identity、Application Insights / Azure Monitor を使う PaaS 構成を、事前準備から cleanup まで順番に確認します。<br/>もととなっているリポジトリは<a href='https://github.com/hironariy/Azure-PaaS-Workshop'>こちら</a>です</p>
 
+<p class="wp-lead" role="note"><strong>実行前に確認：この手順は、実際の Azure 環境での完走検証がまだ完了していません。</strong><br/>
+アプリケーションの改善は main に採用済みですが、運用手順と ARM ZIP デプロイの統合は <a href="https://github.com/hironariy/Azure-PaaS-Workshop/pull/51">#51（draft）</a> で保留中です。アプリの CI・ローカル検証は、Azure へのデプロイ・サインイン・データ保持の実証とは異なります。<br/>
+<strong>Contributor のみでは、現在の構成に必要な Managed Identity への Key Vault ロール割り当てを新規作成できません。</strong> Owner による検証も、Contributor のみで受講できる証拠にはなりません。<a href="https://github.com/hironariy/Azure-PaaS-Workshop/issues/16">権限の制約（#16）</a>を確認してください。<br/>
+リソース作成前に、対象のテナント・サブスクリプション、リージョン、SKU、クォータと費用を確認してください。不明な値や不足がある場合は停止し、SKU・リージョン・権限を無断で変更しないでください。進捗と未達条件は <a href="https://github.com/hironariy/Azure-PaaS-Workshop/blob/main/design/WorkshopImprovementPlan.md#merge-execution-evidence">改善計画の検証記録</a>を参照してください。</p>
+
 <style>
   :root {
     --wp-brand: #0078d4;
