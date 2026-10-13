@@ -90,7 +90,7 @@ function PostPage() {
         {isAuthor && (
           <div className="flex items-center gap-2">
             <Link
-              to={`/posts/${post.slug}/edit`}
+              to={`/posts/${encodeURIComponent(post.slug)}/edit`}
               className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
             >
               Edit
