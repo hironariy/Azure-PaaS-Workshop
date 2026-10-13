@@ -156,9 +156,11 @@ test('isolated MongoDB persists the full application HTTP contracts', { timeout:
   });
 
   await t.test('the real unique index arbitrates concurrent Unicode title collisions', async () => {
-    const posts = await Promise.all([create('同じ記事', 'published'), create('同じ記事', 'published')]);
-    assert.equal(new Set(posts.map((post) => stringField(post, 'slug'))).size, 2);
-    assert.equal(await Post.countDocuments({ title: '同じ記事' }), 2);
+    const posts = await Promise.all([
+      create('同じ記事', 'published'), create('同じ記事', 'published'), create('同じ記事', 'published', 'bob'),
+    ]);
+    assert.equal(new Set(posts.map((post) => stringField(post, 'slug'))).size, 3);
+    assert.equal(await Post.countDocuments({ title: '同じ記事' }), 3);
     const author = await User.findOne({ oid: actors.alice.oid });
     assert.ok(author);
     await assert.rejects(Post.create({
@@ -168,9 +170,9 @@ test('isolated MongoDB persists the full application HTTP contracts', { timeout:
     const first = await readObject(await request('GET', '/api/posts?limit=1', 200));
     const second = await readObject(await request('GET', '/api/posts?limit=1&page=2', 200));
     for (const page of [first, second]) {
-      assert.equal(page.total, 2);
+      assert.equal(page.total, 3);
       assert.equal(page.limit, 1);
-      assert.equal(page.totalPages, 2);
+      assert.equal(page.totalPages, 3);
       assert.ok(Array.isArray(page.posts));
       assert.equal(page.posts.length, 1);
     }
