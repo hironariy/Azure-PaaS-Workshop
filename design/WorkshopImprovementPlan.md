@@ -913,3 +913,11 @@ M2 #51 はこの main を取り込み、検証 snapshot `b55b6c22ab0163b0b27941d
 追加の read-only 調査では、[App Service 自身の Get Usages In Location API](https://learn.microsoft.com/rest/api/appservice/get-usages-in-location/list?view=rest-appservice-2026-07-15) も primary region の **B1 currentValue0 / limit0 / Instances** を報告した。Quota API の usage-1 と別の観測として保持し、unknown を0へ読み替えていない。B1作成枠を確認できない理由は catalog metadata だけではなく、App Service 側の上限にも残る。他 SKU の上限が表示されても、承認済み baseline とその瞬間の容量の根拠にはしない。
 
 Explicit selected account は指定 tenant/subscription と一致する一方、既定 context は再確認時も不一致。共有 default は変更しない。B1増枠と一時 artifact host の追加費用・所有範囲について確認を求めたが、この時点ではユーザー不在で未承認。自動申請や新規 Storage 作成はせず、実 provisioning / consent / CRUD / telemetry / recovery / independent learner acceptance を未達のまま保持する。
+
+### 27.6. Entra policy の読み取りと Contributor の実定義を切り分ける
+
+指定 subscription を明示して Graph 用 token を取得し、CLI 応答の tenant が指定 target と一致することを確認したうえで、公式 [Get authorizationPolicy](https://learn.microsoft.com/graph/api/authorizationpolicy-get?view=graph-rest-1.0) を GET。実応答は **HTTP200** で、default registration permission と assigned consent-policy の shape を確認した。Tokenやtenant固有のpolicy値は公開・commitせず、private session artifactに必要最小限を保存した。Azure CLIはtoken取得でsubscriptionとtenantの同時指定を受け付けなかったため、subscription指定と返却tenantの照合へ修正し、実際の成功応答を採用した。
+
+Policyを読めたことは、全受講者のアプリ登録権限、実際のpermission grant、workshop SPAのhuman MSAL consent/sign-inを証明しない。App registrations / grants / tenant policy を変更せず、#13の未達条件を保持する。Azure Owner とGraph/Entraの権限を同一視しない。
+
+対象subscriptionから取得した実際のbuilt-in Contributor定義でも、`Microsoft.Authorization/*/Write` が除外されていることを確認した。これはplatform定義の照合であり、isolated Contributor principalによるnegative deployment testではない。現在のKey Vault RBAC構成でfresh role assignmentが必要なことと、① AのContributor-only/no-preparation条件の矛盾は、Owner正例やquota増枠では解消しない。自動elevation・access policyへの置換・秘密値の露出で回避せず、workshop-ready/Issue closureを未達のまま保持する。
