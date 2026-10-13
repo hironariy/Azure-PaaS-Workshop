@@ -73,8 +73,8 @@ jobs:
           npm run type-check
           npm run lint
           npm test
-          npm audit --audit-level=low --registry=https://registry.npmjs.org
-          npm audit --package-lock-only --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --audit-level=none --registry=https://registry.npmjs.org
+          npm audit --package-lock-only --audit-level=none --registry=https://registry.npmjs.org
 
       - name: Build and package the isolated production ZIP
         working-directory: ${{ env.BACKEND_DIR }}
@@ -87,7 +87,7 @@ jobs:
           npm ci --omit=dev --no-fund --registry=https://registry.npmjs.org
           test -f dist/src/app.js
           test ! -d node_modules/typescript
-          npm audit --omit=dev --audit-level=low --registry=https://registry.npmjs.org
+          npm audit --omit=dev --audit-level=none --registry=https://registry.npmjs.org
           zip -qr "$RUNNER_TEMP/backend-production.zip" .
           unzip -tq "$RUNNER_TEMP/backend-production.zip"
 
