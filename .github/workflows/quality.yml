@@ -75,6 +75,28 @@ jobs:
           cd "$RUNNER_TEMP/public-swa-cli"
           npm ci --ignore-scripts --no-fund --registry=https://registry.npmjs.org
           ./node_modules/.bin/swa --version
+      - name: Package the public CLI runtime for isolated functional rehearsal
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/public-swa-cli"
+          tar -czf swa-cli-runtime.tar.gz node_modules package.json package-lock.json release.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { createHash } = require('node:crypto');
+          const archive = fs.readFileSync('swa-cli-runtime.tar.gz');
+          const cli = JSON.parse(fs.readFileSync('node_modules/@azure/static-web-apps-cli/package.json', 'utf8'));
+          if (cli.version !== '2.0.10') throw new Error('Unexpected CLI version');
+          fs.writeFileSync('runtime-source.json', JSON.stringify({
+            sourceRevision: process.env.GITHUB_SHA,
+            cliVersion: cli.version,
+            registry: 'https://registry.npmjs.org',
+            installPlatform: process.platform,
+            lifecycleScriptsExecuted: false,
+            azureDeploymentPerformed: false,
+            sha256: createHash('sha256').update(archive).digest('hex'),
+            bytes: archive.length,
+          }, null, 2) + '\n');
+          NODE
       - name: Require zero deployment-tool advisories
         shell: bash
         run: |
@@ -91,6 +113,8 @@ jobs:
             ${{ runner.temp }}/public-swa-cli/package-lock.json
             ${{ runner.temp }}/public-swa-cli/release.json
             ${{ runner.temp }}/public-swa-cli/audit.json
+            ${{ runner.temp }}/public-swa-cli/swa-cli-runtime.tar.gz
+            ${{ runner.temp }}/public-swa-cli/runtime-source.json
           if-no-files-found: error
           retention-days: 1
 
