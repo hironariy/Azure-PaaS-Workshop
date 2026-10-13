@@ -229,7 +229,7 @@ async function deployHostedRelease(values, receipt, text, options = {}) {
     let result;
     try {
       result = JSON.parse(command('az', ['account', 'get-access-token', '--subscription', values.SUBSCRIPTION_ID,
-        '--tenant', values.TENANT_ID, '--resource', `${ARM}/`, '--output', 'json']));
+        '--resource', `${ARM}/`, '--output', 'json']));
     } catch { throw new Error('ARM token acquisition failed; Azure output withheld'); }
     if (!result || typeof result.subscription !== 'string' || typeof result.tenant !== 'string' ||
         result.subscription.toLowerCase() !== values.SUBSCRIPTION_ID.toLowerCase() ||

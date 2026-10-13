@@ -319,7 +319,33 @@ test('a changed saved target is rejected before hosted fetch or token acquisitio
   assert.equal(fixture.calls.length, 0);
 });
 
-test('real Azure CLI token boundary rejects wrong tenants and suppresses reflective CLI errors', async (t) => {
+test('Azure CLI token boundary selects the subscription without incompatible tenant arguments', async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'paas-arm-token-'));
+  const previous = process.env.PATH;
+  t.after(() => { process.env.PATH = previous; fs.rmSync(directory, { recursive: true }); });
+  process.env.PATH = `${directory}${path.delimiter}${previous}`;
+  fs.writeFileSync(path.join(directory, 'az'), `#!${process.execPath}
+const assert = require('node:assert/strict');
+assert.deepEqual(process.argv.slice(2), [
+  'account', 'get-access-token', '--subscription', '${values.SUBSCRIPTION_ID}',
+  '--resource', 'https://management.azure.com/', '--output', 'json',
+]);
+console.log(JSON.stringify({
+  subscription: '${values.SUBSCRIPTION_ID}', tenant: '${values.TENANT_ID}', accessToken: '${token}',
+}));
+`, { mode: 0o755 });
+  const fixture = transport([new Response(bytes), json(200, null)]);
+  const options = { ...fixture.options };
+  delete options.getToken;
+  const report = await deployHostedRelease(values, receipt, hostedUrl, options);
+  assert.equal(report.status, 'arm_completed');
+  assert.equal(fixture.calls.length, 2);
+  assert.equal(fixture.calls[0].init.headers, undefined);
+  assert.equal(fixture.calls[1].init.headers.Authorization, `Bearer ${token}`);
+  assert.doesNotMatch(JSON.stringify(report), /PRIVATE_ARTIFACT|PRIVATE_ARM/);
+});
+
+test('real Azure CLI token boundary rejects wrong contexts and suppresses reflective CLI errors', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'paas-arm-token-'));
   const previous = process.env.PATH;
   t.after(() => { process.env.PATH = previous; fs.rmSync(directory, { recursive: true }); });
@@ -327,6 +353,8 @@ test('real Azure CLI token boundary rejects wrong tenants and suppresses reflect
   for (const script of [
     `console.error('${secret}'); process.exit(9);`,
     `console.log(JSON.stringify({subscription:'${values.SUBSCRIPTION_ID}',tenant:'${values.FRONTEND_CLIENT_ID}',accessToken:'${token}'}));`,
+    `console.log(JSON.stringify({subscription:'${values.FRONTEND_CLIENT_ID}',tenant:'${values.TENANT_ID}',accessToken:'${token}'}));`,
+    `console.log(JSON.stringify({subscription:'${values.SUBSCRIPTION_ID}',tenant:'${values.TENANT_ID}',accessToken:''}));`,
   ]) {
     fs.writeFileSync(path.join(directory, 'az'), `#!${process.execPath}\n${script}\n`, { mode: 0o755 });
     const fixture = transport([new Response(bytes)]);
