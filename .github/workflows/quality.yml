@@ -172,6 +172,8 @@ jobs:
           });
           assert.equal(fs.readFileSync('dist/staticwebapp.config.json', 'utf8'),
             fs.readFileSync('staticwebapp.config.json', 'utf8'));
+          fs.writeFileSync('dist/acceptance-source.json',
+            JSON.stringify({ sourceRevision: process.env.GITHUB_SHA }) + '\n');
           NODE
       - name: Audit installed, production, and lockfile scopes
         run: |
@@ -220,6 +222,14 @@ jobs:
             }
           })().catch((error) => { console.error(error); process.exitCode = 1; });
           NODE
+      - name: Preserve the public-fixture frontend build for browser acceptance
+        if: matrix.application == 'frontend'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: frontend-browser-fixture
+          path: materials/frontend/dist/
+          if-no-files-found: error
+          retention-days: 2
 
   database-contracts:
     name: Database HTTP contracts
