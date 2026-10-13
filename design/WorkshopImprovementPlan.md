@@ -903,3 +903,13 @@ Main `73cd103580a4f4b28cb6ec2caedb6cdc2fec695d` の [post-merge run 38331324319]
 検証途中で CLI の **default subscription / tenant が別の context に変わった**ことを検知した。指定 subscription の `az account show --subscription` は引き続き指定 tenant と一致するが、default を使う production catalog helper は expected exit1 / context mismatch で停止した。共有環境の default を勝手に戻していない。個別 quota usage show は explicit subscription で再実行し、`usage -1 / applicable true` を報告した。以前の usage list の flag と区別し、どちらも usage が不明であることを保持する。
 
 Dedicated RG の absence は explicit subscription で再確認した。Azure resources / registrations / grants / host objects / quota updates を作成・変更していない。教材の quota commands に explicit subscription と tenant-error の停止条件を追加し、context drift を成功・quota量へ読み替えない。
+
+### 27.5. 公開入口の注意書きと App Service 自身の quota を再確認する
+
+独立した docs-only #52 を main `e2325084fdccea11e075387f238e4f1a66a43ee1` に guarded squash merge。PR [38333534673](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38333534673) は全7 checks success、Pages [38333671950](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38333671950) は build/deploy success。公開ポータルを HTTP 取得し、未完走・Contributor 制約・無断 SKU/region/権限変更をしない注意書きの反映を確認した。CSS/JS/デプロイコードは不変。隔離 Chrome で20 links / iframe / progress reload / actual clipboard / storage unavailable fallback / 実測1280+390表示を確認した。
+
+M2 #51 はこの main を取り込み、検証 snapshot `b55b6c22ab0163b0b27941dcabfd82407096cbe2` の [quality38333735296](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38333735296) は9 jobs中8 success、legacy CLI audit failure。実 artifact は high5 / low1 / total6（npm package-level 集計）。[native38333735364](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38333735364) は70 tests / 70 pass / 0 fail。古い stack を一括 merge/closeせず、M2 draft / hold を維持する。追補後は新 head の CI が必要で、この snapshot を新 head の合格証に流用しない。
+
+追加の read-only 調査では、[App Service 自身の Get Usages In Location API](https://learn.microsoft.com/rest/api/appservice/get-usages-in-location/list?view=rest-appservice-2026-07-15) も primary region の **B1 currentValue0 / limit0 / Instances** を報告した。Quota API の usage-1 と別の観測として保持し、unknown を0へ読み替えていない。B1作成枠を確認できない理由は catalog metadata だけではなく、App Service 側の上限にも残る。他 SKU の上限が表示されても、承認済み baseline とその瞬間の容量の根拠にはしない。
+
+Explicit selected account は指定 tenant/subscription と一致する一方、既定 context は再確認時も不一致。共有 default は変更しない。B1増枠と一時 artifact host の追加費用・所有範囲について確認を求めたが、この時点ではユーザー不在で未承認。自動申請や新規 Storage 作成はせず、実 provisioning / consent / CRUD / telemetry / recovery / independent learner acceptance を未達のまま保持する。

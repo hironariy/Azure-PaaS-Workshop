@@ -187,6 +187,21 @@ az quota usage show --subscription "$SUBSCRIPTION_ID" --scope "$QUOTA_SCOPE" --r
 
 `isQuotaApplicable`、limit、usage、unit を両方で確認します。2026-10-13 の Owner 検証では B1 limit は `0 / applicable true / Instances`、usage list は `-1 / applicable false`、subscription を明示した個別 usage show は `-1 / applicable true` でした。List と個別応答の flag に差があっても、負数の usage を 0 と見なして available capacity を計算せず、baseline 1 instance の作成前に停止します。Portal / support で対象 region の Linux B1 を確認してください。Quota increase、別 region、上位 SKU は自動で要求・変更しません。Owner role や catalog success だけでは次へ進めません。
 
+#### Quota API の usage が不明なら App Service 側の値を照合する
+
+上で定義した `QUOTA_SCOPE` / `SUBSCRIPTION_ID` をそのまま使い、[App Service Get Usages In Location](https://learn.microsoft.com/rest/api/appservice/get-usages-in-location/list?view=rest-appservice-2026-07-15) の公式 read-only API で同じ region / B1 の値を確認します。
+
+```bash
+az rest --subscription "$SUBSCRIPTION_ID" --method get \
+  --url "https://management.azure.com${QUOTA_SCOPE}/usages?api-version=2026-07-15" \
+  --query "{nextLink:nextLink,quotas:value[?name.value=='B1'].{name:name.value,currentValue:currentValue,limit:limit,unit:unit}}" \
+  --output json || exit 1
+```
+
+`quotas` に B1 が1件、単位が `Instances`、`nextLink` が `null` であることを確認します。空・負数・単位違い・ページ未完了・API間の上限の矛盾は未確認として停止し、結果を Portal / support に伝えます。この API の `B1 VMs` は App Service worker の quota 表示で、Azure VM の作成手順ではありません。
+
+同日の指定環境では App Service 自身も **B1 `currentValue: 0 / limit: 0 / Instances`** と報告しました。これは独立した API の実測であり、Quota API の `usage: -1` を 0 に置き換えた値ではありません。使用量が0でも上限が0なら1 instance を追加できる根拠にはなりません。上限・使用量が足りても、その時点の物理容量や validation / what-if の成功を保証しません。SKU・region変更や増枠申請はこのコマンドでは行いません。
+
 `InvalidAuthenticationTokenTenant` や context mismatch は quota 不足の証拠ではありません。保存した tenant/subscription と CLI context を照合し、別環境へ切り替わっていたら停止します。`--scope` だけで default subscription に依存せず、上記の `--subscription` も指定してください。別利用者の CLI 設定を自動変更したり、失敗を quota 0 / 成功へ読み替えたりしません。
 
 M25 は Dev/Test 用で、in-region HA はサポートされません。M30 以上へ上げると M25 以下へ戻せない制約があるため、演習中に自動 upgrade しません。有料 HA / 別 region は別途承認が必要です。確認できない条件は「未確認」として停止し、catalog 成功を workshop-ready と扱わないでください。
