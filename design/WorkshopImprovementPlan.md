@@ -8,7 +8,7 @@
 
 ### 現在の解決方針を先に読む
 
-実行状況は [第 27 節](#merge-execution-evidence) を参照する。#24 と #50 は main へ採用済み。実環境では Owner の role preflight と catalog が成功した一方、B1 quota が 0 と報告された。Quota の解消前にリソースを作成せず、別 SKU / region へ自動 fallback しない。運用/ARM の残りは main 向けの draft candidate として再検証し、赤い tool gate を通して merge しない。
+実行状況は [第 27 節](#merge-execution-evidence) を参照する。#24（計画）、#50（アプリ）、#52（ポータル入口の注意書き）は main へ採用済み。運用/ARM の #51 は draft / 未マージ。実環境では Owner の role preflight、catalog、Entra policy の読み取りが成功した一方、App Service 自身も B1 上限0を報告した。Quota の解消前にリソースを作成せず、別 SKU / region へ自動 fallback しない。赤い tool gate と Contributor-only の未達条件を通過扱いにしない。
 
 2026-10-11 の再確認では全 23 Issues のうち #1–#12 は closed、#13–#23 の 11 件は open、#24–#48 の 25 PRs は未マージ。2026-10-12 に #49 の ARM frontend candidate を追加した。main への自動採用は行わず、修正候補の成功を受講者が使う main の改善や Issue 解決と混同しない。
 
@@ -848,7 +848,7 @@ Root の application deploy は optional workflow templates であり、merge �
 
 PR body は未達 Issue に `Refs #N` を使い、`Fixes` / `Closes` による premature closure を避ける。Issue を閉じる場合は採用 SHA、実際の検証者、safe run links、original checklist の充足を記録する。
 
-**次の実行単位は M0 の review と M1 の main 向け candidate 作成であり、merge そのものは別の明示的な承認を待つ。** 追加承認がなければ本計画と既存 PR の evidence を保存した状態で止め、CI failure や Contributor-only の矛盾を自動 bypass して backlog を減らさない。
+**第26節の初期計画では M0 の review と M1 の main 向け candidate 作成を次の実行単位とした。** 2026-10-13 の承認に基づく実際の採用結果は第27節に記録する。未達の M2/M3 は追加の evidence / 必要な承認を待ち、CI failure や Contributor-only の矛盾を自動 bypass して backlog を減らさない。
 
 <a id="merge-execution-evidence"></a>
 
@@ -864,7 +864,7 @@ PR body は未達 Issue に `Refs #N` を使い、`Fixes` / `Closes` による p
 
 Separate-context の read-only code review は significant issues なし。これは independent human learner rehearsal や real Azure consent/CRUD の代替ではない。Local clean installs は public npm transport の `ENOTCONN` で失敗しており、local application tests/build 成功とは記録しない。
 
-Browser acceptance 用には CI が実際に生成・設定した frontend build と source revision を artifact に保存する。Public fixture GUIDs のみを使い、deployment artifact / real sign-in の証拠にしない。Browser smoke と最新 head の全 checks が完了するまで #50 は draft を維持する。Workflow / docs-only 変更後も exact head で checks を再実行する。
+この candidate 準備時点では、browser acceptance 用に CI が実際に生成・設定した frontend build と source revision を artifact に保存した。Public fixture GUIDs のみを使い、deployment artifact / real sign-in の証拠にしない。Browser smoke と最新 head の全 checks が完了するまで #50 は draft を維持し、Workflow / docs-only 変更後も exact head で checks を再実行した。実際の採用は27.3に記録する。
 
 ### 27.2. 実 Azure で確認できた learner steps と新しい停止条件
 
@@ -921,3 +921,11 @@ Explicit selected account は指定 tenant/subscription と一致する一方、
 Policyを読めたことは、全受講者のアプリ登録権限、実際のpermission grant、workshop SPAのhuman MSAL consent/sign-inを証明しない。App registrations / grants / tenant policy を変更せず、#13の未達条件を保持する。Azure Owner とGraph/Entraの権限を同一視しない。
 
 対象subscriptionから取得した実際のbuilt-in Contributor定義でも、`Microsoft.Authorization/*/Write` が除外されていることを確認した。これはplatform定義の照合であり、isolated Contributor principalによるnegative deployment testではない。現在のKey Vault RBAC構成でfresh role assignmentが必要なことと、① AのContributor-only/no-preparation条件の矛盾は、Owner正例やquota増枠では解消しない。自動elevation・access policyへの置換・秘密値の露出で回避せず、workshop-ready/Issue closureを未達のまま保持する。
+
+### 27.7. 最新の運用候補と今回の実行結果を確定する
+
+#51 の検証 head `c36ab6d15ffb96b5a48546d3371157f1dc8be528` / base `e2325084fdccea11e075387f238e4f1a66a43ee1` / synthetic `f44da9c1df8da3d4b59d3b65146f343f5b6796c8` の [quality38335898167](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38335898167) は9 jobs中8 success、[native38335899806](https://github.com/hironariy/Azure-PaaS-Workshop/actions/runs/38335899806) は70 tests / 70 pass / 0 fail。実際の同runのCLI audit artifactはhigh5 / low1 / total6。#51はdraft / holdのまま、過去の結果を将来headの合格証に流用しない。
+
+今回の実行で採用したのは計画・アプリ・入口の注意書きであり、実Azureでは作成前の必要権限 / catalog / quota / Entra policyを照合した。停止条件を確認した結果、Azure resources / app registrations / grants / tenant policy / host upload / quota requestを作成・変更していない。M2のoperational sourceや新しいDay0診断手順は、この記録文書だけの採用ではmainへ入らない。
+
+全Issue解決・workshop-ready・Cloud Shell/Azure Files完走は未達。再開にはB1 quota/support、許可済みartifact host、対象context、実validate/what-if・デプロイ・human consent/CRUD・private data・telemetry/recovery・独立受講者のevidenceが必要。① Aと現行Key Vault構成の矛盾は別途解決が必要で、追加権限や別architectureを無断採用しない。計画・採用記録をmainで読めることと、これらの完成条件の充足を区別する。
