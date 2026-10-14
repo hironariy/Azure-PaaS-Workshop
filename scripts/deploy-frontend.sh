@@ -1,152 +1,107 @@
 #!/bin/bash
-# =============================================================================
-# Frontend Deployment Script for Azure Static Web Apps
-# =============================================================================
-# This script builds the frontend, injects runtime config, and deploys
-# to Azure Static Web Apps using the SWA CLI.
-#
-# Prerequisites:
-#   - Azure CLI logged in
-#   - SWA CLI installed (npm install -g @azure/static-web-apps-cli@2.0.10)
-#   - Entra ID app registrations created
-#   - Frontend config file created from template
-#
-# Setup (one-time):
-#   mkdir -p "$HOME/clouddrive/paas-workshop"
-#   cp scripts/deploy-frontend.template.env "$HOME/clouddrive/paas-workshop/deploy-frontend.local.env"
-#   # Edit deploy-frontend.local.env with your Entra ID values
-#
-# Usage:
-#   ./scripts/deploy-frontend.sh <resource-group>
-#
-# The script will:
-#   1. Load Entra ID values from the Cloud Shell state or repo-local deploy-frontend.local.env
-#   2. Query Azure for SWA info
-#   3. Build the frontend
-#   4. Copy Static Web Apps routing config
-#   5. Inject config into index.html (secure - no separate config file)
-#   6. Deploy to Static Web Apps
-# =============================================================================
+# Usage: ./scripts/deploy-frontend.sh <saved-resource-group>
+# Legacy CLI route; the ARM candidate is deploy-frontend-arm.sh (no automatic fallback).
 
 set +x
-set -e
+set -euo pipefail
 unset SWA_CLI_DEPLOYMENT_TOKEN SWA_TOKEN
 trap 'unset SWA_TOKEN' EXIT
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Configuration
 RESOURCE_GROUP="${1:-}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOCAL_ENV_FILE="$SCRIPT_DIR/deploy-frontend.local.env"
-STATE_ENV_FILE="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}/deploy-frontend.local.env"
-TEMPLATE_ENV_FILE="$SCRIPT_DIR/deploy-frontend.template.env"
-
-# Validate arguments
-if [ -z "$RESOURCE_GROUP" ]; then
-    echo -e "${RED}Usage: $0 <resource-group>${NC}"
-    echo "Example: $0 rg-blogapp-paas"
+if [ -z "$RESOURCE_GROUP" ] || [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <saved-resource-group>" >&2
     exit 1
 fi
 
-echo "=============================================="
-echo "Frontend Deployment Script (Static Web Apps)"
-echo "=============================================="
-echo "Resource Group: $RESOURCE_GROUP"
-echo "=============================================="
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_ENV_FILE="$SCRIPT_DIR/deploy-frontend.local.env"
+STATE_ENV_FILE="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}/deploy-frontend.local.env"
 
-# Step 0: Load Entra ID configuration from frontend env file
-echo ""
-echo -e "${YELLOW}Step 0: Loading Entra ID configuration...${NC}"
+if [ -f "$SCRIPT_DIR/workshop-deploy-common.sh" ] && [ ! -f "$STATE_ENV_FILE" ] && [ ! -f "$LOCAL_ENV_FILE" ]; then
+    source "$SCRIPT_DIR/workshop-deploy-common.sh"
+    workshop_deploy_load_target "$RESOURCE_GROUP"
+    export ENTRA_TENANT_ID="$TENANT_ID"
+    export ENTRA_FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
+    export ENTRA_BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
+    FRONTEND_DIR="$WORKSHOP_REPO_DIR/materials/frontend"
+    cd "$FRONTEND_DIR"
+
+    ACTUAL_HOSTNAME="$(az staticwebapp show --subscription "$SUBSCRIPTION_ID" \
+        --resource-group "$RESOURCE_GROUP" --name "$SWA_NAME" --query defaultHostname -o tsv)"
+    if [ "$ACTUAL_HOSTNAME" != "$SWA_HOSTNAME" ]; then
+        echo "SWA hostname differs from saved state; inspect the target before deployment." >&2
+        exit 1
+    fi
+
+    echo "Building production frontend for the saved target..."
+    npm ci --include=dev --registry=https://registry.npmjs.org
+    NODE_ENV=production npm run build -- --mode production
+    if [ ! -d dist/assets ] || [ ! -f dist/index.html ]; then
+        echo "Frontend build outputs are missing." >&2
+        exit 1
+    fi
+    if grep -R "Loading from Vite environment variables (development)" dist/assets/ >/dev/null; then
+        echo "Frontend bundle contains the development configuration path." >&2
+        exit 1
+    else
+        GREP_STATUS=$?
+        if [ "$GREP_STATUS" -ne 1 ]; then echo "Could not inspect frontend assets." >&2; exit 1; fi
+    fi
+    cp staticwebapp.config.json dist/staticwebapp.config.json
+
+    node "$SCRIPT_DIR/configure-frontend.cjs" "$FRONTEND_DIR/dist"
+
+    echo "Retrieving the deployment token without printing any portion..."
+    SWA_TOKEN="$(az staticwebapp secrets list --subscription "$SUBSCRIPTION_ID" \
+        --resource-group "$RESOURCE_GROUP" --name "$SWA_NAME" --query properties.apiKey -o tsv)"
+    if [ -z "$SWA_TOKEN" ] || [ "$SWA_TOKEN" = null ]; then
+        echo "SWA deployment token was not returned." >&2
+        exit 1
+    fi
+    trap 'unset SWA_TOKEN' EXIT
+    SWA_CLI_DEBUG=log SWA_CLI_DEPLOYMENT_TOKEN="$SWA_TOKEN" \
+        swa deploy ./dist --env production --no-use-keychain --verbose log
+    unset SWA_TOKEN
+
+    echo "Deployment Complete!"
+    echo "Frontend URL: https://$SWA_HOSTNAME"
+    echo "Verify runtime config, redirect URIs, browser sign-in and the Linked Backend separately."
+    exit 0
+fi
 
 ENV_SOURCE_FILE=""
 if [ -f "$STATE_ENV_FILE" ]; then
     ENV_SOURCE_FILE="$STATE_ENV_FILE"
 elif [ -f "$LOCAL_ENV_FILE" ]; then
     ENV_SOURCE_FILE="$LOCAL_ENV_FILE"
-fi
-
-if [ -n "$ENV_SOURCE_FILE" ]; then
-    echo "  Loading from: $ENV_SOURCE_FILE"
-    # Normalize CRLF to LF if file was edited on Windows
-    if grep -q $'\r' "$ENV_SOURCE_FILE"; then
-        echo "  Detected CRLF line endings; converting to LF..."
-        sed -i.bak $'s/\r$//' "$ENV_SOURCE_FILE"
-        rm -f "$ENV_SOURCE_FILE.bak"
-    fi
-    # shellcheck source=/dev/null
-    source "$ENV_SOURCE_FILE"
 else
-    echo -e "${RED}Error: Frontend configuration file not found.${NC}"
-    echo ""
-    echo "Please create it in the Cloud Shell state directory:"
-    echo "  mkdir -p $(dirname "$STATE_ENV_FILE")"
-    echo "  cp $TEMPLATE_ENV_FILE $STATE_ENV_FILE"
-    echo ""
-    echo "Or create the legacy repo-local file:"
-    echo "  cp $TEMPLATE_ENV_FILE $LOCAL_ENV_FILE"
-    echo ""
-    echo "Then edit the file with your Entra ID values."
+    echo -e "${RED}Error: Frontend configuration file not found.${NC}" >&2
     exit 1
 fi
 
-# Validate required values
-validate_config_value() {
-    local name="$1"
-    local value="$2"
-    local placeholder="$3"
-
-    if [ -z "$value" ] || [ "$value" = "$placeholder" ] || [ "$value" = "null" ] || [ "$value" = "undefined" ]; then
-        echo -e "${RED}Error: $name is not configured in $ENV_SOURCE_FILE${NC}"
-        exit 1
-    fi
-}
-
-validate_config_value "ENTRA_TENANT_ID" "$ENTRA_TENANT_ID" "your-tenant-id-here"
-validate_config_value "ENTRA_FRONTEND_CLIENT_ID" "$ENTRA_FRONTEND_CLIENT_ID" "your-frontend-client-id-here"
-validate_config_value "ENTRA_BACKEND_CLIENT_ID" "$ENTRA_BACKEND_CLIENT_ID" "your-backend-client-id-here"
+if grep -q $'\r' "$ENV_SOURCE_FILE"; then
+    sed -i.bak $'s/\r$//' "$ENV_SOURCE_FILE"
+    rm -f "$ENV_SOURCE_FILE.bak"
+fi
+# shellcheck source=/dev/null
+source "$ENV_SOURCE_FILE"
 
 GUID_PATTERN='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+for var_name in ENTRA_TENANT_ID ENTRA_FRONTEND_CLIENT_ID ENTRA_BACKEND_CLIENT_ID; do
+    val="${!var_name:-}"
+    if ! printf '%s' "$val" | grep -Eq "$GUID_PATTERN"; then
+        echo -e "${RED}Error: $var_name is not configured in $ENV_SOURCE_FILE${NC}" >&2
+        exit 1
+    fi
+done
 
-if ! printf '%s' "$ENTRA_TENANT_ID" | grep -Eq "$GUID_PATTERN"; then
-    echo -e "${RED}Error: ENTRA_TENANT_ID not configured in $ENV_SOURCE_FILE${NC}"
-    exit 1
-fi
-
-if ! printf '%s' "$ENTRA_FRONTEND_CLIENT_ID" | grep -Eq "$GUID_PATTERN"; then
-    echo -e "${RED}Error: ENTRA_FRONTEND_CLIENT_ID must be an application client ID GUID in $ENV_SOURCE_FILE${NC}"
-    exit 1
-fi
-
-if ! printf '%s' "$ENTRA_BACKEND_CLIENT_ID" | grep -Eq "$GUID_PATTERN"; then
-    echo -e "${RED}Error: ENTRA_BACKEND_CLIENT_ID must be an application client ID GUID in $ENV_SOURCE_FILE${NC}"
-    exit 1
-fi
-
-echo "  Tenant ID: $ENTRA_TENANT_ID"
-echo "  Frontend Client ID: $ENTRA_FRONTEND_CLIENT_ID"
-echo "  Backend Client ID: $ENTRA_BACKEND_CLIENT_ID"
-echo -e "${GREEN}✅ Entra ID configuration loaded${NC}"
-
-# Ensure we're in the frontend directory
-FRONTEND_DIR="$(dirname "$SCRIPT_DIR")/materials/frontend"
-
-if [ ! -f "$FRONTEND_DIR/package.json" ]; then
-    echo -e "${RED}Error: Cannot find frontend directory at $FRONTEND_DIR${NC}"
-    exit 1
-fi
-
+FRONTEND_DIR="$(cd "$SCRIPT_DIR/../materials/frontend" && pwd)"
 cd "$FRONTEND_DIR"
-echo "Working directory: $(pwd)"
-
-# Step 1: Query Azure resources
-echo ""
-echo -e "${YELLOW}Step 1: Querying Azure resources...${NC}"
 
 AZURE_ARGS=()
 if [ -n "${SUBSCRIPTION_ID:-}" ]; then
@@ -169,56 +124,34 @@ SWA_HOSTNAME="$(az staticwebapp show "${AZURE_ARGS[@]}" \
     --query defaultHostname -o tsv)"
 
 if [ -z "$SWA_HOSTNAME" ] || [ "$SWA_HOSTNAME" = null ]; then
-    echo -e "${RED}Error: No Static Web App found in resource group $RESOURCE_GROUP${NC}"
+    echo -e "${RED}Error: No Static Web App found in resource group $RESOURCE_GROUP${NC}" >&2
     exit 1
 fi
-echo "  SWA Hostname: $SWA_HOSTNAME"
 
-# Get SWA deployment token
-SWA_TOKEN=$(az staticwebapp secrets list "${AZURE_ARGS[@]}" \
+SWA_TOKEN="$(az staticwebapp secrets list "${AZURE_ARGS[@]}" \
     --resource-group "$RESOURCE_GROUP" \
-    --name "$SWA_NAME" --query "properties.apiKey" -o tsv)
+    --name "$SWA_NAME" --query "properties.apiKey" -o tsv)"
 
 if [ -z "$SWA_TOKEN" ] || [ "$SWA_TOKEN" = null ]; then
-    echo -e "${RED}Error: Could not get SWA deployment token${NC}"
+    echo -e "${RED}Error: Could not get SWA deployment token${NC}" >&2
     exit 1
 fi
 echo "  Deployment token acquired; no portion will be displayed."
 
-echo -e "${GREEN}✅ Azure resources found${NC}"
-
-# Step 2: Install dependencies and build
-echo ""
-echo -e "${YELLOW}Step 2: Building application...${NC}"
 npm ci --include=dev --registry=https://registry.npmjs.org
-# Force a production Vite build even if the Cloud Shell profile has NODE_ENV=development.
 NODE_ENV=production npm run build -- --mode production
-
-if grep -R "Loading from Vite environment variables (development)" dist/assets/*.js >/dev/null 2>&1; then
-    echo -e "${RED}Error: Frontend bundle was built in Vite development mode.${NC}"
-    echo "Unset NODE_ENV or rerun this script so it can force NODE_ENV=production."
+if [ ! -d dist/assets ] || [ ! -f dist/index.html ]; then
+    echo "Frontend build outputs are missing." >&2
     exit 1
 fi
-
-echo -e "${GREEN}✅ Build complete${NC}"
-
-# Step 3: Copy Static Web Apps routing config
-echo ""
-echo -e "${YELLOW}Step 3: Copying Static Web Apps config...${NC}"
-
-if [ -f "staticwebapp.config.json" ]; then
-    cp staticwebapp.config.json dist/staticwebapp.config.json
-    echo "  staticwebapp.config.json copied to dist/"
+if grep -R "Loading from Vite environment variables (development)" dist/assets/ >/dev/null; then
+    echo "Frontend bundle contains the development configuration path." >&2
+    exit 1
 else
-    echo -e "${RED}Error: staticwebapp.config.json not found in $FRONTEND_DIR${NC}"
-    exit 1
+    GREP_STATUS=$?
+    if [ "$GREP_STATUS" -ne 1 ]; then echo "Could not inspect frontend assets." >&2; exit 1; fi
 fi
-
-echo -e "${GREEN}✅ Static Web Apps config copied${NC}"
-
-# Step 4: Inject config into index.html (more secure than separate config.json)
-echo ""
-echo -e "${YELLOW}Step 4: Injecting config into index.html...${NC}"
+cp staticwebapp.config.json dist/staticwebapp.config.json
 
 ENTRA_TENANT_ID="$ENTRA_TENANT_ID" \
 ENTRA_FRONTEND_CLIENT_ID="$ENTRA_FRONTEND_CLIENT_ID" \
@@ -267,13 +200,6 @@ if (/window\.__APP_CONFIG__\s*=\s*(?:null|undefined|)\s*;/.test(verified)) {
 }
 NODE
 
-echo "  Config injected and verified in dist/index.html"
-echo -e "${GREEN}✅ Config injected (no separate config.json file)${NC}"
-
-# Step 5: Deploy to Static Web Apps
-echo ""
-echo -e "${YELLOW}Step 5: Deploying to Static Web Apps...${NC}"
-
 SWA_CLI_DEBUG=log SWA_CLI_DEPLOYMENT_TOKEN="$SWA_TOKEN" \
     swa deploy ./dist --env production --no-use-keychain --verbose log
 unset SWA_TOKEN
@@ -306,14 +232,6 @@ node -e '
   }
 ' "$HEALTH_RESPONSE"
 
-echo ""
-echo "=============================================="
-echo -e "${GREEN}✅ Deployment Complete!${NC}"
-echo "=============================================="
-echo ""
+echo "Deployment Complete!"
 echo "Frontend URL: https://$SWA_HOSTNAME"
-echo ""
-echo "Next steps:"
-echo "  1. Verify Entra ID Redirect URI includes: https://$SWA_HOSTNAME"
-echo "  2. Test the application at: https://$SWA_HOSTNAME"
-echo ""
+echo "Verify runtime config, redirect URIs, browser sign-in and the Linked Backend separately."

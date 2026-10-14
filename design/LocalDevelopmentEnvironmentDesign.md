@@ -1,6 +1,30 @@
 # Local Development Environment Design
 
-This document describes the local development environment architecture for the Azure PaaS Workshop.
+This document preserves an earlier local-development proposal, not the current
+Cloud Shell learner path or proof of Azure production parity.
+
+## Use local development without overstating parity
+
+Use the checked-in application/dev-environment source for current commands and
+the [validation gates](MaterialsValidationStrategy.md#use-the-current-release-acceptance-gates)
+for acceptance. Node 24 is the application baseline. SWA CLI's package is
+`@azure/static-web-apps-cli`, confirmed in the upstream v2.0.10 manifest.
+Do not substitute a similarly named unpublished package. A separate deployment-tool audit
+must pass before the CLI can satisfy the zero-advisory release gate.
+
+Vite/MongoDB can support isolated development, but local MongoDB is not a
+DocumentDB emulator and does not prove managed-service tier, API, firewall,
+DNS, routing, identity or restore compatibility. SWA's local authentication
+emulator does not validate real MSAL tokens, tenant self-consent or Linked
+Backend/EasyAuth behavior. Real Entra tests require the
+[Day 0 policy checks](../materials/docs/learner/day-0-entra-id.ja.md); do not
+fabricate consent or replace the learner's setup with organizer registration.
+
+The sections below retain original ideas and samples as **historical reference
+only**. Their installation commands, version pins, MongoDB compatibility
+assertions and "matches production exactly" claim are not normative. The
+[Cloud Shell path](../materials/docs/learner/cloud-shell-quickstart.ja.md)
+remains the learner default.
 
 ## Overview
 

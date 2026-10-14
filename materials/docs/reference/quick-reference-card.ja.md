@@ -6,12 +6,15 @@ title: クイックリファレンス
 
 Cloud Shell セッションが切れたときや、値を確認したいときに使うメモです。
 
+本線は **SWA Standard / App Service B1 / DocumentDB M25 / HA=false**。B1 の slots / zone redundancy、M25 の HA はありません。Contributor-only の RBAC・tenant consent・公開依存の block は [Day 0](../learner/day-0-prerequisites.ja.html) で確認し、quota や費用の成功を catalog だけで保証しません。
+
 ## 変数の復元
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load base || exit 1
 ```
 
 ## 主要変数
@@ -20,7 +23,8 @@ cd "$WORKSHOP_REPO_DIR"
 |---|---|
 | `WORKSHOP_REPO_DIR` | build/deploy 用のリポジトリ。通常は `~/Azure-PaaS-Workshop` |
 | `WORKSHOP_STATE_DIR` | 永続化 state。通常は `~/clouddrive/paas-workshop` |
-| `ENV_FILE` | 共通変数を保存するファイル |
+| `ENV_FILE` | version 付き JSON。保存値を `source` しない |
+| `SUBSCRIPTION_ID` | 保存した Azure subscription。実行時の CLI context と比較する |
 | `RESOURCE_GROUP` | ワークショップ用リソースグループ |
 | `LOCATION` | App Service / Cosmos DB / Key Vault のリージョン |
 | `SWA_LOCATION` | Static Web Apps のリージョン |
@@ -34,22 +38,27 @@ cd "$WORKSHOP_REPO_DIR"
 ## URL
 
 ```bash
+workshop_state_load deployed || exit 1
+APP_HOSTNAME="$(az webapp show --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" --query defaultHostName -o tsv)" || exit 1
 echo "Frontend: https://$SWA_HOSTNAME"
 echo "API via SWA: https://$SWA_HOSTNAME/api/health"
-echo "API direct: https://$APP_SERVICE_NAME.azurewebsites.net/health"
+echo "API direct: https://$APP_HOSTNAME/health"
 ```
 
 ## Health check
 
 ```bash
-curl -fsS "https://${APP_SERVICE_NAME}.azurewebsites.net/health" | jq .
-curl -fsS "https://${SWA_HOSTNAME}/api/health" | jq .
+node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
 ```
+
+公開契約の成功でも `workshopReady: false`。MSAL / consent / authenticated CRUD / telemetry / new release は [Day 1](../learner/day-1-validation.ja.html) で別確認します。復旧の [read-only observer](../learner/day-2-reliability.ja.html) は停止未観測を 0 秒成功とせず、viewCount は content integrity と別です。
 
 ## Deployment outputs
 
 ```bash
 az deployment group show \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
   --query properties.outputs \
@@ -59,33 +68,42 @@ az deployment group show \
 ## Backend deploy
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
-./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-backend.sh" "$RESOURCE_GROUP" "$APP_SERVICE_NAME" || exit 1
 ```
 
 ## Frontend deploy
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
-cat > "$WORKSHOP_STATE_DIR/deploy-frontend.local.env" <<EOF
-ENTRA_TENANT_ID="$TENANT_ID"
-ENTRA_FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
-ENTRA_BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
-EOF
-./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
+FRONTEND_ZIP="$WORKSHOP_STATE_DIR/frontend-$(node -p 'require("node:crypto").randomUUID()').zip"
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP" || exit 1
 ```
+
+許可済み HTTPS 保管先へこの ZIP だけを upload してから、次を実行し、temporary URL を非表示 prompt に入力します。保管先・費用が未承認ならここで止めます。
+
+```bash
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" deploy "$FRONTEND_ZIP" || exit 1
+```
+
+詳しい completion / readiness / owned artifact 削除手順は [Frontend deployment](../learner/day-1-deploy-frontend.ja.html) を参照します。ARM 経路から SWA CLI は実行しません。
 
 ## App Service logs
 
 ```bash
 az webapp log tail \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name "$APP_SERVICE_NAME"
 ```
+
+log stream は `Ctrl+C` で終了します。token / connection string / 本文 / 個人データを伏せ、未加工 logs を共有しません。telemetry は集計で確認し、0 件を監視成功とは解釈しません。
 
 ## Entra redirect URIs
 
@@ -99,7 +117,7 @@ az ad app show \
 ## Cleanup
 
 ```bash
-az group delete --name "$RESOURCE_GROUP" --yes --no-wait
-az ad app delete --id "$FRONTEND_CLIENT_ID"
-az ad app delete --id "$BACKEND_CLIENT_ID"
+bash "$WORKSHOP_REPO_DIR/scripts/cleanup-workshop.sh" || exit 1
 ```
+
+対象・タグ・所有アプリを確認し、専用 RG 全体の削除を明示的に承認します。詳細は [Cleanup](../learner/cleanup.ja.html)。JSON state とパラメータは削除確認後まで保持します。

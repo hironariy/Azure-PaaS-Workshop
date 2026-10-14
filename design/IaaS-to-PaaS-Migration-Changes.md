@@ -1,10 +1,36 @@
 # IaaS to PaaS Migration: Detailed Change Document
 
-## Overview
+## Review the current migration contract first
 
-This document provides a detailed, file-by-file comparison of what changes are required when migrating the blog application from the IaaS Workshop to the PaaS Workshop.
+This page preserves an early file-by-file proposal, **not a current migration
+patch or deployment runbook**. The snippets below do not describe the complete
+current source. In particular, "no changes required" is not acceptance evidence
+for models, authentication, middleware or managed-database behavior.
 
-**Source**: [IaaS Workshop materials](../iaas/materials/)
+Use the [current comparison](IaaS-PaaS-ComparisonMatrix.md),
+[backend design contract](BackendApplicationDesign.md),
+[database design contract](DatabaseDesign.md), actual source and
+[learner path](../materials/docs/learner/cloud-shell-quickstart.ja.md) for the
+reviewed baseline. The baseline is Node 24 production ZIP, SWA Standard Linked
+Backend, App Service B1, DocumentDB M25/HA=false, private data dependencies and
+Managed Identity/Key Vault RBAC. App Gateway, VM application/database tiers,
+private inbound App Service and mandatory GitHub deployment are not required.
+
+Review configuration/secret loading, startup readiness, anonymous published
+reads versus authenticated writes, runtime frontend IDs, route encoding and
+Unicode slug compatibility against the actual implementation. Run the
+[current acceptance gates](MaterialsValidationStrategy.md#use-the-current-release-acceptance-gates)
+before claiming parity: local MongoDB or mock success does not establish
+DocumentDB compatibility, private routing, browser consent, data preservation
+or recovery. Do not copy old connection/logging examples into diagnostic output.
+
+## Historical overview
+
+The following sections preserve the original comparison and design rationale.
+
+**Source for the current comparison**: [IaaS Workshop materials at the reviewed revision](https://github.com/hironariy/Azure-IaaS-Workshop/tree/5aa79ac5969e551f08295ad660f6b1ec6856eda6/materials).
+That revision uses three data-bearing MongoDB 8.0 members, not an arbiter.
+The historical snippets below predate that comparison and are not an exact diff.
 **Target**: PaaS Workshop materials
 
 ---

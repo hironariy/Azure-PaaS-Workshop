@@ -46,7 +46,7 @@ The application requires **two app registrations** in Microsoft Entra ID:
 - **Application Developer** in the target tenant, activated through PIM if applicable, for creating and configuring your own isolated workshop applications and consenting for yourself.
 - Azure Owner / Contributor is separate from Entra permissions. Application Administrator / Cloud Application Administrator / Global Administrator and tenant-wide consent are not prerequisites for the learner path.
 
-Use the [Cloud Shell Day 0 guide](../materials/docs/learner/day-0-entra-id.ja.md) as the canonical command path. The portal steps below explain the same registration settings. Self-consent remains subject to applicable policies, scopes and the CLI's Graph authorization; stop and diagnose actual errors instead of escalating roles or changing tenant policies.
+Use the [Cloud Shell Day 0 guide](../materials/docs/learner/day-0-entra-id.ja.md) as the canonical command path. The portal steps below explain the same registration settings. Self-consent remains subject to applicable policies, scopes and the CLI's Graph authorization; stop and diagnose actual errors instead of escalating roles or changing tenant policies. Do not replace existing grants on shared applications with repeated CLI `Principal` grants.
 
 ## Step 1: Get Your Tenant ID
 
@@ -227,7 +227,7 @@ VITE_API_CLIENT_ID=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
 
 #### "Consent required" error
 
-**Cause**: User hasn't consented to API permissions.
+**Cause**: Consent is absent or tenant policy blocks the user's request.
 
 **Fix**:
 1. Check the current tenant, user, Application Developer activation, owned applications, and the Principal grant using the guarded Day 0 procedure.

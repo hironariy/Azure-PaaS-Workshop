@@ -94,17 +94,16 @@ param appServiceSku string = 'B1'
   'M40'
   'M50'
 ])
-param cosmosDbTier string = 'M30'
+param cosmosDbTier string = 'M25'
 
 @description('Enable Cosmos DB High Availability')
 param cosmosDbEnableHa bool = false
 
-@description('Static Web Apps SKU')
+@description('Static Web Apps SKU: Standard is required for the linked App Service backend')
 @allowed([
-  'Free'
   'Standard'
 ])
-param staticWebAppSku string = 'Free'
+param staticWebAppSku string = 'Standard'
 
 @description('Static Web Apps location (limited regions available: westus2, centralus, eastus2, westeurope, eastasia)')
 @allowed([
@@ -228,18 +227,11 @@ module appService 'modules/appservice.bicep' = {
 // Update Key Vault RBAC for App Service
 // =============================================================================
 
-module keyVaultRbac 'modules/keyvault.bicep' = {
+module keyVaultRbac 'modules/keyvault-rbac.bicep' = {
   name: 'keyvault-rbac-deployment'
   params: {
-    environment: environment
-    location: location
-    baseName: baseName
-    uniqueSuffix: uniqueSuffix
-    privateEndpointSubnetId: network.outputs.privateEndpointSubnetId
-    keyVaultPrivateDnsZoneId: network.outputs.keyVaultPrivateDnsZoneId
-    tenantId: entraTenantId
+    keyVaultName: keyVault.outputs.keyVaultName
     appServicePrincipalId: appService.outputs.appServicePrincipalId
-    tags: tags
   }
 }
 
@@ -326,19 +318,7 @@ output recommendedResourceGroupName string = empty(groupId)
 // =============================================================================
 // After deployment, complete these manual steps:
 //
-// 1. Get Static Web Apps deployment token:
-//    az staticwebapp secrets list --name <swa-name> --query "properties.apiKey" -o tsv
-//
-// 2. Configure GitHub secrets:
-//    - AZURE_STATIC_WEB_APPS_API_TOKEN: <token from step 1>
-//
-// 3. Update Entra ID App Registration redirect URIs:
-//    - Frontend: https://<swa-url>/.auth/login/aad/callback
-//
-// 4. The SWA Linked Backend automatically proxies /api/* requests to App Service
-//    No additional configuration needed for API routing.
-//
-// 5. Deploy backend to App Service:
-//    az webapp deploy --resource-group <rg> --name <app-service-name> --src-path dist.zip --type zip
-//    az webapp config set --resource-group <rg> --name <app-service-name> --startup-file "node dist/src/app.js"
+// Follow materials/docs/learner/day-1-deploy-{backend,frontend}.ja.md.
+// Register the SWA origin as the Frontend SPA redirect URI, not an EasyAuth callback.
+// The state-scoped scripts deploy without printing SWA tokens or parameter secrets.
 // =============================================================================

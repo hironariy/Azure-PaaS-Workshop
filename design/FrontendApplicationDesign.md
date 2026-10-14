@@ -4,7 +4,12 @@
 
 This document defines the frontend application requirements for the Azure PaaS Workshop blog application. The application is deployed on Azure Static Web Apps.
 
-**Reference**: This specification maintains feature compatibility with the [IaaS Workshop Frontend](../iaas/design/FrontendApplicationDesign.md) while adapting deployment patterns for Static Web Apps.
+**Current deployment reference**: [learner frontend guide](../materials/docs/learner/day-1-deploy-frontend.ja.md)
+and [baseline comparison](IaaS-PaaS-ComparisonMatrix.md). Use actual source,
+manifest and lockfile for library/API versions. Detailed UI/code/workflow
+examples below are retained design proposals, not verified executable steps.
+The baseline uses SWA Standard, public runtime IDs, `/api` linked backend and
+origin-based MSAL redirect; no client secret or gateway rewrite.
 
 ## Application Overview
 
@@ -765,14 +770,14 @@ export default defineConfig({
 | Aspect | IaaS (NGINX) | PaaS (Static Web Apps) |
 |--------|--------------|------------------------|
 | **Hosting** | 2 VMs with NGINX | Globally distributed points |
-| **Deployment** | SCP + NGINX reload | Git push → GitHub Actions |
+| **Deployment** | SCP + NGINX reload | Cloud Shell build/runtime config → SWA; Actions optional |
 | **SSL** | App Gateway cert | Automatic (free) |
 | **CDN** | Manual setup | Built-in global distribution (Enterprise edge for 118+ locations) |
 | **Custom Domain** | DNS + App Gateway | DNS + SWA portal |
 | **Scaling** | Add VMs | Automatic (CDN) |
-| **Cost** | ~$60/month (2 VMs) | $0 (Free tier) |
-| **CI/CD** | Manual scripts | Built-in GitHub Actions |
-| **Proxy Config** | nginx.conf | staticwebapp.config.json |
+| **Cost** | Actual VM/disks/network quote | SWA Standard required for linked App Service |
+| **CI/CD** | Check sister implementation | Optional GitHub Actions, not learner prerequisite |
+| **Proxy Config** | nginx.conf | Standard Linked Backend; no gateway URL rewrite |
 
 ---
 

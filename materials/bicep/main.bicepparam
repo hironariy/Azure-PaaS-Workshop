@@ -34,7 +34,7 @@ param baseName = 'blogapp'
 
 // Deployment mode
 // - 'standard': existing workshop flow (App Service code deployment + SWA linked backend)
-// - 'fastpath-container': prebuilt container image on App Service (no SWA linked backend deployment)
+// - 'fastpath-container': prebuilt container image on App Service, with SWA linked backend
 param deploymentMode = 'standard'
 
 // REQUIRED only when deploymentMode = 'fastpath-container'
@@ -71,7 +71,7 @@ param entraFrontendClientId = '<frontend-app-id>'  // Frontend SPA app registrat
 param cosmosDbAdminPassword = '<your-secure-password>'
 
 // =============================================================================
-// Optional Parameters - Defaults are suitable for workshop
+// Optional Parameters - This template explicitly selects M30, not the M25 learner baseline
 // =============================================================================
 
 // App Service SKU: B1 (Basic) for workshop, S1+ for production
@@ -86,9 +86,8 @@ param cosmosDbTier = 'M30'
 // false for workshop, true for production
 param cosmosDbEnableHa = false
 
-// Static Web Apps SKU: Free for workshop
-// Free = $0, Standard = ~$9/month (custom domains, more bandwidth)
-param staticWebAppSku = 'Free'
+// Standard is required for the App Service linked backend in both deployment modes.
+param staticWebAppSku = 'Standard'
 
 // Static Web Apps location (not available in all regions)
 // Available regions: westus2, centralus, eastus2, westeurope, eastasia

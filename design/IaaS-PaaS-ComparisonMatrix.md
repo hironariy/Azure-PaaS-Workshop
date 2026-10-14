@@ -4,7 +4,10 @@
 
 **Status**: 🚧 DRAFT - Pending Review
 
-**Last Updated**: 2026-01-27
+**Comparison baseline**: [IaaS README revision 5aa79ac](https://github.com/hironariy/Azure-IaaS-Workshop/blob/5aa79ac5969e551f08295ad660f6b1ec6856eda6/README.md)
+and the PaaS [current implementation contract](RepositoryWideDesignRules.md#current-baseline-contract).
+IaaS uses three data-bearing MongoDB 8.0 members across zones 1/2/3, no arbiter.
+The PaaS baseline is B1/M25/HA=false, not a like-for-like availability guarantee.
 
 ---
 
@@ -25,11 +28,11 @@
 
 | Tier | IaaS Workshop | PaaS Workshop |
 |------|---------------|---------------|
-| **WAF/Gateway** | Application Gateway with WAF v2 | **Not required** (Entra ID auth) |
+| **WAF/Gateway** | Application Gateway with WAF v2 | Not deployed; Entra is not a WAF replacement |
 | **Web Tier** | NGINX on Ubuntu VMs (2 instances, AZ spread) | **Azure Static Web Apps** (globally distributed) |
 | **App Tier** | Express/Node.js on Ubuntu VMs (2 instances) | **Azure App Service** (Linux, Node.js) |
 | **Load Balancing** | Internal Load Balancer between Web→App | Built-in (**SWA Linked Backend**) |
-| **DB Tier** | MongoDB Replica Set on VMs (2 nodes) | **Azure Cosmos DB for MongoDB vCore** |
+| **DB Tier** | MongoDB Replica Set, 3 data-bearing members | **Azure DocumentDB / MongoDB vCore M25, HA=false** |
 | **Networking** | VNet, Subnets, NSGs, NAT Gateway | VNet Integration, Private Endpoints (DB/KV only) |
 
 ### 2.2 Architecture Diagrams
@@ -42,7 +45,7 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 **PaaS Architecture:**
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│  Static Asset Flow (No WAF needed - read-only content with built-in protection) │
+│  Static Asset Flow (baseline does not deploy a separate WAF)                   │
 │                                                                                 │
 │  Browser ──→ Internet ──→ Static Web Apps (React SPA)                           │
 │                           └── Built-in: Global CDN, Free SSL, DDoS protection   │
@@ -58,10 +61,10 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 
 **Why No Application Gateway for PaaS?**
 - SWA serves **read-only static assets** (HTML, CSS, JS, images)
-- API is protected by **Entra ID authentication** at application level
+- Published reads/health are public; writes require Entra authentication and application authorization
 - **SWA Linked Backend** provides automatic routing to App Service
 - No SSL certificate management needed (Azure handles HTTPS)
-- **Cost savings**: ~$250/month (App Gateway WAF v2)
+- Avoids App Gateway resource costs; estimate actual SWA Standard/NAT/data/telemetry costs separately
 - **Simplicity**: No self-signed certificate issues
 
 ---
@@ -72,23 +75,23 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 
 | Aspect | IaaS (NGINX on VMs) | PaaS (Static Web Apps) |
 |--------|---------------------|------------------------|
-| **Deployment** | Build → SCP to VM → NGINX config | Build → GitHub Actions → SWA |
+| **Deployment** | Build → SCP to VM → NGINX config | Cloud Shell build/runtime config → SWA; Actions optional |
 | **Scaling** | Manual (add VMs) | Automatic (global CDN) |
 | **SSL/TLS** | App Gateway terminates | Built-in free SSL |
 | **Custom Domain** | DNS + App Gateway config | DNS + SWA custom domain |
-| **Cost** | VM hours + disks | Free tier available |
+| **Cost** | VM hours + disks | Standard required for linked backend |
 | **Ops Overhead** | High (OS patching, NGINX config) | Near zero |
 
 ### 3.2 App/Backend Tier
 
 | Aspect | IaaS (Express on VMs) | PaaS (App Service) |
 |--------|----------------------|-------------------|
-| **Deployment** | SCP + PM2/systemd restart | Git push / GitHub Actions |
-| **Scaling** | Manual (add VMs + LB config) | Auto-scale rules (CPU, memory, HTTP) |
+| **Deployment** | SCP + PM2/systemd restart | Cloud Shell production ZIP; Actions optional |
+| **Scaling** | Manual (add VMs + LB config) | B1 baseline; autoscale requires supported higher tier |
 | **Environment Variables** | VM env files / Custom Script | App Service Configuration |
 | **SSL/TLS** | Internal (HTTP within VNet) | HTTPS enforced, managed certs |
 | **Managed Identity** | VM System-assigned MI | App Service System-assigned MI |
-| **Deployment Slots** | N/A (blue-green via LB) | Built-in staging slots |
+| **Deployment Slots** | N/A (blue-green via LB) | Not on B1; optional supported tier |
 | **Cost** | VM hours | App Service Plan (B1/S1/P1v3) |
 | **Ops Overhead** | High (OS patching, process mgmt) | Low (platform managed) |
 
@@ -97,16 +100,16 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 | Aspect | IaaS (MongoDB on VMs) | PaaS (Cosmos DB for MongoDB vCore) |
 |--------|----------------------|------------------------------------|
 | **Service Type** | Self-managed MongoDB | Fully managed, MongoDB-compatible |
-| **Foundation** | MongoDB Community Edition | Cosmos DB engine with MongoDB wire protocol |
+| **Foundation** | MongoDB Community Edition | Managed MongoDB-compatible service; verify feature compatibility |
 | **Deployment** | VM setup + RS initialization | Bicep resource creation (cluster) |
-| **High Availability** | Manual RS config (2 nodes) | Built-in HA (99.995% SLA) |
+| **High Availability** | 3 data-bearing members across zones | M25 has no in-region HA; baseline does not enable HA |
 | **Scaling** | Vertical (larger VMs) | Vertical (vCore tiers) + Horizontal (sharding) |
-| **Backup** | Azure Backup + mongodump | Automatic continuous backup (PITR) |
+| **Backup** | Azure Backup + mongodump | Managed backup/restore subject to tier/retention; restore not rehearsed |
 | **Connection** | mongodb:// connection string | mongodb+srv:// connection string (compatible) |
 | **SDK** | Mongoose ODM | Mongoose ODM (compatible) |
-| **Global Distribution** | N/A | Optional geo-replicas |
+| **Global Distribution** | N/A | Not configured; optional design requires tier/region/approval |
 | **Vector Search** | Manual setup required | Built-in vector search support |
-| **Cost** | VM hours + Premium SSD | vCore-based (M30: ~$200/mo, predictable) |
+| **Cost** | VM hours + disks for 3 members | M25 + storage; dated regional estimate required |
 | **Ops Overhead** | High (patching, RS management) | Near zero (fully managed) |
 
 ### 3.4 Networking & Security
@@ -115,7 +118,7 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 |--------|------|------|
 | **Network Isolation** | VNet + Subnets + NSGs | VNet Integration + Private Endpoints (DB/KV) |
 | **Bastion Access** | Azure Bastion → SSH to VMs | N/A (no VMs to SSH into) |
-| **Firewall Rules** | NSG rules per subnet | Entra ID auth (app level) |
+| **Firewall Rules** | NSG rules per subnet | Data-service firewall/PE/DNS; Entra is a separate app-layer control |
 | **API Protection** | Application Gateway WAF | **Entra ID + input validation** |
 | **Private Connectivity** | Internal IPs within VNet | Private Endpoints for Cosmos DB/Key Vault |
 | **API Routing** | NGINX proxy_pass | **SWA Linked Backend** |
@@ -140,14 +143,14 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 |-----------|--------------------|-----------------------|
 | **Build Output** | Static files → NGINX | Static files → SWA |
 | **API Proxy** | NGINX proxy_pass | **SWA Linked Backend** (automatic) |
-| **Environment** | Build-time VITE_API_URL | SWA environment variables |
+| **Environment** | Check actual sister runtime configuration | Public window.__APP_CONFIG__ injected into build; API base /api |
 
 ### 4.3 Infrastructure as Code
 
 | Component | IaaS (Bicep) | PaaS (Bicep) |
 |-----------|--------------|--------------|
 | **Compute** | VM resources, extensions, availability sets | App Service Plan + Web App |
-| **Database** | VM resources + Custom Script for MongoDB | Cosmos DB account + database (Microsoft.DocumentDB/mongoClusters) |
+| **Database** | VM resources + Custom Script for MongoDB | Managed cluster (Microsoft.DocumentDB/mongoClusters), not RU account |
 | **Networking** | VNet, subnets, NSGs, LBs | VNet, Private Endpoints (DB/KV), VNet Integration |
 | **Gateway** | Application Gateway | **Not required** (SWA Linked Backend) |
 | **Secrets** | Key Vault + VM MI | Key Vault + App Service MI |
@@ -167,13 +170,13 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 
 ### 5.2 PaaS Workshop Objectives
 - ✅ Compare IaaS vs PaaS trade-offs
-- ✅ Deploy App Service with deployment slots
+- ✅ Deploy App Service B1; compare slots as optional supported-tier capability
 - ✅ Configure Cosmos DB for MongoDB vCore (data modeling, indexing)
 - ✅ Use Static Web Apps for frontend hosting
 - ✅ Configure **SWA Linked Backend** for API routing
 - ✅ Implement VNet Integration and Private Endpoints (DB/Key Vault)
 - ✅ Understand **Entra ID authentication** as security boundary
-- ✅ Understand auto-scaling and cost optimization
+- ✅ Understand SKU-dependent scaling, HA constraints and cost estimation
 - ✅ Learn Cosmos DB benefits (global distribution options, vector search)
 
 ---
@@ -189,13 +192,16 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 | **Cosmos DB NoSQL API** | Best Cosmos DB features, highest performance | Requires complete SDK rewrite | Not recommended (too different from IaaS) |
 | **Azure DocumentDB** | 99.03% MongoDB compatible, open-source (MIT), multi-cloud | Newer service with less documentation available | Alternative for multi-cloud focus |
 
-**Decision**: ✅ **Cosmos DB for MongoDB vCore** - Selected for its mature ecosystem, extensive documentation and tutorials, good MongoDB compatibility, and familiar vCore pricing model that workshop participants can easily understand.
+**Current decision**: the implementation uses `Microsoft.DocumentDB/mongoClusters`
+(Azure DocumentDB / formerly Cosmos DB for MongoDB vCore). The options table
+above is historical selection context, not proof of SLA, compatibility percentage
+or enabled cross-region features. It must not be confused with RU Cosmos DB quotas.
 
 ### 6.2 Frontend Hosting
 
 | Option | Pros | Cons | Recommendation |
 |--------|------|------|----------------|
-| **Static Web Apps** | Free tier, global CDN, GitHub integration | Different from IaaS pattern | ✅ Shows PaaS benefits clearly |
+| **Static Web Apps** | Standard linked API, global distribution | Standard cost/eligibility required | ✅ Selected |
 | **App Service (static)** | Similar to App tier | Overkill for static files | Not recommended |
 | **Azure Storage static** | Simple, cheap | No built-in CI/CD | Alternative option |
 
@@ -212,7 +218,10 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 
 ---
 
-## 7. Next Steps
+## 7. Historical implementation checklist
+
+This original checklist is retained for context, not current readiness.
+Use the learner path and issue/PR acceptance evidence for release decisions.
 
 1. [x] ~~Finalize Database service choice~~ → **Cosmos DB for MongoDB vCore**
 2. [x] ~~Finalize Frontend hosting~~ → **Static Web Apps (direct access, no App GW)**
@@ -229,15 +238,14 @@ Internet → App Gateway (WAF) → Web VMs (NGINX) → Internal LB → App VMs (
 
 ---
 
-## Appendix: Cost Comparison Estimates
+## Appendix: Compare costs without false equivalence
 
-| Component | IaaS Monthly Cost (Est.) | PaaS Monthly Cost (Est.) | Notes |
-|-----------|--------------------------|--------------------------|-------|
-| Web Tier | 2x Standard_B2s (~$60) | SWA Free tier ($0) | SWA Linked Backend for API |
-| App Tier | 2x Standard_B2s (~$60) | App Service B1 (~$13) | Public access, Entra ID auth |
-| DB Tier | 2x Standard_B4ms (~$240) | Cosmos DB vCore M30 (~$200) | Managed MongoDB compatible |
-| App Gateway | WAF v2 (~$250) | **$0** (not used) | SWA Linked Backend instead |
-| NAT Gateway | N/A | ~$45 | Required for VNet Integration |
-| **Total** | **~$610/month** | **~$260/month** | **~57% cost reduction** |
+Use a dated regional/currency quote for each actual topology. Include the
+IaaS three DB members/disks/backup and its network resources; include PaaS
+SWA Standard, B1, M25/storage, two private endpoints, NAT/public IP/data,
+Key Vault and telemetry ingestion/retention. Do not promise a percentage
+saving from obsolete two-node/Free-SWA monthly totals.
 
-*Note: Estimates for Japan East region, actual costs vary by usage*
+B1/M25/HA=false is not equivalent to the sister's zone-spread replica set.
+Compare TCO, operating responsibility **and availability requirements**, not
+resource price alone. See the [baseline cost checklist](../materials/bicep/README.md#estimate-costs-for-the-actual-baseline).

@@ -15,28 +15,44 @@ Azure リソース側の受講前提はサブスクリプションの **Owner** 
 ## 1. 名前を決める
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load base || exit 1
 
 export BACKEND_APP_NAME="paas-blog-backend-${GROUP_ID}"
 export FRONTEND_APP_NAME="paas-blog-frontend-${GROUP_ID}"
-export ACCESS_SCOPE_ID="$(uuidgen)"
+export ACCESS_SCOPE_ID="${ACCESS_SCOPE_ID:-$(node -p 'require("node:crypto").randomUUID()')}"
+SIGNED_IN_USER_ID="$(az ad signed-in-user show --query id -o tsv)" || exit 1
+workshop_state_save base || exit 1
 ```
 
-このページのアプリ登録作成は初回だけ実行します。再接続時は保存した Client ID を復元し、同じ名前で作り直さないでください。1 組の Backend / Frontend は作成者本人の演習専用とし、他グループや複数受講者で同意コマンドを共有・並行実行しません。
+保存済みの `BACKEND_CLIENT_ID` / `FRONTEND_CLIENT_ID` がある場合、以下のコードは作成を省略して既存アプリを確認します。削除済み・権限不足・tenant 不一致を区別し、新しいアプリを無断で作成しません。1 組の Backend / Frontend は作成者本人の演習専用とし、他グループや複数受講者で同意コマンドを共有・並行実行しません。
 
 ## 2. Backend API アプリ登録を作成する
 
 ```bash
-export BACKEND_CLIENT_ID="$(az ad app create \
-  --display-name "$BACKEND_APP_NAME" \
-  --sign-in-audience AzureADMyOrg \
-  --query appId -o tsv)"
+if [ -z "$BACKEND_CLIENT_ID" ]; then
+  BACKEND_CLIENT_ID="$(az ad app create \
+    --display-name "$BACKEND_APP_NAME" \
+    --sign-in-audience AzureADMyOrg \
+    --query appId -o tsv)" || exit 1
+  export BACKEND_CLIENT_ID
+else
+  az ad app show --id "$BACKEND_CLIENT_ID" --output none || exit 1
+fi
+workshop_state_save base || exit 1
 
-export BACKEND_OBJECT_ID="$(az ad app show \
+BACKEND_OBJECT_ID="$(az ad app show \
   --id "$BACKEND_CLIENT_ID" \
-  --query id -o tsv)"
+  --query id -o tsv)" || exit 1
+export BACKEND_OBJECT_ID
+
+APP_OWNERS="$(az ad app owner list --id "$BACKEND_CLIENT_ID" -o json)" || exit 1
+printf '%s' "$APP_OWNERS" | jq -e --arg user "$SIGNED_IN_USER_ID" 'any(.[]; .id == $user)' >/dev/null || {
+  echo "自分が所有する Backend アプリでないため、変更を停止します。"
+  exit 1
+}
 
 az ad app update \
   --id "$BACKEND_CLIENT_ID" \
@@ -44,6 +60,10 @@ az ad app update \
 ```
 
 `access_as_user` スコープを追加します。
+
+Backend は `api://$BACKEND_CLIENT_ID/access_as_user` を要求した **user access token** を検証します。token の `aud` は v1 では Backend の GUID または `api://$BACKEND_CLIENT_ID`、v2 では Backend の GUID です。scope を要求する URI と、token に返る audience の表現は同じとは限りません。Frontend の ID token、app-only role token、別 API の token は代替にしません。
+
+API は signature / tenant issuer / expiry / Backend audience と、`scp` の `access_as_user`、user identity を検査します。無効な token は 401、正しい user resource token でも必要 scope がなければ 403 です。403 の場合は Frontend の API permission 要求と実際の consent/grant を確認し、tenant policy を無断で変更しません。token 本文を教材・ログ・Issue に貼り付けないでください。
 
 > `az ad app update --set api.oauth2PermissionScopes=...` は、新規 app registration の `api` プロパティがまだ初期化されていない場合に `Couldn't find 'api' in ''` で失敗することがあります。この手順では Microsoft Graph の application object ID (`BACKEND_OBJECT_ID`) に対して `az rest` で PATCH します。`BACKEND_OBJECT_ID` が空だと `/applications/` への PATCH になり `Method Not Allowed` になるため、PATCH 直前に再取得して確認します。
 
@@ -94,14 +114,27 @@ az ad app show \
 ## 3. Frontend SPA アプリ登録を作成する
 
 ```bash
-export FRONTEND_CLIENT_ID="$(az ad app create \
-  --display-name "$FRONTEND_APP_NAME" \
-  --sign-in-audience AzureADMyOrg \
-  --query appId -o tsv)"
+if [ -z "$FRONTEND_CLIENT_ID" ]; then
+  FRONTEND_CLIENT_ID="$(az ad app create \
+    --display-name "$FRONTEND_APP_NAME" \
+    --sign-in-audience AzureADMyOrg \
+    --query appId -o tsv)" || exit 1
+  export FRONTEND_CLIENT_ID
+else
+  az ad app show --id "$FRONTEND_CLIENT_ID" --output none || exit 1
+fi
+workshop_state_save base || exit 1
 
-export FRONTEND_OBJECT_ID="$(az ad app show \
+FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
-  --query id -o tsv)"
+  --query id -o tsv)" || exit 1
+export FRONTEND_OBJECT_ID
+
+APP_OWNERS="$(az ad app owner list --id "$FRONTEND_CLIENT_ID" -o json)" || exit 1
+printf '%s' "$APP_OWNERS" | jq -e --arg user "$SIGNED_IN_USER_ID" 'any(.[]; .id == $user)' >/dev/null || {
+  echo "自分が所有する Frontend アプリでないため、変更を停止します。"
+  exit 1
+}
 ```
 
 Cloud Shell では本番の Static Web Apps URL がまだ分からないため、まずローカル/検証用 URI を入れておきます。Day 1 のデプロイ後に SWA URL を追加します。
@@ -118,9 +151,10 @@ fi
 
 echo "FRONTEND_OBJECT_ID=$FRONTEND_OBJECT_ID"
 
-SPA_PATCH="$(jq -nc '{
+EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)" || exit 1
+SPA_PATCH="$(jq -nc --argjson existing "$EXISTING_REDIRECTS" '{
   spa: {
-    redirectUris: ["http://localhost:4280"]
+    redirectUris: (($existing // []) + ["http://localhost:4280"] | unique)
   }
 }')"
 
@@ -256,9 +290,8 @@ az ad app permission list \
   --id "$FRONTEND_CLIENT_ID" \
   -o jsonc
 
-az ad app permission list-grants \
-  --id "$FRONTEND_CLIENT_ID" \
-  -o jsonc
+az ad app owner list --id "$BACKEND_CLIENT_ID" --query "[].id" -o jsonc
+az ad app owner list --id "$FRONTEND_CLIENT_ID" --query "[].id" -o jsonc
 ```
 
 確認の見方:
@@ -266,6 +299,7 @@ az ad app permission list-grants \
 | 確認先 | 何を見ているか | 期待値 |
 |---|---|---|
 | `az ad app permission list` | Frontend app registration の API permission 要求 (`requiredResourceAccess`) | Backend API の `access_as_user` が含まれる |
+| `az ad app owner list` | 登録アプリの所有者 | 自分のユーザー object ID が含まれる。グループ専用アプリ以外は変更しない |
 | `az ad app permission list-grants` | Frontend service principal に対する delegated permission grant | `clientId` は Frontend **service principal object ID**、`resourceId` は Backend **service principal object ID**。`scope` に `access_as_user`、`consentType` は `Principal`、`principalId` はサインイン中の本人の **user object ID** |
 | Azure Portal の **App registrations > Frontend > API permissions** | `requiredResourceAccess` の表示 | 反映に時間がかかる場合があります。ブラウザー更新、Portal 再ログイン、対象 tenant/app の確認を行います。 |
 
@@ -283,33 +317,46 @@ az ad app show \
 Cloud Shell のセッション切断に備え、再利用する値を Azure Files 側の state ファイルに保存します。
 
 ```bash
-cat > "$ENV_FILE" <<EOF
-export WORKSHOP_REPO_DIR="$WORKSHOP_REPO_DIR"
-export WORKSHOP_STATE_DIR="$WORKSHOP_STATE_DIR"
-export ENV_FILE="$ENV_FILE"
-export LOCATION="$LOCATION"
-export SWA_LOCATION="$SWA_LOCATION"
-export BASE_NAME="$BASE_NAME"
-export GROUP_ID="$GROUP_ID"
-export RESOURCE_GROUP="$RESOURCE_GROUP"
-export PARAM_FILE="$PARAM_FILE"
-export TENANT_ID="$TENANT_ID"
-export BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
-export FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
-export ACCESS_SCOPE_ID="$ACCESS_SCOPE_ID"
-EOF
-
-cat "$ENV_FILE"
+workshop_state_save identity || exit 1
+printf 'State saved: %s\n' "$ENV_FILE"
 ```
 
 次回 Cloud Shell を開いたら、次で復元できます。
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load identity || exit 1
 ```
 
 ## 次に進む
 
 - [Day 1: PaaS インフラをデプロイ](day-1-deploy-infrastructure.ja.html)
+
+## Day 1 のサインイン後に自己同意を検証する
+
+Frontend の SWA URL を SPA redirect URI に追加し、デプロイした画面の **Sign in with Microsoft** から同じテナントの受講者アカウントでサインインします。要求先が自分の Backend API の `api://<BACKEND_CLIENT_ID>/access_as_user` であることを同意画面で確認します。管理者の承認が必要と表示されたら、その時点で本線はブロックです。テナント設定を変更しません。
+
+次の確認は service principal が作成された**サインイン後**に行います。Client ID と service principal object ID は別です。Cloud Shell とブラウザーで異なるアカウントを使わないでください。
+
+```bash
+BACKEND_SP_ID="$(az ad sp show --id "$BACKEND_CLIENT_ID" --query id -o tsv)"
+FRONTEND_SP_ID="$(az ad sp show --id "$FRONTEND_CLIENT_ID" --query id -o tsv)"
+SIGNED_IN_USER_ID="$(az ad signed-in-user show --query id -o tsv)"
+
+if [ -z "$BACKEND_SP_ID" ] || [ -z "$FRONTEND_SP_ID" ] || [ -z "$SIGNED_IN_USER_ID" ]; then
+  echo "同意検証に必要な object ID を取得できません。tenant、アカウント、Graph 読み取り権限を確認してください。"
+  exit 1
+fi
+
+az ad app permission list-grants --id "$FRONTEND_CLIENT_ID" \
+  --query "[?clientId=='$FRONTEND_SP_ID' && resourceId=='$BACKEND_SP_ID'].{clientId:clientId,resourceId:resourceId,consentType:consentType,principalId:principalId,scope:scope}" \
+  -o jsonc
+```
+
+自己同意の期待値は `consentType: Principal`、`principalId: <SIGNED_IN_USER_ID>`、`scope` の空白区切りの値に `access_as_user` があることです。`AllPrincipals` / `principalId: null` は組織全体同意であり、自己同意成功の証拠ではありません。読み取りが拒否された場合も「grant がない」とは断定せず、検証不能として記録します。
+
+続けて [アプリ検証](day-1-validation.ja.html) の認証付き記事作成を行います。同意、API の audience/scope、アプリ起動・DB 接続は別々の検証です。トークンをログへ出力したり、外部の解析サイトへ送信したりしないでください。管理者による組織全体同意は [インストラクターガイド（GitHub 上の補足資料）](https://github.com/hironariy/Azure-PaaS-Workshop/blob/main/docs/instructor-guide.ja.md) の任意例外で、本線の自己完結の証拠にはなりません。
+
+参考: [Microsoft Graph: delegated permission grant](https://learn.microsoft.com/en-us/graph/api/oauth2permissiongrant-post)、[ユーザー同意の設定](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/configure-user-consent)、[Azure CLI: permission grant](https://learn.microsoft.com/en-us/cli/azure/ad/app/permission#az-ad-app-permission-grant)。

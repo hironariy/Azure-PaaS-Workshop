@@ -4,14 +4,18 @@
 
 This document defines the database architecture and schema requirements for the Azure PaaS Workshop blog application using Azure Cosmos DB for MongoDB vCore.
 
-**Reference**: The schema design is compatible with the [IaaS Workshop MongoDB schema](../iaas/design/DatabaseDesign.md) to enable direct comparison and minimal code changes.
+**Baseline reference**: [current implementation contract](RepositoryWideDesignRules.md#current-baseline-contract)
+and [comparison revision](IaaS-PaaS-ComparisonMatrix.md). Treat schema/index/code
+examples below as design proposals; actual backend models and migrations are
+the source of truth. Managed service does not eliminate data/auth/query/restore
+responsibility, and local fixtures are not DB acceptance.
 
 ## Database Overview
 
 - **Database Service**: Azure Cosmos DB for MongoDB vCore
 - **MongoDB Wire Protocol**: Compatible (MongoDB 6.0+)
-- **Deployment Pattern**: Managed cluster with built-in HA
-- **Backup Strategy**: Automatic continuous backup with PITR
+- **Deployment Pattern**: Managed M25 Dev/Test cluster, one shard, HA=false
+- **Backup Strategy**: Verify actual tier/retention/restore capability; restore not rehearsed
 - **Target Users**: Workshop students learning PaaS database patterns
 - **Educational Focus**: Demonstrate managed MongoDB migration, minimal code changes
 
@@ -25,26 +29,24 @@ This document defines the database architecture and schema requirements for the 
 
 | Aspect | IaaS (MongoDB on VMs) | PaaS (Cosmos DB vCore) |
 |--------|----------------------|------------------------|
-| **Nodes** | 2 VMs (manual RS) | Managed cluster (HA built-in) |
-| **Failover** | Manual intervention (2-node) | Automatic (managed) |
+| **Nodes** | 3 data-bearing members, no arbiter | M25, one shard, HA=false |
+| **Failover** | Replica-set election subject to quorum | Baseline has no in-region HA; restart is not DB failover |
 | **Backup** | Azure Backup + mongodump | Continuous backup (PITR) |
 | **Patching** | Manual OS/MongoDB updates | Fully managed |
 | **Scaling** | Vertical (larger VMs) | Vertical (tier upgrade) |
 
 #### Recommended Tier for Workshop
 
-| Tier | vCores | Memory | Storage | Use Case |
-|------|--------|--------|---------|----------|
-| M25 | 2 | 8 GB | 32 GB | Minimum viable |
-| **M30** | 2 | 8 GB | 128 GB | ✅ Workshop recommended |
-| M40 | 4 | 16 GB | 128 GB | Production |
-| M50 | 8 | 32 GB | 128 GB | High performance |
+| Tier | Workshop use | Constraints |
+|---|---|---|
+| **M25** | Baseline Dev/Test; template selects 128 GiB | One shard, no HA; supported 32/64/128 GiB storage; verify subscription eligibility |
+| M30+ | Optional approved sizing / resilience design | Verify supported HA/region/quota/cost; cannot scale back to M25 |
 
-**Workshop Choice: M30**
-- Sufficient compute for 20-30 concurrent users
-- 128 GB storage for blog data with room to grow
-- HA enabled within region
-- Cost-effective for learning environment (~$200/month)
+The baseline has not been capacity-tested for a promised concurrent-user count.
+An M30 tier or `environment='prod'` alone does not enable HA. Existing M30+
+deployments must preserve their actual tier explicitly during redeploy, not
+inherit the new fresh-baseline M25 default. Upgrade is not a reversible workshop
+toggle. Use actual SKU properties/pricing rather than unverified memory/price tables.
 
 ### Connection Configuration
 
@@ -504,21 +506,18 @@ resource cosmosDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
 
 ### Right-sizing Recommendations
 
-| Workshop Phase | Tier | Monthly Cost | Reason |
-|----------------|------|--------------|--------|
-| Development | M25 | ~$100 | Minimal testing |
-| Workshop Active | M30 | ~$200 | 20-30 users |
-| Post-Workshop | Delete or M25 | $0-100 | Reduce when idle |
+| Workshop Phase | Tier / action | Verification |
+|---|---|---|
+| Development / learner baseline | M25 / HA=false | Region, eligibility, storage, quotas/capacity and dated quote |
+| Optional scale/resilience | Supported M30+ | Additional approval, cost, availability, irreversible downgrade constraint |
+| Post-workshop | Owned verified cleanup | Stopping app does not remove DB/storage/NAT charges |
 
 ### Cost Comparison
 
-| Component | IaaS (2 VMs) | PaaS (M30) | Notes |
-|-----------|--------------|------------|-------|
-| Compute | ~$240/month | ~$200/month | 17% savings |
-| Storage | Included | Included | - |
-| Backup | Azure Backup cost | Included | Additional savings |
-| Patching | Engineer time | Included | Ops savings |
-| HA Setup | Manual | Included | Complexity savings |
+Compare the [current three-member IaaS topology](IaaS-PaaS-ComparisonMatrix.md)
+with actual M25/storage/network/telemetry costs. Do not assert a fixed saving
+or equivalent HA. Backup/restore acceptance and operational engineering time
+are separate from the resource invoice.
 
 ---
 

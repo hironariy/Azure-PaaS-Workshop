@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "15362458888282945291"
+      "templateHash": "710479134203283813"
     }
   },
   "parameters": {
@@ -119,7 +119,7 @@
     },
     "cosmosDbTier": {
       "type": "string",
-      "defaultValue": "M30",
+      "defaultValue": "M25",
       "allowedValues": [
         "M25",
         "M30",
@@ -139,13 +139,12 @@
     },
     "staticWebAppSku": {
       "type": "string",
-      "defaultValue": "Free",
+      "defaultValue": "Standard",
       "allowedValues": [
-        "Free",
         "Standard"
       ],
       "metadata": {
-        "description": "Static Web Apps SKU"
+        "description": "Static Web Apps SKU: Standard is required for the linked App Service backend"
       }
     },
     "staticWebAppLocation": {
@@ -623,7 +622,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "9535606549026757098"
+              "templateHash": "16865717249682235709"
             }
           },
           "parameters": {
@@ -667,14 +666,7 @@
             "tenantId": {
               "type": "string",
               "metadata": {
-                "description": "Tenant ID for access policies"
-              }
-            },
-            "appServicePrincipalId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Object ID of App Service Managed Identity (optional - can be set after App Service creation)"
+                "description": "Tenant ID for the vault"
               }
             },
             "tags": {
@@ -687,8 +679,7 @@
           },
           "variables": {
             "keyVaultName": "[format('kv-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
-            "privateEndpointName": "[format('pe-keyvault-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
-            "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6"
+            "privateEndpointName": "[format('pe-keyvault-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]"
           },
           "resources": [
             {
@@ -760,21 +751,6 @@
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]"
-              ]
-            },
-            {
-              "condition": "[not(empty(parameters('appServicePrincipalId')))]",
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
-              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), parameters('appServicePrincipalId'), variables('keyVaultSecretsUserRoleId'))]",
-              "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleId'))]",
-                "principalId": "[parameters('appServicePrincipalId')]",
-                "principalType": "ServicePrincipal"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
               ]
             }
           ],
@@ -1364,32 +1340,11 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "environment": {
-            "value": "[parameters('environment')]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "baseName": {
-            "value": "[parameters('baseName')]"
-          },
-          "uniqueSuffix": {
-            "value": "[variables('uniqueSuffix')]"
-          },
-          "privateEndpointSubnetId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.privateEndpointSubnetId.value]"
-          },
-          "keyVaultPrivateDnsZoneId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'network-deployment'), '2025-04-01').outputs.keyVaultPrivateDnsZoneId.value]"
-          },
-          "tenantId": {
-            "value": "[parameters('entraTenantId')]"
+          "keyVaultName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'keyvault-deployment'), '2025-04-01').outputs.keyVaultName.value]"
           },
           "appServicePrincipalId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appservice-deployment'), '2025-04-01').outputs.appServicePrincipalId.value]"
-          },
-          "tags": {
-            "value": "[variables('tags')]"
           }
         },
         "template": {
@@ -1399,184 +1354,45 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "9535606549026757098"
+              "templateHash": "3830361822787624603"
             }
           },
           "parameters": {
-            "environment": {
+            "keyVaultName": {
               "type": "string",
               "metadata": {
-                "description": "Environment name (dev, staging, prod)"
-              }
-            },
-            "location": {
-              "type": "string",
-              "defaultValue": "[resourceGroup().location]",
-              "metadata": {
-                "description": "Azure region for resources"
-              }
-            },
-            "baseName": {
-              "type": "string",
-              "metadata": {
-                "description": "Base name for resources"
-              }
-            },
-            "uniqueSuffix": {
-              "type": "string",
-              "metadata": {
-                "description": "Unique suffix for globally unique resource names"
-              }
-            },
-            "privateEndpointSubnetId": {
-              "type": "string",
-              "metadata": {
-                "description": "Subnet ID for Private Endpoint"
-              }
-            },
-            "keyVaultPrivateDnsZoneId": {
-              "type": "string",
-              "metadata": {
-                "description": "Private DNS Zone ID for Key Vault"
-              }
-            },
-            "tenantId": {
-              "type": "string",
-              "metadata": {
-                "description": "Tenant ID for access policies"
+                "description": "Name of the vault created by keyvault.bicep"
               }
             },
             "appServicePrincipalId": {
               "type": "string",
-              "defaultValue": "",
+              "minLength": 1,
               "metadata": {
-                "description": "Object ID of App Service Managed Identity (optional - can be set after App Service creation)"
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Tags to apply to all resources"
+                "description": "App Service system-assigned Managed Identity object ID"
               }
             }
           },
           "variables": {
-            "keyVaultName": "[format('kv-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
-            "privateEndpointName": "[format('pe-keyvault-{0}-{1}', parameters('baseName'), parameters('uniqueSuffix'))]",
             "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6"
           },
           "resources": [
             {
-              "type": "Microsoft.KeyVault/vaults",
-              "apiVersion": "2023-07-01",
-              "name": "[variables('keyVaultName')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "sku": {
-                  "family": "A",
-                  "name": "standard"
-                },
-                "tenantId": "[parameters('tenantId')]",
-                "enabledForDeployment": false,
-                "enabledForDiskEncryption": false,
-                "enabledForTemplateDeployment": true,
-                "enableRbacAuthorization": true,
-                "enableSoftDelete": true,
-                "softDeleteRetentionInDays": 7,
-                "publicNetworkAccess": "Disabled",
-                "networkAcls": {
-                  "defaultAction": "Deny",
-                  "bypass": "AzureServices",
-                  "ipRules": [],
-                  "virtualNetworkRules": []
-                }
-              }
-            },
-            {
-              "type": "Microsoft.Network/privateEndpoints",
-              "apiVersion": "2023-09-01",
-              "name": "[variables('privateEndpointName')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "subnet": {
-                  "id": "[parameters('privateEndpointSubnetId')]"
-                },
-                "privateLinkServiceConnections": [
-                  {
-                    "name": "keyvault-connection",
-                    "properties": {
-                      "privateLinkServiceId": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
-                      "groupIds": [
-                        "vault"
-                      ]
-                    }
-                  }
-                ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
-              "apiVersion": "2023-09-01",
-              "name": "[format('{0}/{1}', variables('privateEndpointName'), 'default')]",
-              "properties": {
-                "privateDnsZoneConfigs": [
-                  {
-                    "name": "config",
-                    "properties": {
-                      "privateDnsZoneId": "[parameters('keyVaultPrivateDnsZoneId')]"
-                    }
-                  }
-                ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]"
-              ]
-            },
-            {
-              "condition": "[not(empty(parameters('appServicePrincipalId')))]",
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
-              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), parameters('appServicePrincipalId'), variables('keyVaultSecretsUserRoleId'))]",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), parameters('appServicePrincipalId'), variables('keyVaultSecretsUserRoleId'))]",
               "properties": {
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleId'))]",
                 "principalId": "[parameters('appServicePrincipalId')]",
                 "principalType": "ServicePrincipal"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              ]
+              }
             }
-          ],
-          "outputs": {
-            "keyVaultId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-            },
-            "keyVaultName": {
-              "type": "string",
-              "value": "[variables('keyVaultName')]"
-            },
-            "keyVaultUri": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]"
-            },
-            "privateEndpointId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]"
-            }
-          }
+          ]
         }
       },
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', 'appservice-deployment')]",
-        "[resourceId('Microsoft.Resources/deployments', 'network-deployment')]"
+        "[resourceId('Microsoft.Resources/deployments', 'keyvault-deployment')]"
       ]
     },
     {
@@ -1621,7 +1437,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "9441482257264932925"
+              "templateHash": "3330116368793720561"
             }
           },
           "parameters": {
@@ -1652,7 +1468,7 @@
             },
             "sku": {
               "type": "string",
-              "defaultValue": "Free",
+              "defaultValue": "Standard",
               "allowedValues": [
                 "Free",
                 "Standard"

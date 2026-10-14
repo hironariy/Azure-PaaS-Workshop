@@ -27,12 +27,18 @@ echo "$RESOURCE_GROUP"
 対処:
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cat "$WORKSHOP_STATE_DIR/paas-workshop.env"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load base || exit 1
+printf 'State: %s / Subscription: %s / RG: %s\n' "$ENV_FILE" "$SUBSCRIPTION_ID" "$RESOURCE_GROUP"
 ```
 
 ファイルが無い場合は [受講者クイックスタート](cloud-shell-quickstart.ja.html) から変数を再設定します。
+
+JSON 不正・version 不一致・clone 先の消失は明示的に停止します。旧 `.env` を代わりに `source` したり、破損 state を空の値で成功扱いにしたりしません。context 不一致なら保存済み subscription を確認し、`az account set --subscription "$SUBSCRIPTION_ID"` 後に再度ロードします。別グループへの変更は別の state ディレクトリで行います。
+
+`.paas-workshop.lock` が存在して保存できない場合は、同じ state を使う別セッションの保存処理が終わるまで待ちます。異常終了後も残った場合、すべての保存処理が停止していることと専用ディレクトリを確認してから、その lock ファイルだけを削除します。保存中に lock を削除したり、JSON を削除して初期化を強行したりしません。
 
 ## Provider 登録で失敗する
 
@@ -66,6 +72,7 @@ Insufficient privileges
 
 - 対象 tenant、本人の Application Developer、有効化が必要な PIM、適用ポリシーを確認します。Azure Owner があるだけでは Entra の権限不足は解消しません。
 - [Day 0 の Entra 手順](day-0-entra-id.ja.html)で本人が作成・所有する演習専用アプリを使います。共有 Client ID の配布や全ユーザーへの管理者同意を標準の回避策にしません。
+- 明示的に承認した専用アプリの値を保存する場合も、tenant を変更せず、Client ID / scope ID を確認して `workshop_state_save identity` を使います。state へ文字列を追記しません。
 - 解消できない場合はエラーを記録して停止し、講師・テナント管理担当へ相談してください。
 
 ## Bicep デプロイが失敗する
@@ -85,7 +92,7 @@ az deployment group show \
 |---|---|
 | SKU quota | App Service Plan / Cosmos DB tier の quota |
 | region unavailable | `LOCATION` と `SWA_LOCATION` |
-| invalid password | `COSMOS_PASSWORD` が空でないか |
+| invalid password | `PARAM_FILE` の `cosmosDbAdminPassword` の設定有無。秘密値は出力しない |
 | app registration mismatch | `BACKEND_CLIENT_ID` / `FRONTEND_CLIENT_ID` |
 
 ## App Service `/health` が失敗する
@@ -112,11 +119,21 @@ az webapp config show \
   -o jsonc
 
 az webapp config appsettings list \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name "$APP_SERVICE_NAME" \
-  --query "[?name=='SCM_DO_BUILD_DURING_DEPLOYMENT' || name=='COSMOS_CONNECTION_STRING'].{name:name,value:value}" \
+  --query "[?name=='SCM_DO_BUILD_DURING_DEPLOYMENT'].{name:name,value:value}" \
+  -o table
+
+az webapp config appsettings list \
+  --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$APP_SERVICE_NAME" \
+  --query "[?name=='COSMOS_CONNECTION_STRING'].{name:name}" \
   -o table
 ```
+
+DB connection string は値を表示しません。Key Vault reference の解決状態・MI・private network・DB readiness は [アプリ検証の診断順序](day-1-validation.ja.html) に従います。未加工ログや app settings を Issue に貼らないでください。
 
 ### `Cannot find module '/home/site/wwwroot/src/app.js'`
 
@@ -173,7 +190,9 @@ az ad app show \
 `https://<swa-hostname>` が無い場合は追加します。
 
 ```bash
-REDIRECT_URIS="$(jq -nc --arg swa "https://$SWA_HOSTNAME" '["http://localhost:4280", $swa, ($swa + "/")]')"
+EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)" || exit 1
+REDIRECT_URIS="$(jq -nc --argjson existing "$EXISTING_REDIRECTS" --arg swa "https://$SWA_HOSTNAME" \
+  '(($existing // []) + ["http://localhost:4280", $swa, ($swa + "/")]) | unique')" || exit 1
 
 FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
@@ -198,7 +217,7 @@ az rest \
 
 ## Frontend の API permissions が Portal に表示されない
 
-`az ad app permission add` は Frontend app registration の API permission 要求を追加し、`az ad app permission grant` は Frontend service principal に delegated permission grant を作成します。Portal の **App registrations > Frontend > API permissions** は前者を表示しますが、反映に時間がかかることがあります。
+`az ad app permission add` は API permission の**要求**であり、実際の同意ではありません。Portal の **App registrations > Frontend > API permissions** は要求を表示します。実際の同意は本線では MSAL のブラウザーサインインで行い、CLI grant は実行しません。Day 0 時点で grant がないこと自体は失敗ではありません。
 
 CLI で状態を確認します。
 
@@ -247,7 +266,7 @@ AADSTS900144: The request body must contain the following parameter: 'client_id'
 原因:
 
 - Static Web Apps にデプロイされた `index.html` の `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID` が入っていない。
-- `$WORKSHOP_STATE_DIR/deploy-frontend.local.env` の値が空、または古い frontend 成果物を再デプロイしている。
+- JSON state の frontend ID が異なる、または古い frontend 成果物を再デプロイしている。
 
 確認:
 
@@ -255,30 +274,31 @@ AADSTS900144: The request body must contain the following parameter: 'client_id'
 curl -fsS "https://${SWA_HOSTNAME}" \
   | grep -o 'window.__APP_CONFIG__=[^<]*'
 
-cat "$WORKSHOP_STATE_DIR/deploy-frontend.local.env"
+workshop_state_load deployed || exit 1
+printf 'Tenant: %s / Frontend: %s / Backend: %s\n' "$TENANT_ID" "$FRONTEND_CLIENT_ID" "$BACKEND_CLIENT_ID"
 ```
 
 期待値は `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_TENANT_ID`、`ENTRA_BACKEND_CLIENT_ID` が含まれることです。
 
-`window.__APP_CONFIG__` が正しいのに同じエラーが続く場合は、古いデプロイスクリプトで Vite の development bundle をデプロイしている可能性があります。`git pull` 後に `./scripts/deploy-frontend.sh "$RESOURCE_GROUP"` を再実行してください。スクリプトは `NODE_ENV=production` を強制し、development bundle が混入した場合はデプロイ前に停止します。また、このワークショップ本線では Static Web Apps 組み込み認証の `/.auth/login/aad` ではなく、アプリ画面の **Sign in with Microsoft** ボタンから MSAL でログインします。
+`window.__APP_CONFIG__` が正しいのに同じエラーが続く場合は、古いデプロイスクリプトで Vite の development bundle をデプロイしている可能性があります。`git pull` 後に [ARM frontend 手順](day-1-deploy-frontend.ja.html) で ZIP を prepare し直し、許可済み保管先へ upload して deploy してください。スクリプトは `NODE_ENV=production` を強制し、development bundle が混入した場合はデプロイ前に停止します。また、このワークショップ本線では Static Web Apps 組み込み認証の `/.auth/login/aad` ではなく、アプリ画面の **Sign in with Microsoft** ボタンから MSAL でログインします。
 
 対処:
 
 ```bash
-cat > "$WORKSHOP_STATE_DIR/deploy-frontend.local.env" <<EOF
-ENTRA_TENANT_ID="$TENANT_ID"
-ENTRA_FRONTEND_CLIENT_ID="$FRONTEND_CLIENT_ID"
-ENTRA_BACKEND_CLIENT_ID="$BACKEND_CLIENT_ID"
-EOF
-
-./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
+workshop_state_load deployed || exit 1
+FRONTEND_ZIP="$WORKSHOP_STATE_DIR/frontend-$(node -p 'require("node:crypto").randomUUID()').zip"
+bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP" || exit 1
 ```
+
+この時点では未デプロイです。上記 ARM 手順で hosted ZIP / completion / readiness / cleanup を確認し、CLI に自動 fallback しません。
 
 ## フロントエンド build が失敗する
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
 cd "$WORKSHOP_REPO_DIR/materials/frontend"
 node --version
 npm --version
@@ -291,9 +311,10 @@ Node.js が古い場合、Cloud Shell 環境差異の可能性があります。
 ## バックエンド build / ZIP deploy が失敗する
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load deployed || exit 1
 node --version
 npm --version
 zip -v | head -1

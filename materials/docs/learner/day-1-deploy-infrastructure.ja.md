@@ -11,9 +11,10 @@ Cloud Shell から Bicep を実行し、PaaS リソースを作成します。�
 ## 1. 変数と作業ディレクトリを確認する
 
 ```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-source "$WORKSHOP_STATE_DIR/paas-workshop.env" 2>/dev/null || true
-cd "$WORKSHOP_REPO_DIR"
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load identity || exit 1
 
 echo "$WORKSHOP_REPO_DIR"
 echo "$WORKSHOP_STATE_DIR"
@@ -26,29 +27,47 @@ echo "$PARAM_FILE"
 
 値が空の場合は、[受講者クイックスタート](cloud-shell-quickstart.ja.html) と [Day 0: Entra ID と認証設定](day-0-entra-id.ja.html) に戻って設定してください。
 
-## 2. Cosmos DB 管理者パスワードを生成する
+## 2. Cosmos DB 管理者パスワードの扱いを確認する
 
-接続文字列で扱いやすいよう、URL-safe な値を使います。
-
-```bash
-export COSMOS_PASSWORD="$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=' | cut -c1-32)"
-echo "Password length: ${#COSMOS_PASSWORD}"
-```
+次の手順で初めてパラメータファイルを作る場合だけ、暗号学的乱数から URL-safe なパスワードを生成してファイルへ直接保存します。大文字・小文字・数字・記号を必ず含めます。パスワードをターミナルへ表示せず、JSON state に保存しません。再実行時は既存の値を保持し、意図しない DB パスワード変更を防ぎます。
 
 ## 3. 標準デプロイ用パラメータファイルを作成する
 
 テンプレートをローカル用ファイルにコピーし、Cloud Shell のエディターで自分の値に変更します。この章では、パラメータの意味を確認しながら手動で編集します。
 
 ```bash
-cp materials/bicep/dev.bicepparam "$PARAM_FILE"
-
-sed -i.bak "s|using 'main.bicep'|using '../../Azure-PaaS-Workshop/materials/bicep/main.bicep'|" "$PARAM_FILE"
-rm -f "${PARAM_FILE}.bak"
+node <<'NODE' || exit 1
+const fs = require('node:fs');
+const path = require('node:path');
+const { randomBytes } = require('node:crypto');
+const file = process.env.PARAM_FILE;
+const created = !fs.existsSync(file);
+if (!created && (!fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink())) {
+  throw new Error('パラメータは通常ファイルでなければなりません');
+}
+const relative = path.relative(path.dirname(file),
+  path.join(process.env.WORKSHOP_REPO_DIR, 'materials/bicep/main.bicep')).split(path.sep).join('/');
+const using = `using '${relative.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+let source = fs.readFileSync(created
+  ? path.join(process.env.WORKSHOP_REPO_DIR, 'materials/bicep/dev.bicepparam') : file, 'utf8');
+const pattern = /^using '(?:\\.|[^'\\])*'/m;
+if (!pattern.test(source)) throw new Error('パラメータの using 行を確認してください');
+source = source.replace(pattern, () => using);
+if (created) {
+  const passwordLine = /^param cosmosDbAdminPassword = ''/m;
+  if (!passwordLine.test(source)) throw new Error('テンプレートのパスワード行を確認してください');
+  source = source.replace(passwordLine,
+    () => `param cosmosDbAdminPassword = 'Aa1_${randomBytes(24).toString('base64url')}'`);
+}
+fs.writeFileSync(file, source, { mode: 0o600, flag: created ? 'wx' : 'w' });
+fs.chmodSync(file, 0o600);
+console.log(created ? 'パラメータを作成しました（秘密値は非表示）' : '既存パラメータ・秘密値を保持しました');
+NODE
 ```
 
-`PARAM_FILE` は `~/clouddrive/paas-workshop` 配下に保存します。Bicep の `using` 行だけは、永続領域から `~/Azure-PaaS-Workshop/materials/bicep/main.bicep` を参照できるように調整します。
+`PARAM_FILE` は state ディレクトリ直下に保存します。`using` は実際の clone 先への相対パスから生成するため、ディレクトリ名を固定しません。再実行時は既存パラメータ・秘密値を上書きせず、テンプレート変更は手動で確認します。
 
-編集に使う値を確認します。`cosmosDbAdminPassword` はこのあとパラメータファイルに貼り付けるため、このタイミングだけ表示します。
+編集に使う公開設定値だけを確認します。`cosmosDbAdminPassword` は生成済みで、表示・コピーする必要はありません。
 
 ```bash
 cat <<EOF
@@ -60,7 +79,6 @@ groupId=$GROUP_ID
 entraTenantId=$TENANT_ID
 entraBackendClientId=$BACKEND_CLIENT_ID
 entraFrontendClientId=$FRONTEND_CLIENT_ID
-cosmosDbAdminPassword=$COSMOS_PASSWORD
 EOF
 ```
 
@@ -82,7 +100,7 @@ code "$PARAM_FILE"
 | `param entraTenantId` | `$TENANT_ID` の値 | Day 0 で確認した tenant ID |
 | `param entraBackendClientId` | `$BACKEND_CLIENT_ID` の値 | Backend API app registration の client ID |
 | `param entraFrontendClientId` | `$FRONTEND_CLIENT_ID` の値 | Frontend SPA app registration の client ID |
-| `param cosmosDbAdminPassword` | `$COSMOS_PASSWORD` の値 | 直前に生成した URL-safe なパスワード |
+| `param cosmosDbAdminPassword` | 生成済みの値を保持 | 表示・コピー・再生成しない |
 | `param staticWebAppSku` | `'Standard'` のまま | Static Web Apps Linked Backend に必要 |
 | `param staticWebAppLocation` | `$SWA_LOCATION` の値 | Static Web Apps のリージョン |
 
@@ -104,19 +122,40 @@ fi
 
 ```bash
 az deployment group validate \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --template-file materials/bicep/main.bicep \
-  --parameters "$PARAM_FILE"
+  --parameters "$PARAM_FILE" || exit 1
 ```
 
 ## 5. PaaS リソースをデプロイする
 
+[Day 0 の catalog / quota / tier 確認](day-0-prerequisites.ja.html#5-quota-と費用の前提を確認する) と RBAC・Entra の条件を満たした場合だけ実行します。catalog が成功しても `deploymentReady: false` のままです。制約を無視して deployment を試す手順ではありません。
+
 ```bash
 az deployment group create \
+  --subscription "$SUBSCRIPTION_ID" \
+  --name main \
   --resource-group "$RESOURCE_GROUP" \
   --template-file materials/bicep/main.bicep \
-  --parameters "$PARAM_FILE"
+  --parameters "$PARAM_FILE" || exit 1
 ```
+
+このコマンドはリソース作成を待つため、数分以上かかる場合があります。進捗を見る場合は別の Cloud Shell セッションで同じ state をロードし、次を実行します。リソース名・type・状態だけを表示し、パラメータや秘密値は出しません。
+
+```bash
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+workshop_state_load identity || exit 1
+az deployment group show --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --name main \
+  --query '{state:properties.provisioningState,started:properties.timestamp,correlationId:properties.correlationId}' -o jsonc
+az deployment operation group list --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --name main \
+  --query '[].{type:properties.targetResource.resourceType,name:properties.targetResource.resourceName,state:properties.provisioningState}' \
+  -o table
+```
+
+再実行時は前回の `Succeeded` と取り違えず、開始時刻・correlation ID と現在の作成コマンドの結果を照合します。`Failed` / `Canceled` / quota / regional capacity エラーでは deployment 出力の保存やアプリ deploy へ進みません。region/SKU/HA を自動変更せず、エラーコード・resource type・correlation ID を記録します。
 
 作成される主なリソース:
 
@@ -130,26 +169,27 @@ az deployment group create \
 ## 6. デプロイ出力を保存する
 
 ```bash
-export APP_SERVICE_NAME="$(az deployment group show \
+APP_SERVICE_NAME="$(az deployment group show \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query "properties.outputs.appServiceName.value" -o tsv)"
+  --query "properties.outputs.appServiceName.value" -o tsv)" || exit 1
 
-export SWA_NAME="$(az deployment group show \
+SWA_NAME="$(az deployment group show \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query "properties.outputs.staticWebAppName.value" -o tsv)"
+  --query "properties.outputs.staticWebAppName.value" -o tsv)" || exit 1
 
-export SWA_HOSTNAME="$(az staticwebapp show \
+SWA_HOSTNAME="$(az staticwebapp show \
+  --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name "$SWA_NAME" \
-  --query defaultHostname -o tsv)"
+  --query defaultHostname -o tsv)" || exit 1
 
-cat >> "$ENV_FILE" <<EOF
-export APP_SERVICE_NAME="$APP_SERVICE_NAME"
-export SWA_NAME="$SWA_NAME"
-export SWA_HOSTNAME="$SWA_HOSTNAME"
-EOF
+export APP_SERVICE_NAME SWA_NAME SWA_HOSTNAME
+
+workshop_state_save deployed || exit 1
 
 echo "App Service: $APP_SERVICE_NAME"
 echo "Static Web App: https://$SWA_HOSTNAME"

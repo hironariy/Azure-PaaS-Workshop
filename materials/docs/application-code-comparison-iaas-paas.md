@@ -235,7 +235,7 @@ Design intent: **change infrastructure assumptions without rewriting domain logi
 
 ## 8. Related Documents
 
-- `design/IaaS-to-PaaS-Migration-Changes.md` (detailed migration design notes)
+- `design/IaaS-to-PaaS-Migration-Changes.md` (current migration contract and preserved historical proposal; old snippets are not executable learner steps)
 - `materials/docs/bicep-guide.md` / `materials/docs/bicep-guide.ja.md`
 - `materials/docs/monitoring-guide.md` / `materials/docs/monitoring-guide.ja.md`
 - `materials/docs/disaster-recovery-guide.md` / `materials/docs/disaster-recovery-guide.ja.md`
