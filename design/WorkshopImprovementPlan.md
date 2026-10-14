@@ -2,11 +2,31 @@
 
 作成日: 2026-10-09
 
-再評価日: 2026-10-13
+再評価日: 2026-10-14
+
+### 現行の受講前提と Issue 共通方針（2026-10-14）
+
+ユーザーの明示的な指示により、受講者は **利用する Azure サブスクリプションの Owner** を保持することを正式な前提とする。従来の strict Contributor-only / 管理者支援なしの完走条件は撤回し、今後の Issue 対応・受け入れ・Azure rehearsal は Owner を基準にする。必要なら PIM を有効化する。Resource Group だけの Owner や Contributor のみでの完走は本線の対象外である。
+
+Entra のアプリ登録・本人同意は別の権限であり、**Application Developer と本人専用 Principal grant** を維持する。Azure Owner を Entra の Global Administrator / 組織全体同意と同一視しない。現在の CLI が Contributor のままなら、Owner の実証としてデプロイせず停止する。方針変更は現在のアカウントへのロール追加を実行する許可ではない。
+
+#13 の CLI は #58 で main に採用済み。2026-10-14 の Contributor + Application Developer の実テストで登録・scope・要求設定・Principal grant・既存 grant 再利用が成功し、検証アプリの削除も確認した。新規本人同意・サインイン・認証 CRUD は利用者報告で受け入れ済み。#16 は Owner の前提説明・開始前確認・Owner baseline の実検証へ更新する。#15/#17–#23 はそれぞれの品質・配備・運用・復旧・Cloud Shell・診断・quota・文書条件を Owner baseline 上で判断する。
+
+Owner の採用で全 Issue を自動完了にはしない。Cloud Shell 全ページの連続完走、再接続、復旧後データ保持、cleanup 等の未検証事項は残す。過去の Contributor 拒否と Owner の正例はそのまま保存する。以下の dated records にある「Contributor-only を維持」「Owner 成功は本線の証拠ではない」は旧方針の履歴であり、この現行方針を上書きしない。
+
+### 2026-10-13 までの方針・検証履歴
+
+**2026-10-13 22:34 の CI 方針変更:** ユーザーの指示により、脆弱性の検出だけで PR を NG にする監査 gate は廃止する。依存関係と SWA CLI の監査は `npm audit --audit-level=none` による情報レポートとして保持し、検出件数や重大度はビルド成否に含めない。ビルド、型検査、lint、テスト、成果物検証、公開 package source / integrity、実行・通信エラーの検出は維持する。残っている Actions NG の PR はこの方針で再実行し、監査以外の失敗を区別して記録する。以下の「監査が赤いため採用保留」という記述は変更前の履歴であり、この CI gate は現在の方針ではない。脆弱性自体が修正された、#15 が解決した、無条件に全 PR を採用する、という意味ではない。
+
+本人認証の追加結果: 22:30 に利用者からサインインと案内した認証 CRUD が問題なく完了したとの報告を受け、実環境の機能受け入れ結果として記録した。新規同意画面の表示と既存 grant の利用は区別できていないため、初回自己同意の証拠は断定しない。Contributor-only の fresh deployment と Cloud Shell 全手順の連続完走は別の未達条件である。
 
 状態: **①は A（Contributor のみ・管理者支援なし）を維持、②は B（ARM ZIP 経路の実装）で進めると決定済み**。2026-10-13 に merge 戦略の実行と Owner アカウントによる指定 Azure 環境の検証が承認された。新規 artifact host の費用、tenant policy、branch settings、Issue closure は別承認。
 
-### 現在の解決方針を先に読む
+**2026-10-13 の追加承認と最新の実測:** ユーザーは残存脆弱性を認識したうえで SWA CLI による機能検証の継続を承認した。CLI 2.0.10 で既存の検証用 SWA への実配備が成功し、公開 HTML の一致、直接 / SWA 経由の API 正常応答、未認証の書き込み拒否、デスクトップ / モバイル表示、MSAL の認証開始を確認した。承認された実 URL の SPA リダイレクト URI 追加も、既存 URI を保持して実施・読み戻し済み。CLI 依存関係の High 5 件・Low 1 件は残り、この承認は監査 gate の免除や #15 の解決ではない。ARM 候補は代替として保持する。
+
+B1 クオータは引き上げ後に上限100を確認し、Owner で baseline インフラ、バックエンド、Key Vault reference、telemetry、再起動後の health を実測済み。以下の quota0 / フロントエンド未配備の記録は過去の状態である。**本人のサインイン・同意・認証 CRUD、Contributor-only の fresh deployment、全 Cloud Shell 手順の連続完走は未確認**。①A は変更せず、赤い #51 を採用しない。受講者ページと配備スクリプトには、実 URL の SPA 登録、既存 URI の保持、token 非表示、正しい作業ディレクトリ、終了コードに依存しない公開後確認を反映する。
+
+### 2026-10-13 までの解決方針（現行の Owner 方針で更新済み）
 
 実行状況は [第 27 節](#merge-execution-evidence) を参照する。#24（計画）、#50（アプリ）、#52（ポータル入口の注意書き）は main へ採用済み。運用/ARM の #51 は draft / 未マージ。実環境では Owner の role preflight、catalog、Entra policy の読み取りが成功した一方、App Service 自身も B1 上限0を報告した。Quota の解消前にリソースを作成せず、別 SKU / region へ自動 fallback しない。赤い tool gate と Contributor-only の未達条件を通過扱いにしない。
 
@@ -29,7 +49,7 @@
 最初の目標は機能追加ではなく、受講者が既存のワークショップを確実に完了できる状態にすること。
 
 - Cloud Shell Bash で Day 0 → Day 1 → Day 2 → Cleanup を連続して実行できる。
-- Contributor のみ・講師の事前準備なしで進められる範囲と、Azure / Entra の権限制約で実施できない範囲を開始前に区別する。
+- サブスクリプション Owner と Entra Application Developer を開始前に確認し、Azure / Entra / policy / quota の制約を区別する。
 - 日本語の投稿、認証、CRUD、再接続、再デプロイが正常に動作する。
 - 失敗を成功と表示せず、原因を調査でき、秘密値を出力しない。
 - 実際の SKU・設定・費用に一致する説明で PaaS の責任分界と復旧を学べる。
@@ -44,13 +64,13 @@
 - 実 Azure 検証は指定された隔離環境で baseline SKU に限定する。環境識別子・秘密値を教材の既定値として保存しない。
 - Tenant-wide policy 変更と、追加費用を伴う optional HA / secondary-region 検証は別途承認を得る。
 
-### Contributor-only 本線の制約
+### Owner 本線の前提と Contributor の対象外範囲
 
 Contributor は `Microsoft.Authorization/roleAssignments/write` を持たない。現行 Bicep が App Service の Managed Identity に Key Vault Secrets User を割り当てる操作は、Contributor のみ・事前準備なしでは実行できない。また、Contributor は Entra のアプリ登録作成・ユーザー同意権限を意味しない。
 
-この条件で Key Vault reference を含む fresh deployment 全体が完了できるとは説明しない。RBAC を無効にする、access policy へ置き換える、秘密値を公開する、必要な割り当てを省略して成功とする、受講者を自動昇格する、といった回避策は採用しない。正確な preflight・明示的な失敗・権限別の検証結果を成果物とし、未達の acceptance criteria を残す。
+そのため本線はサブスクリプション Owner を前提とし、受講者本人が必要な vault-scoped role assignment を作成する。Contributor-only の完走は受け入れ条件から外す。RBAC を無効にする、access policy へ置き換える、秘密値を公開する、必要な割り当てを省略して成功とする、受講者を自動昇格する、といった回避策は採用しない。正確な preflight・明示的な失敗・権限別の検証結果は維持する。
 
-管理者権限による positive deployment はアプリ・IaC の検証として区別し、Contributor-only 完了の証拠にしない。自己同意は per-group app と browser/MSAL flow を使い、tenant policy が許可する場合に限る。制限を解消する architecture / permission 方針の変更が必要なら、別の意思決定として扱う。
+Owner による実検証は今後の本線の証拠として採用するが、実際に確認した対象・操作・結果だけを記録し、過去の限定的な正例を全 Cloud Shell 手順の完走へ読み替えない。自己同意は本人専用アプリと Application Developer のガード付き Principal CLI 経路とし、適用ポリシー・Graph 認可の拒否は明示する。
 
 この安定化計画では、新たな Container Apps / Functions / database の導入、VM / SSH / Bastion / ASR の導入、大規模な framework 移行、姉妹リポジトリとの共通パッケージ化は行わない。依存関係の修正で必要となる互換性対応は #15 の範囲で判断する。
 
@@ -79,7 +99,7 @@ High は受講者の完了を妨げる問題、依存関係の是正、失敗・
 | [#13](https://github.com/hironariy/Azure-PaaS-Workshop/issues/13) | High | App ownership・permission request・自己同意・管理者同意を分けた Day 0 | Policy が許可する自己同意を実証し、blocked な条件を明記 |
 | [#14](https://github.com/hironariy/Azure-PaaS-Workshop/issues/14) | High | Unicode 対応の slug、互換性維持、モデル/API 回帰テスト | 日本語などの draft/published CRUD と既存 URL が正常 |
 | [#15](https://github.com/hironariy/Azure-PaaS-Workshop/issues/15) | High | 依存修正、lockfile install、deploy tooling の整理、継続監査 | Issue が要求する全監査範囲で検出ゼロと機能維持 |
-| [#16](https://github.com/hironariy/Azure-PaaS-Workshop/issues/16) | High | 必要権限の preflight と Contributor-only の platform limitation | Contributor denial と authorized deployment を分けて記録。未達条件を完了扱いしない |
+| [#16](https://github.com/hironariy/Azure-PaaS-Workshop/issues/16) | High | サブスクリプション Owner の前提説明・preflight・Key Vault RBAC | Owner baseline の実効権限・MI 割り当て・起動・CRUD と既存割り当て維持を確認 |
 | [#18](https://github.com/hironariy/Azure-PaaS-Workshop/issues/18) | High | 明確な失敗通知、秘密値を出さない診断、安全な Cleanup | 権限・通信・state エラーを誤った成功に置き換えない |
 | [#20](https://github.com/hironariy/Azure-PaaS-Workshop/issues/20) | High | RG / tenant / subscription / cwd / state の統一 | 順次実行とセッション再接続で同じ対象を操作 |
 | [#19](https://github.com/hironariy/Azure-PaaS-Workshop/issues/19) | Medium・早期着手 | 動作する test harness と deploy-independent 品質 CI | 意図した失敗を検知し、対象 checks が正常終了 |
@@ -93,19 +113,25 @@ High は受講者の完了を妨げる問題、依存関係の是正、失敗・
 ### 実装方針
 
 - アプリ登録作成、所有アプリの設定、API permission 要求、実際の同意付与を別操作として説明する。
-- 本線は per-group owned app と browser/MSAL の自己同意を使えるか確認する。現行の無条件 AllPrincipals grant は受講者手順から外す。
+- 本線は本人専用の owned app と Application Developer による CLI の自己同意とする。`--consent-type Principal` とサインイン中の本人の `--principal-id` を明示し、無条件 AllPrincipals grant は受講者手順から外す。
 - 対象 tenant、Frontend / Backend client ID、service principal object ID、scope、実行担当を確認してから同意を付与する。
-- 管理者支援は明示的な代替経路に限定する。Contributor-only 本線が成功した証拠として扱わず、受講者全員への Global Administrator / Application Administrator 付与を標準にしない。
-- 自己同意経路は tenant policy と CLI の挙動を確認して設計する。共有アプリの grant を壊し得るため、単に Principal に変更して繰り返す回避策は採用しない。
+- Entra 管理者支援は明示的な例外に限定する。Azure Owner を Entra 同意の成功証拠として扱わず、受講者全員への Global Administrator / Application Administrator 付与を標準にしない。
+- 自己同意経路は tenant policy と CLI の Graph 認可・既存 grant 置換挙動を確認して設計する。本人の完全な既存 grant は再利用し、同じ client/resource の競合 grant は変更せず停止する。共有・並行利用はしない。
 - Azure resource の Owner / Contributor と Entra の同意権限を混同しない。Azure RBAC 側は #16 と合わせて説明する。
 
 ### 検証と完了条件
 
-- [ ] 隔離した検証用アプリで、learner の登録・設定と管理者の同意を役割別に確認する。
+- [x] 隔離した検証用アプリで Application Developer の登録・設定・Principal 同意を確認する（2026-10-14 実 CLI 成功）。
 - [ ] 必要ロール不足の失敗と PIM / tenant 違いを区別し、依頼する値と対処を説明する。
-- [ ] Grant の resource、scope、consentType、principalId を確認する。
-- [ ] Frontend の sign-in と Backend への認証付き API 呼び出しまで成立する。
-- [ ] 既存 grant を意図せず削除・置換せず、共有アプリの他受講者を壊さない。
+- [x] Grant の client/resource、scope、consentType、principalId を確認する（2026-10-14 実 grant 照合）。
+- [x] Frontend の sign-in と Backend への認証付き API 呼び出しまで成立する（新規本人同意・認証 CRUD の利用者報告）。
+- [x] 既存本人 grant を再利用し、競合時は停止する（実再実行で grant 不変、他ユーザー等の競合は isolated regression）。
+
+### 2026-10-14 の本人同意報告と Day 0 方針更新
+
+利用者が「新しく本人同意が成立しました」と明示したため、2026-10-13 のサインイン・認証 CRUD 成功報告を、既存同意の再利用と未分離のまま扱っていた判定を訂正する。**新規本人同意・本人ログイン・認証 CRUD は利用者報告による受け入れ結果**であり、エージェントによる token 検査・grant object の直接観測・Application Developer 単独での CLI 完走を意味しない。
+
+Day 0 の本人専用 Principal CLI 経路、tenant/本人/所有権確認、既存 grant 保護、grant の全項目確認は #58 で main に採用済み。README、事前準備、旧 setup guide、講師ガイド、トラブルシューティング、Day 1 の同意画面の期待値も同期した。その後の限定ロールの実 CLI 検証も成功し、#16 の Azure RBAC 条件とは区別する。
 
 ## 5. #14 の Unicode 投稿と URL 互換性を解決する
 
@@ -197,7 +223,7 @@ App Service slots / autoscale / zone redundancy / database HA / secondary-region
 1. Unit / model / isolated API / focused frontend tests と targeted lint / type-check。
 2. Clean install、build、ZIP / SWA artifacts、Bicep diagnostics と relevant parameter surface。
 3. Fresh Cloud Shell で Day 0 → Day 1 → Day 2 → Cleanup を実行する Azure rehearsal。
-4. 別の実施者による learner-level permissions と documented instructor support の独立 rehearsal。
+4. 別の実施者によるサブスクリプション Owner + Entra Application Developer の独立 rehearsal。
 
 Azure grant、Managed Identity / Key Vault references、SWA Linked Backend、regional capacity はローカル mock だけでは実証できない。明示的なスキップや baseline failure は記録し、成功へ置き換えない。テスト不在を無条件の `passWithNoTests` で完了としない。
 
@@ -205,7 +231,7 @@ Azure grant、Managed Identity / Key Vault references、SWA Linked Backend、reg
 
 ### Milestone A: 受講者 pilot に進める
 
-- [ ] #13 / #16 の Contributor-only 制約と自己同意の policy 条件が実証され、必要な条件を満たせない場合は pilot-ready としない。
+- [ ] #13 の Principal 本人同意と #16 のサブスクリプション Owner 前提が教材・実検証で整合し、必要な条件を満たせない場合は pilot-ready としない。
 - [ ] #14 の日本語 CRUD と既存 URL の互換性が確認されている。
 - [ ] #15 の監査条件と clean install / deploy 条件を満たしている。
 - [ ] #18 / #20 の状態復元、失敗通知、秘密値を出さない診断、Cleanup が成立する。

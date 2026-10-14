@@ -6,11 +6,13 @@
 
 A hands-on workshop for learning Azure PaaS patterns through building and deploying a web application.
 
-> **Adoption status:** #24 and #50 adopted the plan and application maintenance improvements. A green application CI run is not Azure deployment or workshop acceptance. The remaining operational/ARM candidate is not yet adopted. The Owner rehearsal reported B1 quota limit 0 with unavailable usage; provisioning is blocked pending quota/support confirmation. Legacy CLI advisories and the fresh Contributor-only Key Vault RBAC limitation remain unresolved. See [the execution evidence](design/WorkshopImprovementPlan.md#merge-execution-evidence).
-
-> **Current deployment entry:** Start with the [Cloud Shell quickstart](materials/docs/learner/cloud-shell-quickstart.ja.md) and the linked Day 0/Day 1 guides. Current deploy scripts require versioned JSON state with a verified subscription/tenant and exact resource targets. Legacy `deploy-frontend.local.env` and token-argument instructions further below are historical; do not use them with the current scripts. [Cleanup](materials/docs/learner/cleanup.ja.md) confirms dedicated ownership and actual Azure deletion and never recursively deletes the checkout.
-
-> **Frontend tooling candidate:** The [ARM ZIP deployment guide](materials/docs/learner/day-1-deploy-frontend.ja.md) uses `deploy-frontend-arm.sh` without npm SWA CLI or a SWA deployment token. It requires an approved, owned HTTPS artifact host; it does not create Storage or grant roles. ARM completion, hosted checksum, exact deployed HTML and public readiness are checked separately. Live upload/browser acceptance is still pending, legacy CLI advisories remain unresolved, and strict Contributor-only fresh Key Vault RBAC remains blocked.
+> **Learner permissions:** participants must hold **Owner on the Azure subscription used for the workshop**, including activation through PIM when applicable. Contributor-only completion is not a supported baseline. **Application Developer in the target Entra tenant is a separate prerequisite** for app registration and Principal self-consent; Azure Owner does not grant Entra administrator privileges.
+>
+> **Adoption status:** application maintenance improvements, credential-free tests, single-writer Key Vault IaC, and Cloud Shell operational helpers are adopted on `main`. Principal consent commands have passed a restricted-role live test, and human first-time consent/sign-in/CRUD is accepted from the user's report. A green CI run or the Owner prerequisite does not establish full Cloud Shell completion. Legacy SWA CLI advisories and remaining live acceptance still need their own resolution. See [the adoption strategy](design/WorkshopImprovementPlan.md#pr-merge-strategy), [execution evidence](design/WorkshopImprovementPlan.md#merge-execution-evidence), and [application testing](docs/application-testing.md).
+>
+> **Current deployment entry:** Start with the [Cloud Shell quickstart](materials/docs/learner/cloud-shell-quickstart.ja.md) and the linked Day 0/Day 1 guides. Current deploy scripts support versioned JSON state with a verified subscription/tenant and exact resource targets. [Cleanup](materials/docs/learner/cleanup.ja.md) confirms dedicated ownership and actual Azure deletion and never recursively deletes the checkout.
+>
+> **Frontend tooling candidate:** The [ARM ZIP deployment guide](materials/docs/learner/day-1-deploy-frontend.ja.md) uses `deploy-frontend-arm.sh` without npm SWA CLI or a SWA deployment token. It requires an approved, owned HTTPS artifact host; it does not create Storage or grant roles. ARM completion, hosted checksum, exact deployed HTML and public readiness are checked separately. Live upload/browser acceptance is still pending, and legacy CLI advisories remain unresolved.
 
 > 📚 **Workshop Series - Day 2**
 > 
@@ -377,7 +379,7 @@ You need access to the following:
 
 | Account | Purpose | How to Get |
 |---------|---------|------------|
-| **Microsoft Azure** | Cloud platform | [Free Account](https://azure.microsoft.com/free/). Contributor can manage resources but cannot create the Key Vault RBAC assignment required by a fresh deployment. Contributor-only/no-organizer-preparation completion is currently blocked. |
+| **Microsoft Azure** | Cloud platform | [Free Account](https://azure.microsoft.com/free/). Workshop attendees must hold **Owner on the subscription used for the workshop**. Activate PIM assignments before starting. |
 | **Microsoft Entra ID** | Authentication | Included with Azure subscription |
 | **GitHub** (optional) | Clone repository, CI/CD | [Sign Up](https://github.com/join) |
 
@@ -402,17 +404,15 @@ You need access to the following:
 > 3. The form is only an initial indication; creation and management of your own isolated app must actually succeed.
 > 4. If you see an error or the button is disabled, contact your IT administrator ❌
 >
-> Azure Owner/Contributor does not confer Entra registration or consent rights.
-> Application Developer/app ownership does not authorize tenant-wide consent.
-> The learner path uses separate owned apps and browser self-consent only where
-> tenant policy permits it; `type: User` does not bypass that policy.
-> If registration or consent is blocked, record the blocker rather than elevating
-> every learner or replacing grants on shared apps. Administrator-prepared apps
-> are an explicitly different, assisted scenario—not proof of self-service.
+> **For Workshop Organizers:**
+> The learner baseline uses **Application Developer**, learner-owned isolated applications, and consent for the signed-in learner only. Activate the role through PIM if applicable. Administrator roles and pre-created shared applications are not required for this path.
+>
+> App registration, API permission requests, and actual consent are different operations. [Day 0](materials/docs/learner/day-0-entra-id.ja.md) explicitly uses `az ad app permission grant --consent-type Principal --principal-id <signed-in user object ID>`, with an existing-grant guard and verification of client/resource service principal IDs, scope, consent type, and principal. Omitting `--consent-type` defaults to **AllPrincipals**, which Application Developer alone cannot grant.
+>
+> The Azure baseline requires subscription **Owner** so participants can create the required Key Vault role assignment (#16). Owner does not grant Entra consent permissions. Applicable tenant policies and the CLI's Microsoft Graph authorization must also allow Principal consent. On denial, record the error and check tenant, role activation, ownership, scope and Graph authorization; do not add tenant-wide consent or broad Graph permissions as a workaround.
 >
 > **For Personal/Free Azure Accounts:**
-> Check the actual tenant and effective roles; a subscription role or account type
-> alone does not establish Entra registration/consent permissions.
+> Verify your actual Entra role; an Azure subscription or free account alone does not establish Global Administrator privileges.
 
 #### 2.1.4 Clone the Repository
 
@@ -535,11 +535,9 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
    - Check the box next to `access_as_user`
    - Click "Add permissions"
 
-3. **Consent at first sign-in**
-   - Use the application's MSAL sign-in flow for individual consent if tenant policy permits.
-   - If administrator approval is required, the self-service path is blocked.
-   - Tenant-wide consent is an optional administrator exception; do not run learner CLI grants or overwrite existing shared grants.
-   - See the [learner consent checks](materials/docs/learner/day-0-entra-id.ja.md) for request versus grant, resource object ID, `consentType`, and `principalId` verification.
+3. **Grant Consent for Yourself**
+   - Follow the guarded **Principal** consent commands in [Day 0](materials/docs/learner/day-0-entra-id.ja.md) as Application Developer.
+   - API permission configuration alone is not a grant. Do not use organization-wide admin consent or run the grant command unguarded on a shared application.
 
 </details>
 

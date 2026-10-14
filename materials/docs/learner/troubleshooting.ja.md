@@ -6,6 +6,14 @@ title: トラブルシューティング
 
 Cloud Shell 専用手順で詰まりやすい問題を、症状別に確認します。
 
+## Owner の前提権限が不足している
+
+本ワークショップは、利用する Azure サブスクリプションの **Owner** を受講者の前提とします。Contributor のみでは、Day 1 の `Microsoft.Authorization/roleAssignments/write`（App Service の Managed Identity への Key Vault Secrets User 割り当て）が拒否されます。
+
+[Day 0 の Owner 確認](day-0-prerequisites.ja.html)で、対象 subscription、グループ経由・継承の割り当て、PIM の有効化を確認してください。Owner を確認できなければデプロイ前に停止し、講師またはサブスクリプション管理担当に受講環境を確認します。必要な割り当ての省略、Key Vault RBAC 無効化、無断の権限昇格で回避しません。Owner 確認後も拒否される場合は、Deny Assignment・Azure Policy・対象スコープを調べます。
+
+Azure Owner は Entra の Application Developer や組織全体同意の権限を意味しません。アプリ登録・本人同意の失敗は別途切り分けます。
+
 ## Cloud Shell の変数が空になる
 
 症状:
@@ -62,9 +70,10 @@ Insufficient privileges
 
 対処:
 
-- Azure Contributor と Entra の作成権限は別です。[Day 0 の権限と自己同意](day-0-entra-id.ja.html) を確認します。
-- テナントポリシーで禁止されている場合、本線はブロックとして記録します。管理者支援の例外は本線の自己完結の証明ではありません。
+- 対象 tenant、本人の Application Developer、有効化が必要な PIM、適用ポリシーを確認します。Azure Owner があるだけでは Entra の権限不足は解消しません。
+- [Day 0 の Entra 手順](day-0-entra-id.ja.html)で本人が作成・所有する演習専用アプリを使います。共有 Client ID の配布や全ユーザーへの管理者同意を標準の回避策にしません。
 - 明示的に承認した専用アプリの値を保存する場合も、tenant を変更せず、Client ID / scope ID を確認して `workshop_state_save identity` を使います。state へ文字列を追記しません。
+- 解消できない場合はエラーを記録して停止し、講師・テナント管理担当へ相談してください。
 
 ## Bicep デプロイが失敗する
 
@@ -227,17 +236,24 @@ az ad app permission list-grants \
 
 - `requiredResourceAccess[].resourceAppId` が `$BACKEND_CLIENT_ID`
 - `requiredResourceAccess[].resourceAccess[].id` が `$ACCESS_SCOPE_ID`
-- サインイン後の grant の `resourceId` が Backend **service principal object ID**、`scope` に `access_as_user`、自己同意の場合は `consentType: Principal` と対象ユーザーの `principalId`。詳細は [Day 0 の同意検証](day-0-entra-id.ja.html#day-1-のサインイン後に自己同意を検証する) を参照します。
+- `list-grants` の `clientId` は Frontend service principal object ID、`resourceId` は Backend service principal object ID（application の object ID / Client ID とは別）
+- `scope` に `access_as_user`、`consentType` は `Principal`、`principalId` は `az ad signed-in-user show --query id -o tsv` で取得する本人の user object ID
 
 CLI では見えるのに Portal で見えない場合は、ブラウザー更新、Portal 再ログイン、正しい tenant と Frontend app registration を開いているかを確認します。
 
-## 「管理者の承認が必要」または同意操作で権限不足になる
+## Day 0 の本人同意が拒否される・既存 grant で停止する
 
-Azure Contributor/Owner、アプリ所有者、Application Developer は、テナント全体への同意権限と同義ではありません。Backend scope が `type: User` でもユーザー同意ポリシーによって拒否されます。
+| 症状 | 確認と対処 |
+|---|---|
+| `permission grant` が権限不足 | `--consent-type Principal` と `--principal-id` があるか確認します。省略時は `AllPrincipals` となり、Application Developer 単独では不足します。 |
+| 正しい `Principal` でも拒否 | `az account show --query "{tenant:tenantId,userType:user.type}" -o jsonc` で対象 tenant と本人ログインを確認。Application Developer の PIM 有効化、所有アプリ、`type: User` の scope、適用 consent policy と CLI の Graph OAuth 認可を切り分けます。Azure Owner / Contributor では代替できません。 |
+| service principal の検索・grant の読み取りが失敗 | 読み取り拒否を「存在しない」と解釈して作成・上書きしません。実エラーを確認し、Graph 反映待ちなら時間をおいて Day 0 のガード付きブロックを再実行します。 |
+| 「別の grant があります」で停止 | 他ユーザーや全ユーザーへの既存同意を保護しています。grant を削除せず、本人専用の新規アプリで演習するか、既存アプリの管理担当に確認します。 |
+| Day 1 で同意画面が出ない | Day 0 で本人の `Principal` grant を作成済みなら正常です。本人の grant と認証 CRUD を確認します。同意画面が出ないことだけで新規同意の成否を判断しません。 |
 
-tenant、Frontend/Backend client ID、scope、CLI バージョン、エラーコードと correlation ID、PIM ロールの有効化状態を確認します。トークンやシークレットは共有しません。Graph の読み取り権限不足は「grant が存在しない」と区別します。
+CLI バージョン (`az version`)、実効ロール・PIM 状態、失敗した操作、エラーコードと本文を記録してください。共有 Issue へ token、資格情報、本人の object ID などの個人情報を貼らないでください。講師への相談時も必要な tenant/client/scope の値は承認済みの連絡経路で共有します。管理者は対象・ポリシー・CLI 認可を調査する担当であり、受講者全員への管理者ロール付与や無条件の組織全体同意を依頼する手順ではありません。
 
-`az ad app permission grant` の consent type 省略は `AllPrincipals` です。`Principal` へ変えて再実行するだけの回避も既存 grant の置換につながるため行いません。本線がポリシーでブロックされた場合は記録して停止し、テナントポリシーを勝手に変更しません。別途承認した管理者例外の依頼内容・確認手順は [インストラクターガイド（GitHub 上の補足資料）](https://github.com/hironariy/Azure-PaaS-Workshop/blob/main/docs/instructor-guide.ja.md) を参照します。
+参考: [CLI の consent type と principal ID](https://learn.microsoft.com/en-us/cli/azure/ad/app/permission?view=azure-cli-latest#az-ad-app-permission-grant)、[Application Developer の権限](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference#application-developer)。
 
 ## ログイン時に `AADSTS900144` が出る
 

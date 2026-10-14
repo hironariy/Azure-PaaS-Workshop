@@ -6,7 +6,7 @@ title: "Day 1: フロントエンドをデプロイ"
 
 Cloud Shell で React を build し、[公式 ARM ZIP API](https://learn.microsoft.com/en-us/rest/api/appservice/static-sites/create-zip-deployment-for-static-site?view=rest-appservice-2025-05-01) へ送る経路です。SWA CLI の導入・deployment token の取得は不要です。Runtime config、SWA Standard、Linked Backend `/api`、MSAL は維持します。
 
-**現在の境界:** ZIP の保管先と実 Azure upload は別途確認が必要です。この実装の local/CI fixture 成功は、workshop-ready や #15 完了の証拠ではありません。Contributor のみ・管理者支援なしという条件も変更せず、fresh Key Vault RBAC の prerequisite を満たせない場合は Day 0 で止めます。SWA CLI の既知の audit failure は解消したと扱いません。
+**現在の境界:** ZIP の保管先と実 Azure upload は別途確認が必要です。この実装の local/CI fixture 成功は、workshop-ready や #15 完了の証拠ではありません。受講者の前提は対象 Azure サブスクリプションの Owner と対象 Entra テナントの Application Developer です。SWA CLI の既知の audit advisory は解消したと扱いません。
 
 ## 1. 変数とツールを確認する
 
@@ -86,13 +86,13 @@ Known-good rollback 用の local ZIP / receipt は必要な期間だけ保持し
 |---|---|
 | 保管先がない／upload 権限がない | 未承認 Storage の作成・追加権限付与はしない。許可済み保管先・費用・cleanup を確定するまで止める |
 | Hosted ZIP の checksum / HTTP エラー | exact ZIP、URL 有効期限、read 権限、redirect 不使用を確認。ARM POST 前の失敗なので token/target を変更して回避しない |
-| ARM HTTP 401/403 | saved tenant/subscription、token context と exact SWA への deploy 権限を確認。Contributor を自動昇格しない |
+| ARM HTTP 401/403 | saved tenant/subscription、token context と exact SWA への deploy 権限を確認。ロールを自動昇格しない |
 | Unsupported polling / Retry-After | safe error と operation 状態を確認。別 host へ token を送らず、completion を未確認とする |
 | ARM 完了後に readiness が失敗 | exact HTML の配信、direct backend と Linked Backend を分けて確認。ZIP を再送する前に current operation/release を確認する |
 | 必須 Entra 設定が異なる | Day 0 identity/state を確認し、新しい ZIP を prepare・upload する。既存 receipt を書き換えない |
 | 古い host や `/api/api/posts` に送信される | ブラウザー Network で **現在の SWA host の `/api/posts`** を確認。exact HTML・runtime `/api`・配信 revision を照合する |
 
-Legacy `scripts/deploy-frontend.sh` は SWA CLI 経路として履歴・互換性のため保持しますが、この ARM 手順からは実行しません。CLI audit の未解消を無視して fallback しないでください。[公式 GitHub Actions](day-1-github-actions-alternative.ja.html) は別の任意経路で、native image inventory と実 deploy の検証は別です。
+Legacy `scripts/deploy-frontend.sh` は SWA CLI (`@azure/static-web-apps-cli@2.0.10`) 経路として互換性のため保持しています（公開 npm 監査で High 5 件・Low 1 件の依存関係 advisory が残存しているため、この ARM 手順からは自動 fallback しません）。[公式 GitHub Actions](day-1-github-actions-alternative.ja.html) は別の任意経路で、native image inventory と実 deploy の検証は別です。
 
 ## 次に進む
 

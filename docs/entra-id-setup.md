@@ -42,14 +42,11 @@ The application requires **two app registrations** in Microsoft Entra ID:
 
 ## Prerequisites
 
-- Azure subscription with access to Microsoft Entra ID
-- Permission to create and manage your own app registrations (tenant registration policy or Application Developer, for example). Azure Contributor/Owner does not confer this permission.
-- User-consent policy permitting the requested delegated scope. App ownership and permission requests do not establish actual consent or tenant-wide consent authority.
+- **Owner on the Azure subscription used for the workshop**, including PIM activation if applicable, and access to the target Microsoft Entra tenant. Contributor-only completion is not the learner baseline.
+- **Application Developer** in the target tenant, activated through PIM if applicable, for creating and configuring your own isolated workshop applications and consenting for yourself.
+- Azure Owner / Contributor is separate from Entra permissions. Application Administrator / Cloud Application Administrator / Global Administrator and tenant-wide consent are not prerequisites for the learner path.
 
-The [Cloud Shell learner path](../materials/docs/learner/day-0-entra-id.ja.md)
-uses group-owned applications and browser self-consent where policy permits.
-Blocked registration/consent must be recorded, not bypassed. Do not replace
-existing grants on shared applications with repeated CLI `Principal` grants.
+Use the [Cloud Shell Day 0 guide](../materials/docs/learner/day-0-entra-id.ja.md) as the canonical command path. The portal steps below explain the same registration settings. Self-consent remains subject to applicable policies, scopes and the CLI's Graph authorization; stop and diagnose actual errors instead of escalating roles or changing tenant policies. Do not replace existing grants on shared applications with repeated CLI `Principal` grants.
 
 ## Step 1: Get Your Tenant ID
 
@@ -153,18 +150,13 @@ Your API permissions should now show:
 - `Microsoft Graph` > `User.Read` (default)
 - `PaaS BlogApp Backend API` > `access_as_user`
 
-### 3.5 Consent at First Sign-in; Administrator Exception
+### 3.5 Grant Consent for the Signed-In Learner
 
-For the self-service path, use MSAL sign-in and consent as the individual user
-where tenant policy permits. Verify the grant's Backend service principal
-object ID, `Principal` consent type, user `principalId`, and `access_as_user`
-scope as described in the learner guide. A permission request is not a grant.
+Follow [Day 0 section 4](../materials/docs/learner/day-0-entra-id.ja.md): resolve your user object ID with `az ad signed-in-user show`, create service principals for your owned applications if absent, and use the guarded `az ad app permission grant` with **`--consent-type Principal --principal-id "$USER_OBJECT_ID"`**.
 
-If administrator approval is required, self-service is blocked. An authorized
-Cloud Application Administrator/Application Administrator can optionally grant
-tenant-wide consent for this custom delegated API after reviewing the isolated
-apps and existing grants. This assisted exception is not Contributor-only
-completion and is not a reason to grant administrator roles to all learners.
+Do not omit `--consent-type`: its default is `AllPrincipals`, which Application Developer alone cannot grant. The CLI may replace existing grants for the same client/resource; use the entire guard, not an isolated grant command, and never share this application pair for parallel consent operations.
+
+Verify `clientId` and `resourceId` against the Frontend and Backend **service principal object IDs**, `scope` includes `access_as_user`, `consentType` is `Principal`, and `principalId` is the signed-in user's object ID. A complete existing self-grant is reused; conflicting grants are left unchanged. Sign in as the same user on Day 1. A consent prompt need not reappear after the Day 0 grant.
 
 ### 3.6 Summary - Frontend Values
 
@@ -237,10 +229,9 @@ VITE_API_CLIENT_ID=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
 
 **Cause**: Consent is absent or tenant policy blocks the user's request.
 
-**Fix**: 
-1. Confirm the tenant, owned apps, requested API/scope, and redirect URI.
-2. Use browser consent if policy permits; record administrator-approval restrictions.
-3. Use the explicitly assisted administrator exception only when separately authorized. Do not blindly replace existing grants.
+**Fix**:
+1. Check the current tenant, user, Application Developer activation, owned applications, and the Principal grant using the guarded Day 0 procedure.
+2. If browser consent is requested for an additional permission, the user must review it themselves. If approval is required or CLI consent is denied, record the actual error and diagnose applicable policy and Graph authorization. Do not use tenant-wide admin consent as an automatic fallback.
 
 ## Production Configuration
 
@@ -267,7 +258,7 @@ Add these as **Application Settings** (or use Key Vault references):
 1. **Use separate app registrations** for Frontend and Backend
 2. **Don't expose client secrets** - SPA uses PKCE, no secrets needed
 3. **Limit redirect URIs** - Only add URIs you actually use
-4. **Separate self-consent and tenant-wide consent**; respect policy and use the least privilege appropriate to the chosen scenario
+4. **Use Principal self-consent** for the isolated learner application; do not grant tenant-wide consent merely to suppress prompts
 5. **Review permissions** regularly and remove unused ones
 
 ## Quick Reference
@@ -289,7 +280,7 @@ Add these as **Application Settings** (or use Key Vault references):
 | Add redirect URI | App registration > Authentication |
 | Add API permissions | App registration > API permissions |
 | Expose an API | App registration > Expose an API |
-| Grant admin consent | App registration > API permissions > Grant admin consent |
+| Verify Principal self-consent | Guarded Cloud Shell commands in Day 0 section 4; API permissions configuration alone is not the grant |
 
 ## Related Documents
 

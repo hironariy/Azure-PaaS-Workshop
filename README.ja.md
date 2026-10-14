@@ -7,7 +7,9 @@ English version: [README.md](./README.md)
 
 このリポジトリは、マルチユーザー ブログ アプリケーションを Azure PaaS で構築しながら、App Service、Static Web Apps、Azure DocumentDB、Key Vault、Managed Identity、Application Insights などのマネージドサービス設計・デプロイ・運用を学ぶためのハンズオン教材です。
 
-> **採用状況:** #24 と #50 で計画・アプリ改善を main に採用しました。アプリ CI の成功は Azure deployment / workshop-ready の証拠ではなく、残る運用/ARM candidate は未採用です。Owner 検証では B1 quota limit が 0、usage は取得不能と報告され、quota/support 確認まで provisioning を止めています。旧 CLI advisories、fresh Contributor-only の Key Vault RBAC 制約は未解消です。[実行記録](design/WorkshopImprovementPlan.md#merge-execution-evidence) を参照してください。
+> **受講者の必須前提:** 利用する Azure サブスクリプションの **Owner** と、対象 Entra テナントの **Application Developer** が必要です。PIM の対象ロールは開始前に有効化します。Contributor のみでの完走は本線の対応範囲外です。Azure Owner と Entra の権限は別です。
+>
+> **採用状況:** アプリ改善・credential-free tests・IaC 単一所有者化・Cloud Shell 状態管理・preflight/cleanup/diagnostics 補助スクリプトを採用しています。Principal 同意の CLI は限定ロールの実環境で成功し、新規本人同意・サインイン・認証 CRUD は利用者報告で受け入れ済みです。ただし、Owner 前提への変更やアプリ CI の成功だけで全 Cloud Shell 手順の完走を保証しません。旧 SWA CLI の advisories と残る real Azure acceptance は別途確認します。[採用戦略](design/WorkshopImprovementPlan.md#pr-merge-strategy)、[実行記録](design/WorkshopImprovementPlan.md#merge-execution-evidence)、[アプリ検証](docs/application-testing.md) を参照してください。
 
 ## まずどこから始めるか
 
@@ -39,9 +41,13 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 
 通常のワークショップ参加では、ローカル PC に Azure CLI、Azure PowerShell、Bicep CLI、Node.js、Docker、WSL、PowerShell をインストールする必要はありません。CLI とデプロイ作業は Azure Cloud Shell Bash を標準にします。
 
-**Frontend tooling の更新候補:** [ARM ZIP deployment](materials/docs/learner/day-1-deploy-frontend.ja.md) は npm SWA CLI / SWA deployment token を使わず、prepared ZIP を許可済み HTTPS 保管先から公式 API に渡します。Storage 作成・追加ロール付与は行いません。Checksum、ARM completion、exact HTML と公開 readiness を確認しますが、保管先・実 upload・browser acceptance は未検証です。Legacy CLI の audit failure と Contributor-only の制約を解決済みとは扱いません。
+**Frontend tooling の更新候補:** [ARM ZIP deployment](materials/docs/learner/day-1-deploy-frontend.ja.md) は npm SWA CLI / SWA deployment token を使わず、prepared ZIP を許可済み HTTPS 保管先から公式 API に渡します。Storage 作成・追加ロール付与は行いません。Checksum、ARM completion、exact HTML と公開 readiness を確認しますが、保管先・実 upload・browser acceptance は別途確認します。Legacy CLI の audit advisory は解消済みとは扱いません。
 
-**開始前の権限確認:** Azure Contributor/Owner は Entra の登録・同意権限ではありません。本線はグループ専用アプリを作成し、許可されたブラウザー自己同意を使います。テナントポリシーで登録・同意が禁止されていれば自己完結はブロックです。また、現行 Bicep の Key Vault ロール割り当てには Contributor に含まれない `Microsoft.Authorization/roleAssignments/write` が必要なため、**Contributor のみ・主催者の事前準備なしでは新規構成を完了できません**。費用の発生する操作前に [Day 0 の前提条件](materials/docs/learner/day-0-prerequisites.ja.md) を確認し、制約を記録します。受講者への過剰な管理者権限付与や Key Vault RBAC 無効化で回避しません。
+### Day 0 の Entra 権限と Azure Owner 前提
+
+**Application Developer** を本人の対象テナントで有効にし、自分が作成・所有する演習専用アプリを使います。[Day 0](materials/docs/learner/day-0-entra-id.ja.md) の `permission grant` は `--consent-type Principal` と本人の `--principal-id` を明示し、既存 grant を保護したうえで本人だけへの同意を付与します。全ユーザーへの `AllPrincipals` 同意や Application Administrator / Global Administrator の付与は必要としません。
+
+アプリ登録作成、API permission 要求、実際の同意は別操作です。Azure Owner は Entra ロールの代わりではありません。適用ポリシーや CLI の Graph 認可で拒否される場合は実エラーを切り分け、権限を自動昇格しません。Day 1 の Key Vault role assignment はサブスクリプションの Owner として受講者本人が実行し、開始前に [Day 0 の前提条件](materials/docs/learner/day-0-prerequisites.ja.md) を確認します。
 
 ## ワークショップ概要
 

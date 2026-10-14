@@ -8,7 +8,7 @@ title: "Day 1: GitHub Actions でデプロイ（代替）"
 
 GitHub-hosted runner で build し、既存の Azure リソースへデプロイします。Frontend だけを Actions に切り替える場合は、新しい Entra アプリや role assignment は不要です。Microsoft の公式 deployment action に build 済み成果物を渡し、SWA npm CLI はインストールしません。
 
-これは任意の経路です。Contributor-only の fresh infrastructure / Key Vault RBAC 制約を解消せず、通常の Cloud Shell 経路を置き換えません。公式 action の commit は固定しますが、upstream Docker image は `stable` であり、native client の完全な immutable inventory / audit=0 や実 Azure deploy は別の検証です。SWA CLI の 6 findings をこの経路の追加で解決済みにはしません。
+これは任意の経路です。利用するサブスクリプションの Owner 前提や Key Vault RBAC の要件を変えるものではなく、通常の Cloud Shell 経路を置き換えません。公式 action の commit は固定しますが、upstream Docker image は `stable` であり、native client の完全な immutable inventory / audit=0 や実 Azure deploy は別の検証です。SWA CLI の 6 findings をこの経路の追加で解決済みにはしません。
 
 ## 1. 前提
 

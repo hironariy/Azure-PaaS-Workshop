@@ -8,7 +8,7 @@ title: "Day 2: 信頼性と復旧"
 
 ## 1. 実施条件と障害前のデータを確認する
 
-[Day 1 の検証](day-1-validation.ja.html) を完了し、実 deploy / release、自己同意、認証付き CRUD、telemetry を確認したグループだけ実施します。Contributor-only / 支援なしで #16 の RBAC prerequisite を満たせない場合、または #15 の公開依存・選択した ARM upload 経路の検証がブロック中なら、演習の成功は未検証です。管理者成功に置き換えません。共有アプリ・実ユーザーデータには障害注入しません。
+[Day 1 の検証](day-1-validation.ja.html) を完了し、実 deploy / release、本人同意、認証付き CRUD、telemetry を確認したグループだけ実施します。利用するサブスクリプションの Owner と Key Vault RBAC 割り当て（#16）、およびフロントエンドの公開状態（#15）が満たされていない場合は、先に Day 0 / Day 1 の前提を完了してください。共有アプリ・実ユーザーデータには障害注入しません。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"

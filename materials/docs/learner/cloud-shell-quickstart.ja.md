@@ -6,6 +6,8 @@ title: "Day 0: 事前準備 1 Cloud Shell 設定"
 
 このページは、Azure PaaS Workshop を **Azure Cloud Shell (Bash) だけ**で進めるための入口です。ローカル PC への Azure CLI、Node.js、Docker、WSL、PowerShell のインストールは不要です。バックエンドは、このリポジトリのソースコードから Cloud Shell 上で build して App Service に ZIP deploy します。
 
+> **受講者は利用する Azure サブスクリプションの Owner ロールを保持していることが前提です。** Contributor のみでは Day 1 の Key Vault ロール割り当てを作成できず、完走できません。Entra のアプリ登録・本人同意には、別途 Application Developer が必要です。PIM の対象ロールは開始前に有効化し、[Day 0 の事前準備](day-0-prerequisites.ja.html)で確認します。
+
 ## このワークショップで作るもの
 
 | レイヤー | Azure PaaS サービス |

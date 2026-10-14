@@ -209,7 +209,7 @@ test('frontend injects saved public IDs and never prints or passes a token as an
   assert(fs.readFileSync(path.join(checkout, 'materials/frontend/dist/index.html'), 'utf8').includes(frontend));
   const deploy = calls().find((call) => call.tool === 'swa');
   assert.equal(deploy.hasToken, true);
-  assert.deepEqual(deploy.args, ['deploy', './dist', '--env', 'production', '--verbose', 'log']);
+  assert.deepEqual(deploy.args, ['deploy', './dist', '--env', 'production', '--no-use-keychain', '--verbose', 'log']);
   assert.equal(deploy.debug, 'log');
   assert(calls().filter((call) => call.tool !== 'swa').every((call) => !call.hasToken));
   assert.deepEqual(calls().find((call) => call.tool === 'npm' && call.args[0] === 'ci').args,

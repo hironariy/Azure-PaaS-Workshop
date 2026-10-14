@@ -59,12 +59,12 @@ are still an acceptance check, not proven by local compilation.
 
 ### Permission boundary before creating resources
 
-**Contributor-only, with no organizer preparation, cannot complete the current
-fresh deployment.** `modules/keyvault-rbac.bicep` creates a Key Vault Secrets User
-assignment for App Service's Managed Identity. This requires
-`Microsoft.Authorization/roleAssignments/write`, which Contributor excludes.
-Resource management, permission assignment, Key Vault secret access, and Entra
-registration/consent are different authorization planes.
+**Subscription Owner is a required learner prerequisite.** `modules/keyvault-rbac.bicep`
+creates a Key Vault Secrets User assignment for App Service's Managed Identity.
+This requires `Microsoft.Authorization/roleAssignments/write`, which Contributor
+excludes. Resource management, permission assignment, Key Vault secret access,
+and Entra registration/consent (Application Developer + personal `Principal`
+consent) are different authorization planes.
 
 After selecting and verifying the intended subscription and tenant, run the
 read-only check **from the repository root** with Node.js 24:
@@ -86,9 +86,7 @@ Absent groups are checked at their parent subscription; resource-specific
 permissions on existing infrastructure require separate review.
 
 Do not skip the required assignment, turn off Key Vault RBAC, switch to access
-policies, or expose secrets as a workaround. A separately authorized
-administrator deployment can verify the infrastructure, but cannot establish
-Contributor-only success. See the [learner prerequisites](../docs/learner/day-0-prerequisites.ja.md)
+policies, or expose secrets as a workaround. See the [learner prerequisites](../docs/learner/day-0-prerequisites.ja.md)
 and [Key Vault RBAC documentation](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide).
 
 ## Quick Start
