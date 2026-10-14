@@ -39,7 +39,7 @@ cd "$WORKSHOP_REPO_DIR"
 3. ビルド成果物（`dist/`）に、実行時設定ファイル（`runtime-config.js`）と `index.html` の `window.__APP_CONFIG__` を注入します。
 4. Azure Static Web Apps のデプロイトークンを一時取得し、Static Web Apps CLI（`@azure/static-web-apps-cli`）を使って本番環境（`production`）へデプロイします。
 
-完了すると、`Frontend deployment complete!` と公開 URL（`https://<SWA_HOSTNAME>`）が表示されます。
+完了すると、`Deployment Complete!` と公開 URL（`Frontend URL: https://<SWA_HOSTNAME>`）が表示されます。
 
 ## 3. デプロイ結果を確認する
 
@@ -51,7 +51,7 @@ curl -fsS "https://${SWA_HOSTNAME}/api/health"
 echo ""
 ```
 
-- `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_TENANT_ID`、`ENTRA_BACKEND_CLIENT_ID`、`"API_URL":"/api"` が含まれていること。
+- `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_TENANT_ID`、`ENTRA_BACKEND_CLIENT_ID`、`"API_BASE_URL":"/api"` が含まれていること。
 - `/api/health` から `"status":"healthy"` を含む JSON が返ること。
 
 ---
