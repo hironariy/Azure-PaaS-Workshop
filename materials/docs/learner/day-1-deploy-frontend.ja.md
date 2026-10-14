@@ -16,6 +16,7 @@ npm --version
 az version
 command -v zip
 command -v unzip
+command -v swa || npm install -g @azure/static-web-apps-cli@2.0.10
 printf 'SWA: %s\nHost: %s\n' "$SWA_NAME" "$SWA_HOSTNAME"
 printf 'Tenant: %s\nFrontend: %s\nBackend: %s\n' "$TENANT_ID" "$FRONTEND_CLIENT_ID" "$BACKEND_CLIENT_ID"
 ```
