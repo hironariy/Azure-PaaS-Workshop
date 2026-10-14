@@ -37,6 +37,17 @@ chmod +x scripts/deploy-backend.sh
 ./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
 ```
 
+#### ヘルスチェック（Readiness）待機中の出力と状態一覧
+
+ZIP のアップロード完了後（`Waiting 20s before bounded readiness checks...` の後）、初回デプロイ時は App Service のコンテナ起動・Managed Identity 初期化・Key Vault 参照解決・Cosmos DB 接続確立までに **2〜4 分程度（試行 8〜15 回前後）** かかります。途中に表示されるメッセージの意味は以下のとおりです。
+
+| 出力メッセージ | 現在の状態 | 次のアクション |
+|---|---|---|
+| `Readiness attempt N/30: HTTP 503; not ready.` | **コンテナ起動待機（正常な経過）**<br>インフラ作成直後（コード未配置時）のクールダウン解除待ち、または App Service が古いプロセスを停止して新しいコンテナを準備している状態です。 | **そのままお待ちください**（15 秒間隔で自動リトライされます）。 |
+| `curl: (28) Operation timed out after 10005 milliseconds...`<br>`Readiness attempt N/30: transport failure; not ready.` | **コンテナ初期化・ウォームアップ中（正常な経過）**<br>App Service が Node.js 24 コンテナを起動し、内部のウォームアッププローブ（`dist/src/app.js` の起動と Cosmos DB 接続）を実行している最中のため、10 秒タイムアウトで待機しています。 | **中断せずそのままお待ちください**（ウォームアップが完了すると次の試行で即座に HTTP 200 になります）。 |
+| `Readiness check passed on attempt N/30.`<br>`Upload and readiness checks passed: https://<APP_SERVICE_NAME>.azurewebsites.net` | **デプロイ・起動完了**<br>`/health` エンドポイントから HTTP 200 と `{"status":"healthy"}` が返り、バックエンド API が正常に稼働開始した状態です。 | 次の手順へ進んでください。 |
+| `Backend health endpoint did not become healthy after 30 attempts.` | **起動失敗（30 回リトライ上限到達）**<br>約 8 分経過しても `/health` が正常応答しなかった状態です（Key Vault の RBAC 伝播待ちや接続設定不備など）。 | 手順 6 の `az webapp log tail` でエラーログを確認するか、数分待ってから再実行してください。 |
+
 ## 4. スクリプトの処理内容を確認する
 
 `scripts/deploy-backend.sh` は、手作業ではミスが起きやすいパッケージングと App Service の設定を次の順序で自動実行します。
