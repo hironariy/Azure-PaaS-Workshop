@@ -10,6 +10,8 @@ title: "Day 0: Entra ID と認証設定"
 >
 > Application Developer が PIM の対象の場合は開始前に有効化してください。本人同意にもテナントの適用ポリシー・対象 scope・CLI の Graph 認可が関係します。拒否された場合はエラーを記録し、[トラブルシューティング](troubleshooting.ja.html)で切り分けます。管理者ロールの追加やテナントポリシーの変更で自動回避しません。
 
+Azure リソース側の受講前提はサブスクリプションの **Owner** です。ここで使う Application Developer と本人専用 `Principal` 同意は、Owner 前提に変更しても維持します。
+
 ## 1. 名前を決める
 
 ```bash

@@ -6,6 +6,14 @@ title: トラブルシューティング
 
 Cloud Shell 専用手順で詰まりやすい問題を、症状別に確認します。
 
+## Owner の前提権限が不足している
+
+本ワークショップは、利用する Azure サブスクリプションの **Owner** を受講者の前提とします。Contributor のみでは、Day 1 の `Microsoft.Authorization/roleAssignments/write`（App Service の Managed Identity への Key Vault Secrets User 割り当て）が拒否されます。
+
+[Day 0 の Owner 確認](day-0-prerequisites.ja.html)で、対象 subscription、グループ経由・継承の割り当て、PIM の有効化を確認してください。Owner を確認できなければデプロイ前に停止し、講師またはサブスクリプション管理担当に受講環境を確認します。必要な割り当ての省略、Key Vault RBAC 無効化、無断の権限昇格で回避しません。Owner 確認後も拒否される場合は、Deny Assignment・Azure Policy・対象スコープを調べます。
+
+Azure Owner は Entra の Application Developer や組織全体同意の権限を意味しません。アプリ登録・本人同意の失敗は別途切り分けます。
+
 ## Cloud Shell の変数が空になる
 
 症状:
@@ -56,20 +64,9 @@ Insufficient privileges
 
 対処:
 
-- 講師から `TENANT_ID`、`BACKEND_CLIENT_ID`、`FRONTEND_CLIENT_ID` を受け取ります。
-- 受け取った値を Azure Files 側の state ファイルに保存します。
-
-```bash
-export WORKSHOP_STATE_DIR="$HOME/clouddrive/paas-workshop"
-mkdir -p "$WORKSHOP_STATE_DIR"
-
-cat >> "$WORKSHOP_STATE_DIR/paas-workshop.env" <<EOF
-export TENANT_ID="<tenant-id>"
-export BACKEND_CLIENT_ID="<backend-client-id>"
-export FRONTEND_CLIENT_ID="<frontend-client-id>"
-EOF
-source "$WORKSHOP_STATE_DIR/paas-workshop.env"
-```
+- 対象 tenant、本人の Application Developer、有効化が必要な PIM、適用ポリシーを確認します。Azure Owner があるだけでは Entra の権限不足は解消しません。
+- [Day 0 の Entra 手順](day-0-entra-id.ja.html)で本人が作成・所有する演習専用アプリを使います。共有 Client ID の配布や全ユーザーへの管理者同意を標準の回避策にしません。
+- 解消できない場合はエラーを記録して停止し、講師・テナント管理担当へ相談してください。
 
 ## Bicep デプロイが失敗する
 

@@ -6,6 +6,8 @@
 >
 > ローカル開発、Windows/WSL、PowerShell は代替・発展・講師向け参照として扱います。GitHub Actions は手動 build/deploy の任意代替です。
 
+> **受講者の権限前提:** 利用する Azure サブスクリプションの **Owner** を受講者が保持し、対象 Entra テナントの **Application Developer** を別途用意します。PIM の有効化を開始前に確認してください。Contributor のみでの完走や講師による Key Vault 割り当ての事前準備は本線の前提にしません。Owner でも Entra policy、quota、Deny Assignment、実容量・費用は別途確認します。Azure の Owner を Entra の Global Administrator と混同しないでください。
+
 > **📝 注意:** このドキュメントはインストラクター専用です。受講者はメインの [README.ja.md](../README.ja.md)（必要に応じて [README.md](../README.md)）に従ってください。
 
 > **📘 アーキテクチャ/運用ガイド（講師参照用）:**
@@ -125,7 +127,7 @@ Day 1 を終えている参加者が多い場合は、比較ポイント（責�
    - 症状: “Invalid scope”
    - 対処: Backend API → “Expose an API” でスコープ作成
 
-**本人だけへの同意:** 本線は Entra の Application Developer を有効化した本人が、専用 Backend / Frontend を作成し、[Day 0](../materials/docs/learner/day-0-entra-id.ja.md) のガード付き `--consent-type Principal --principal-id` で自分だけに同意する経路です。API permission の要求設定と実際の grant を区別し、client/resource の service principal object ID、scope、consentType、principalId を確認します。全受講者への管理者ロール付与、共有アプリの grant 再作成、講師による事前作成は前提にしません。拒否時は tenant、PIM、所有権、適用ポリシー・Graph 認可を調査し、Azure Owner / Contributor の成功を Entra 権限の証拠にしないでください。
+**本人だけへの同意:** 本線は Entra の Application Developer を有効化した本人が、専用 Backend / Frontend を作成し、[Day 0](../materials/docs/learner/day-0-entra-id.ja.md) のガード付き `--consent-type Principal --principal-id` で自分だけに同意する経路です。API permission の要求設定と実際の grant を区別し、client/resource の service principal object ID、scope、consentType、principalId を確認します。全受講者への Entra 管理者ロール付与、共有アプリの grant 再作成、講師による事前作成は前提にしません。拒否時は tenant、PIM、所有権、適用ポリシー・Graph 認可を調査し、Azure Owner / Contributor の成功を Entra 権限の証拠にしないでください。
 
 ### Bicep デプロイ
 

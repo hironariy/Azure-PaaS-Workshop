@@ -42,7 +42,7 @@ The application requires **two app registrations** in Microsoft Entra ID:
 
 ## Prerequisites
 
-- Azure subscription with access to Microsoft Entra ID
+- **Owner on the Azure subscription used for the workshop**, including PIM activation if applicable, and access to the target Microsoft Entra tenant. Contributor-only completion is not the learner baseline.
 - **Application Developer** in the target tenant, activated through PIM if applicable, for creating and configuring your own isolated workshop applications and consenting for yourself.
 - Azure Owner / Contributor is separate from Entra permissions. Application Administrator / Cloud Application Administrator / Global Administrator and tenant-wide consent are not prerequisites for the learner path.
 

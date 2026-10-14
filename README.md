@@ -6,7 +6,9 @@
 
 A hands-on workshop for learning Azure PaaS patterns through building and deploying a web application.
 
-> **Adoption status:** application maintenance improvements and credential-free tests are being adopted separately from deployment, IaC and learner-path improvements. A green application CI run does not establish Azure deployment or workshop readiness. Legacy SWA CLI advisories, the fresh Contributor-only Key Vault RBAC limitation, browser consent and real Azure acceptance remain unresolved. Do not use the existing deployment instructions as a verified end-to-end learner path. See [the adoption strategy](design/WorkshopImprovementPlan.md#pr-merge-strategy) and [application testing](docs/application-testing.md).
+> **Learner permissions:** participants must hold **Owner on the Azure subscription used for the workshop**, including activation through PIM when applicable. Contributor-only completion is not a supported baseline. **Application Developer in the target Entra tenant is a separate prerequisite** for app registration and Principal self-consent; Azure Owner does not grant Entra administrator privileges.
+>
+> **Adoption status:** application maintenance improvements and credential-free tests are being adopted separately from deployment, IaC and learner-path improvements. Principal consent commands have passed a restricted-role live test, and human first-time consent/sign-in/CRUD is accepted from the user's report. A green CI run or the Owner prerequisite does not establish full Cloud Shell completion. Legacy SWA CLI advisories and remaining live acceptance still need their own resolution. See [the adoption strategy](design/WorkshopImprovementPlan.md#pr-merge-strategy) and [application testing](docs/application-testing.md).
 
 > 📚 **Workshop Series - Day 2**
 > 
@@ -373,7 +375,7 @@ You need access to the following:
 
 | Account | Purpose | How to Get |
 |---------|---------|------------|
-| **Microsoft Azure** | Cloud platform | [Free Account](https://azure.microsoft.com/free/). Workshop attendees must have an active subscription with Owner or Contributor role. |
+| **Microsoft Azure** | Cloud platform | [Free Account](https://azure.microsoft.com/free/). Workshop attendees must hold **Owner on the subscription used for the workshop**. Activate PIM assignments before starting. |
 | **Microsoft Entra ID** | Authentication | Included with Azure subscription |
 | **GitHub** (optional) | Clone repository, CI/CD | [Sign Up](https://github.com/join) |
 
@@ -403,7 +405,7 @@ You need access to the following:
 >
 > App registration, API permission requests, and actual consent are different operations. [Day 0](materials/docs/learner/day-0-entra-id.ja.md) explicitly uses `az ad app permission grant --consent-type Principal --principal-id <signed-in user object ID>`, with an existing-grant guard and verification of client/resource service principal IDs, scope, consent type, and principal. Omitting `--consent-type` defaults to **AllPrincipals**, which Application Developer alone cannot grant.
 >
-> Azure Owner / Contributor does not grant Entra consent permissions. Applicable tenant policies and the CLI's Microsoft Graph authorization must also allow the operation. On denial, record the error and check tenant, role activation, ownership, scope and Graph authorization; do not add tenant-wide consent or broad Graph permissions as a workaround. Application Developer covers the Entra path, not the separate Azure Key Vault role-assignment requirement (#16).
+> The Azure baseline requires subscription **Owner** so participants can create the required Key Vault role assignment (#16). Owner does not grant Entra consent permissions. Applicable tenant policies and the CLI's Microsoft Graph authorization must also allow Principal consent. On denial, record the error and check tenant, role activation, ownership, scope and Graph authorization; do not add tenant-wide consent or broad Graph permissions as a workaround.
 >
 > **For Personal/Free Azure Accounts:**
 > Verify your actual Entra role; an Azure subscription or free account alone does not establish Global Administrator privileges.
