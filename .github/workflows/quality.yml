@@ -155,7 +155,7 @@ jobs:
         run: |
           fixture="$RUNNER_TEMP/negative-$APPLICATION"
           mkdir "$fixture"
-          git archive HEAD "materials/$APPLICATION" | tar -xf - -C "$fixture"
+          git -C "$GITHUB_WORKSPACE" archive HEAD "materials/$APPLICATION" | tar -xf - -C "$fixture"
           ln -s "$PWD/node_modules" "$fixture/materials/$APPLICATION/node_modules"
           cd "$fixture/materials/$APPLICATION"
           expect_failure() {
