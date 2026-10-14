@@ -6,15 +6,6 @@ title: Azure PaaS Workshop 受講者ポータル
 
 <p class="wp-lead">このポータルは、Azure PaaS Workshop を <strong>Azure Cloud Shell (Bash)</strong> だけで進めるための受講者向け入口です。App Service、Static Web Apps、Cosmos DB/DocumentDB、Key Vault、Managed Identity、Application Insights / Azure Monitor を使う PaaS 構成を、事前準備から cleanup まで順番に確認します。<br/>もととなっているリポジトリは<a href='https://github.com/hironariy/Azure-PaaS-Workshop'>こちら</a>です</p>
 
-<p class="wp-lead" role="note"><strong>受講者の前提権限：利用する Azure サブスクリプションの Owner ロールが必要です。</strong><br/>
-リソース作成、Resource Provider 登録、App Service の Managed Identity への Key Vault ロール割り当てを受講者本人が実行します。Contributor のみでの完走は本ワークショップの対応範囲外です。<br/>
-Azure Owner と Entra の権限は別です。アプリ登録・本人同意には対象テナントの <strong>Application Developer</strong> を別途用意します。Entra の Global Administrator や全ユーザーへの同意は前提にしません。PIM を使う場合は開始前に必要なロールを有効化してください。<a href="learner/day-0-prerequisites.ja.html">Day 0 の権限確認</a>へ進んでください。</p>
-
-<p class="wp-lead" role="note"><strong>実行前に確認：この手順は、実際の Azure 環境での完走検証がまだ完了していません。</strong><br/>
-アプリケーションの改善は main に採用済みですが、運用手順と ARM ZIP デプロイの統合は <a href="https://github.com/hironariy/Azure-PaaS-Workshop/pull/51">#51（draft）</a> で保留中です。アプリの CI・ローカル検証は、Azure へのデプロイ・サインイン・データ保持の実証とは異なります。<br/>
-<strong>Owner 前提への変更だけで、全手順の動作確認が完了したことにはなりません。</strong> ロール割り当ての権限不足時は、<a href="https://github.com/hironariy/Azure-PaaS-Workshop/issues/16">Owner の前提権限と確認手順（#16）</a>を確認してください。<br/>
-リソース作成前に、対象のテナント・サブスクリプション、リージョン、SKU、クォータと費用を確認してください。不明な値や不足がある場合は停止し、SKU・リージョン・権限を無断で変更しないでください。進捗と未達条件は <a href="https://github.com/hironariy/Azure-PaaS-Workshop/blob/main/design/WorkshopImprovementPlan.md#merge-execution-evidence">改善計画の検証記録</a>を参照してください。</p>
-
 <style>
   :root {
     --wp-brand: #0078d4;
