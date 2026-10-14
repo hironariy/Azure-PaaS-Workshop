@@ -215,7 +215,6 @@ Day 0 で作成したフロントエンドのアプリ登録に対して、手�
   fi
 
   if ! FRONTEND_APP_JSON="$(az ad app show \
-    --subscription "$SUBSCRIPTION_ID" \
     --id "$FRONTEND_CLIENT_ID" \
     -o json)"; then
     echo "Frontend アプリ登録を取得できません。テナント、Client ID、アプリの所有権を確認してください。" >&2
@@ -246,7 +245,6 @@ Day 0 で作成したフロントエンドのアプリ登録に対して、手�
   }')"
 
   az rest \
-    --subscription "$SUBSCRIPTION_ID" \
     --method PATCH \
     --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
     --body "$SPA_PATCH"
@@ -257,7 +255,6 @@ Day 0 で作成したフロントエンドのアプリ登録に対して、手�
 
 ```bash
 az ad app show \
-  --subscription "$SUBSCRIPTION_ID" \
   --id "$FRONTEND_CLIENT_ID" \
   --query "spa.redirectUris" -o jsonc
 ```

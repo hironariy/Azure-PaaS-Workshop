@@ -49,6 +49,7 @@ if(tool==='az'){
  if(args[0]==='account'){
   console.log(JSON.stringify({id:process.env.SUBSCRIPTION_ID,tenantId:process.env.SCENARIO==='wrong-tenant'?'wrong':process.env.TENANT_ID}));
  }else if(args[0]==='ad'){
+  if(args.includes('--subscription')){console.error('unrecognized arguments: --subscription');process.exit(2);}
   if(process.env.SCENARIO==='app-read-failure')process.exit(9);
   const app=JSON.parse(process.env.APP_JSON);
   if(process.env.SCENARIO==='wrong-client')app.appId='00000000-0000-0000-0000-000000000009';
