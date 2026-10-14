@@ -108,6 +108,13 @@ zip -v | head -1
 以降のページで使用する環境変数を設定し、`~/clouddrive/paas-workshop/paas-workshop.json` に保存します。グループ演習で `GROUP_ID` が指定されている場合は、自分のグループ名（`A`、`B` など）に変更してください。同じ Cloud Shell セッションで作業を続ける限り、これらの変数は以降のページでもそのまま引き継がれます。
 
 ```bash
+if [ -f "$PWD/scripts/workshop-state.sh" ]; then
+  export WORKSHOP_REPO_DIR="$PWD"
+else
+  export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+fi
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+export ENV_FILE="$WORKSHOP_STATE_DIR/paas-workshop.json"
 export LOCATION="japaneast"
 export SWA_LOCATION="eastasia"
 export BASE_NAME="blogapp"

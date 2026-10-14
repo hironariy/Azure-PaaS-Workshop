@@ -144,4 +144,9 @@ test('reconnect loads data without executing shell strings, clears stale optiona
   });
   assert.notEqual(mismatch.status, 0);
   assert.match(mismatch.stderr, /context mismatch/);
+  if (spawnSync('zsh', ['--version']).status === 0) {
+    const zshResult = spawnSync('zsh', ['-c', script], { env, encoding: 'utf8', cwd: directory });
+    assert.equal(zshResult.status, 0, zshResult.stderr);
+    assert.equal(zshResult.stdout, oddPath);
+  }
 });
