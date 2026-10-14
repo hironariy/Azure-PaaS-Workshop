@@ -1,19 +1,34 @@
 ---
-title: デプロイスクリプトガイド（任意）
+title: デプロイスクリプト仕様（開発者向け）
 ---
 
-# デプロイスクリプトガイド（任意）
+# デプロイスクリプト仕様（開発者向け）
 
-このページは Cloud Shell 受講者本線で使用する `scripts/deploy-backend.sh` と `scripts/deploy-frontend.sh` の内部処理を理解したい場合の参照です。
+このページは、Cloud Shell から実行する `scripts/deploy-backend.sh` や `scripts/deploy-frontend.sh` などの内部処理を把握したい開発者・講師向けの解説です。
 
-Cloud Shell 本線では、バックエンドはリポジトリ内ソースから build して App Service に ZIP deploy し、フロントエンドは Cloud Shell 上で build して Static Web Apps に deploy します。講師提供の既成コンテナイメージには依存しません。
+受講者向けの実行手順は以下のページを参照してください。
 
-- [Day 1: PaaS インフラをデプロイ](../learner/day-1-deploy-infrastructure.ja.html)
-- [Day 1: バックエンドをデプロイ](../learner/day-1-deploy-backend.ja.html)
-- [Day 1: フロントエンドをデプロイ](../learner/day-1-deploy-frontend.ja.html)
+- [Day 1: インフラのデプロイ](../learner/day-1-deploy-infrastructure.ja.html)
+- [Day 1: バックエンドのデプロイ](../learner/day-1-deploy-backend.ja.html)
+- [Day 1: フロントエンドのデプロイ](../learner/day-1-deploy-frontend.ja.html)
 
-現行スクリプトは JSON state と現在の subscription/tenant/対象を照合し、`npm ci` で build します。backend は実行ごとの一時ディレクトリを使い、HTTP 200 と healthy JSON の両方を上限付きで検査します。Frontend token は環境で渡し、引数・ログ・末尾表示には使いません。CLI の失敗を未作成・削除済み・成功へ読み替えません。
+## 主なスクリプトの仕組み
 
-旧実装の詳細を残した `docs/deployment-scripts-guide.ja.md` は履歴の参照用です。実行には上記の Day 1 ページを使います。ローカル回帰テストは `node --test scripts/test/*.test.cjs` で実行でき、Azure CLI・npm・SWA の stub を使用するため実クラウドへ書き込みません。これは実際の Azure deployment の証拠ではありません。
+1. **状態管理 (`scripts/workshop-state.sh`)**
+   - `~/clouddrive/paas-workshop/paas-workshop.json` に保存されたサブスクリプション・テナント・リソースグループ・アプリ登録 ID を検証し、現在の Azure CLI コンテキストと一致していることを確認してから環境変数へ展開します。
+2. **バックエンドのデプロイ (`scripts/deploy-backend.sh`)**
+   - 一時ディレクトリで `npm ci` と `npm run build` を実行し、本番依存関係と `dist/` を ZIP パッケージ化して App Service へデプロイします。デプロイ後は `/health` が HTTP 200 と正常な JSON を返すまで確認します。
+3. **フロントエンドのデプロイ (`scripts/deploy-frontend.sh` / `scripts/deploy-frontend-arm.sh`)**
+   - `materials/frontend` を本番モードでビルドし、`runtime-config.js` と `index.html` の `window.__APP_CONFIG__` に Entra ID の設定値を注入します。
+   - メイン手順の `scripts/deploy-frontend.sh` は Static Web Apps のデプロイトークンを環境変数経由で SWA CLI に渡してデプロイします（トークンは画面やログに出力しません）。
+   - 代替手順の `scripts/deploy-frontend-arm.sh` は、ARM の `createZipDeploymentForStaticSiteBuild` API を使って ZIP パッケージをデプロイします。
 
-`.github/workflows/scripts-quality.yml` は Node.js 24 / Ubuntu 24.04 で script 構文と native 回帰テストを実行します。アプリの依存 package をインストールせず、Azure credentials・SWA token も使いません。公開 npm の供給元問題で止まっているアプリ側 CI とは独立した gate で、script CI の成功はアプリ audit・Bicep・実クラウド検証の成功を意味しません。
+## テストの実行方法
+
+スクリプトの構文チェックと単体テスト（Azure CLI / npm のモックを使用）は、次のコマンドで実行できます。
+
+```bash
+node --test scripts/test/*.test.cjs
+```
+
+さらに詳しい背景については、リポジトリ内の `docs/deployment-scripts-guide.ja.md` を参照してください。

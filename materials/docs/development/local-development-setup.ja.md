@@ -1,15 +1,17 @@
 ---
-title: ローカル開発セットアップ（任意）
+title: ローカル開発環境セットアップ（開発者向け）
 ---
 
-# ローカル開発セットアップ（任意）
+# ローカル開発環境セットアップ（開発者向け）
 
-このページは Cloud Shell 専用の受講者本線ではありません。ローカル PC でアプリケーションを開発・検証したい場合だけ参照してください。
+> **受講者の方へ:** ワークショップの受講ではローカル PC 上の開発環境構築は不要です。演習はすべて Azure Cloud Shell 上で進めます。受講手順は [ワークショップの流れ](../learner/cloud-shell-quickstart.ja.html) を参照してください。
 
-Cloud Shell でワークショップを進める場合は、次のページを使います。
+このページは、手元の PC でアプリケーションのコード変更やローカル動作検証を行いたい開発者向けの案内です。
 
-- [受講者クイックスタート](../learner/cloud-shell-quickstart.ja.html)
-- [Day 1: PaaS インフラをデプロイ](../learner/day-1-deploy-infrastructure.ja.html)
-- [Day 1: フロントエンドをデプロイ](../learner/day-1-deploy-frontend.ja.html)
+## 関連リンク
 
-ローカル開発の詳細はリポジトリ内の `docs/local-development-setup.ja.md` を参照してください。
+- [ワークショップの流れ（Cloud Shell クイックスタート）](../learner/cloud-shell-quickstart.ja.html)
+- [Day 1: インフラのデプロイ](../learner/day-1-deploy-infrastructure.ja.html)
+- [Day 1: フロントエンドのデプロイ](../learner/day-1-deploy-frontend.ja.html)
+
+ローカル開発環境の詳しい手順（Docker MongoDB の起動、`.env` の設定、フロントエンド・バックエンドの同時起動方法など）については、リポジトリ内の `docs/local-development-setup.ja.md` を参照してください。

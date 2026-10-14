@@ -1,98 +1,61 @@
 # 監視ガイド（Azure Monitor + Application Insights + Log Analytics）
 
-このガイドでは、Azure PaaS ワークショップのブログアプリケーションを監視・トラブルシュートする方法を説明します。
+このガイドでは、Azure PaaS ワークショップのブログアプリケーションを監視・トラブルシュートする方法を解説します。
 
-> **受講者本線:** Cloud Shell 専用の Day 2 手順は [Day 2: 監視と運用](learner/day-2-operations.ja.html) を参照してください。このガイドは監視設計と KQL の参照用です。
+> **演習手順について:** Cloud Shell から順番に実行する手順は [Day 2: 監視と運用](learner/day-2-operations.ja.html) を参照してください。このページは監視設計と KQL クエリのリファレンスです。
 
-本線は B1 / M25 / HA=false / SWA Standard。設定値があるだけで telemetry ingestion / new release / recovery 成功とは言えません。以下の診断・alert は実 resource と対象時刻を確認してから行い、秘密値・token・本文・個人データ・raw logs を共有しません。
-
-- **Frontend**: Azure Static Web Apps
-- **Backend**: Azure App Service（`/health`, `/api/health`）
-- **Database**: Azure Cosmos DB for MongoDB vCore
-- **Telemetry**: Application Insights（workspace-based）+ Log Analytics
+- **フロントエンド**: Azure Static Web Apps (`Standard`)
+- **バックエンド**: Azure App Service（`/health`, `/api/health`）
+- **データベース**: Azure Cosmos DB for MongoDB vCore
+- **監視基盤**: Application Insights（ワークスペースベース）+ Log Analytics
 
 ---
 
 ## 1. 監視の目的
 
-ワークショップ運用では、次の 3 点に迅速に答えられる状態を目指します。
+PaaS アプリケーションの運用では、主に次の 3 つの問いに素早く答えられることを目指します。
 
-1. **利用可能か？**（稼働状況、ヘルスチェック、エラー率）
-2. **健全か？**（依存先状態、DB 接続、認証フロー）
-3. **性能は維持できているか？**（API レイテンシ、失敗率、リソース飽和）
+1. **サービスは利用可能か？**（フロントエンド表示、ヘルスチェック応答、HTTP エラー率）
+2. **依存サービスは健全か？**（Key Vault シークレット解決、Cosmos DB 接続、Entra 認証）
+3. **パフォーマンスは維持されているか？**（API の応答時間、リソース使用率）
 
 ---
 
-## 2. Bicep で既に構成されている監視基盤
+## 2. Bicep で構成される監視リソース
 
-`materials/bicep/modules/monitoring.bicep` で次が作成されます。
+`materials/bicep/modules/monitoring.bicep` と `appservice.bicep` によって、以下の設定が自動的に構成されます。
 
-- Log Analytics ワークスペース（`PerGB2018`）
-- ワークスペース連携 Application Insights
-- コスト抑制のための日次上限設定
-
-`materials/bicep/modules/appservice.bicep` では、バックエンドに次が設定されます。
-
-- `APPLICATIONINSIGHTS_CONNECTION_STRING`
-- Node.js 向け Application Insights 拡張設定
+- Log Analytics ワークスペース（`PerGB2018`）と日次データ上限（Daily Cap）
+- ワークスペース連携の Application Insights
+- App Service の `APPLICATIONINSIGHTS_CONNECTION_STRING` と Node.js テレメトリ設定
 - App Service のヘルスチェックパス `/health`
 
 ---
 
-## 3. 推奨シグナル設計
+## 3. 監視シグナルの整理
 
-## 3.1 可用性シグナル
+### 3.1 可用性シグナル
+- App Service 直接のヘルスチェック（`/health`）
+- Static Web Apps Linked Backend 経由のヘルスチェック（`/api/health`）
+- HTTP ステータスコードの分布（2xx / 4xx / 5xx）
 
-- App Service ヘルスエンドポイント（`/health`）
-- SWA 経由 API ヘルス（`/api/health`）
-- HTTP ステータス分布（2xx/4xx/5xx）
+### 3.2 信頼性・エラーシグナル
+- Application Insights の失敗リクエスト（`AppRequests` で `Success == false`）と例外（`AppExceptions`）
+- App Service の Key Vault 参照ステータス
+- App Service ログストリーム上の起動エラーや DB 接続エラー
 
-## 3.2 信頼性シグナル
-
-- Application Insights の failed requests / exceptions
-- Key Vault reference 解決失敗
-- バックエンドログ上の Cosmos DB 接続障害
-
-## 3.3 性能シグナル
-
-- リクエスト時間の分位点（P50/P95/P99）
-- 依存呼び出しの遅延・失敗
-- App Service の CPU/メモリ推移
+### 3.3 性能シグナル
+- API リクエストの応答時間（P50 / P95 / P99）
+- Cosmos DB など外部依存呼び出しの応答時間（`AppDependencies`）
+- App Service Plan の CPU / メモリ使用率
 
 ---
 
-## 4. 実践セットアップ手順
+## 4. KQL クエリ集（Log Analytics ワークスペース用）
 
-### 4.1 App Service ヘルスチェックを検証する
+> **補足:** Log Analytics ワークスペースの **Logs（ログ）** 画面では、Application Insights のテーブル名は `AppRequests` / `AppExceptions` / `AppDependencies` になります（Application Insights リソース側の Logs 画面では `requests` / `exceptions` / `dependencies` が使われます）。
 
-1. 通常時に `/health` が HTTP 200 を返すことを確認する。
-2. フロントエンド経由で `/api/health` に到達できることを確認する。
-3. EasyAuth 設定でヘルス系パスが除外されていることを確認する。
-
-### 4.2 診断設定を有効化する（未設定の場合）
-
-本番相当の可観測性のため、次のリソースのプラットフォームログ/メトリックを Log Analytics に送ります。
-
-- App Service
-- Static Web Apps（利用可能な診断カテゴリがある場合）
-- Key Vault
-- Cosmos DB クラスター関連リソース
-
-> ワークショップの Bicep ベースラインは監視リソース作成までを担い、全リソースの診断設定を強制はしていません。
-
-### 4.3 アプリケーションログを標準化する
-
-- 構造化ログ（JSON フレンドリー）を維持する
-- 非秘密の相関キー（request id、operation id、sanitized operation）を含める。user id / token / payload を診断証拠へ出さない
-- シークレット/トークン/個人情報はログ出力しない
-
----
-
-## 5. KQL クエリ例（スターター）
-
-> Log Analytics ワークスペースの Logs では、workspace-based Application Insights のテーブル名は `AppRequests` / `AppExceptions` です。Application Insights リソースの Logs では `requests` / `exceptions` の別名が使える場合があります。以降は Log Analytics ワークスペースから実行する前提です。
-
-### 5.1 テーブルと直近テレメトリの簡易確認
+### 4.1 直近 24 時間でデータが記録されているテーブルを確認する
 
 ```kusto
 search *
@@ -101,7 +64,7 @@ search *
 | order by Records desc
 ```
 
-### 5.2 App Service の HTTP 失敗（Application Insights）
+### 4.2 HTTP 失敗リクエストと 95 パーセンタイル応答時間を確認する
 
 ```kusto
 AppRequests
@@ -112,7 +75,7 @@ AppRequests
 | order by TimeGenerated desc
 ```
 
-### 5.3 API 遅延（P95）
+### 4.3 時間帯別の API 応答時間（P95）の推移を確認する
 
 ```kusto
 AppRequests
@@ -121,7 +84,7 @@ AppRequests
 | order by P95DurationMs desc
 ```
 
-### 5.4 例外の種類別集計
+### 4.4 発生した例外（Exceptions）を種類別に集計する
 
 ```kusto
 AppExceptions
@@ -130,9 +93,9 @@ AppExceptions
 | order by Exceptions desc
 ```
 
-### 5.5 テーブルが見えない場合の確認
+### 4.5 テーブルが表示されない場合の対処
 
-`AppRequests` / `AppExceptions` が表示されない場合は、まずバックエンドへリクエストを送って Application Insights にテレメトリを発生させます。
+デプロイ直後などでまだリクエストが送信されていない場合、`AppRequests` や `AppExceptions` テーブルが表示されないことがあります。次のコマンドでヘルスチェックと公開 API へのリクエストを発生させ、数分待ってから再度クエリを実行してください。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -142,59 +105,36 @@ workshop_state_load deployed || exit 1
 node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
 ```
 
-数分待っても 0 件なら、対象 resource / 時間範囲 / SDK startup / instrumentation 設定を Portal で確認します。0 件は正常監視の証拠ではありません。CLI は設定名のみを表示します。
+また、App Service に `APPLICATIONINSIGHTS_CONNECTION_STRING` が設定されているかは次のコマンドで確認できます。
 
 ```bash
 az webapp config appsettings list \
-	--subscription "$SUBSCRIPTION_ID" \
-	--resource-group "$RESOURCE_GROUP" \
-	--name "$APP_SERVICE_NAME" \
-	--query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].name" \
-	-o table
+  --subscription "$SUBSCRIPTION_ID" \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$APP_SERVICE_NAME" \
+  --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].name" \
+  -o table
 ```
 
-設定の変更・再起動は原因と承認範囲を確認してから実施します。App settings の全値・logs ZIP を取得して貼る方法で診断しません。[Resource Health → startup → MI / KV → DB](learner/day-1-validation.ja.html) と、[復旧の UTC / monotonic 観測](learner/day-2-reliability.ja.html) を使います。
+---
+
+## 5. 本番運用に向けたアラート設計の例
+
+本番環境では、以下のような条件で Azure Monitor のアラートルールとアクショングループ（メール / Teams / PagerDuty 通知など）を設定することを推奨します。
+
+- 直近 5 分間の HTTP 5xx エラー率が 5% を超えた場合
+- `/health` エンドポイントの正常応答率がしきい値を下回った場合
+- API の P95 応答時間が目標値（例: 2,000 ms）を超えた場合
+- 未処理例外（`AppExceptions`）が短時間に急増した場合
 
 ---
 
-## 6. 最小アラート設計
+## 6. 障害切り分けの基本フロー
 
-次は追加設計案です。本線の Bicep が作成・発火検証済みではありません。実 traffic / 最小 sample count / observation window / ingestion delay / 通知先 / 費用を確認してから承認された scope で作成します。
+問題が発生した際は、ユーザーに近い側から順番に確認すると原因を特定しやすくなります。
 
-- HTTP 5xx 比率が閾値超過（例: 5 分間で 5% 超）
-- `/health` の連続失敗
-- レイテンシ異常（P95 上昇）
-- 例外発生の急増
-
-通知先:
-
-- メール / Teams / PagerDuty（チーム運用に合わせる）
-
----
-
-## 7. ワークショップ向け障害切り分けフロー
-
-次の順で確認すると切り分けが早くなります。
-
-1. **フロントエンド到達性**（SWA が静的コンテンツを配信できるか）
-2. **SWA 経由 API ヘルス**（`/api/health`）
-3. **バックエンド直接ヘルス**（`/health`）
-4. **Application Insights の失敗/例外**
-5. **DB 依存状態**（接続失敗、タイムアウト傾向）
-
----
-
-## 8. 運用上のベストプラクティス
-
-- 環境ごとに Log Analytics ワークスペースを分離する
-- アラート閾値をユーザー体感 SLO と整合させる
-- 実障害を待たずに月次でアラート訓練を実施する
-- MTTA/MTTR を記録し、事後レビューで改善する
-
----
-
-## 9. 今後の拡張（任意）
-
-- 講師/運用者向け Dashboard / Workbook 追加
-- 診断設定とアラートを Bicep モジュール化
-- ログイン〜投稿作成までの合成監視（Synthetic Probe）追加
+1. **フロントエンド到達性**: Static Web Apps のトップページが表示されるか。
+2. **SWA 経由の API 疎通**: `https://<SWA_HOSTNAME>/api/health` が 200 を返すか。
+3. **バックエンド直接の疎通**: `https://<APP_HOSTNAME>/health` が 200 を返すか。
+4. **アプリケーションログと例外**: `az webapp log tail` や `AppExceptions` にエラーが出ていないか。
+5. **シークレットと DB 接続**: Key Vault 参照が解決されているか、Cosmos DB への接続エラーが出ていないか。

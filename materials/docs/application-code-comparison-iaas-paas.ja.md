@@ -1,243 +1,69 @@
-# IaaS 版と PaaS 版のアプリケーションコード比較ガイド
+# IaaS と PaaS の比較（アプリケーションコード解説）
 
-このドキュメントは、同じブログアプリケーションに対して **IaaS 実装から PaaS 実装へ移行する際に、アプリケーションコードのどこを変更したか** を整理した解説書です。
+このドキュメントでは、同じブログアプリケーションを **IaaS（VM ベース）から Azure PaaS へ移行する際、アプリケーションコードのどこを変更し、どこをそのまま維持できるか** を解説します。
 
-> このページは任意の比較資料です。PaaS ワークショップの受講者本線では、IaaS 側のアーキテクチャは参照せず、Cloud Shell から App Service / Static Web Apps / Cosmos DB or DocumentDB / Key Vault / Application Insights を使う手順に従ってください。
-
-- 対象: `iaas/materials/backend` vs `materials/backend`、`iaas/materials/frontend` vs `materials/frontend`
-- 主眼: **差分（What）**、**背景（Context）**、**理由（Why）**
-- 非対象: Bicep インフラ定義の詳細（別ガイド参照）
+> **受講手順について:** ワークショップの構築・運用手順は [ワークショップの流れ](learner/cloud-shell-quickstart.ja.html) から進めてください。このページはアーキテクチャとコード差分の理解を深めるための補足資料です。
 
 ---
 
 ## 1. 結論サマリ
 
-アプリケーションのビジネスロジック（投稿作成・編集・閲覧、認証済みユーザー操作）は基本的に維持し、主に次の観点で変更しています。
+IaaS から PaaS へ移行しても、**アプリケーションのビジネスロジック（記事の作成・編集・閲覧・認証チェック）はそのまま維持**できます。コード変更が必要になるのは、主に以下の 4 点です。
 
-1. **実行環境差分への適応**（ポート、プロキシ経路、ヘルスチェック）
-2. **データ接続先差分への適応**（MongoDB レプリカセット → Cosmos DB for MongoDB vCore）
-3. **配布/設定注入方式の差分への適応**（IaaS VM 配置 → PaaS 配置）
-4. **運用性向上**（ログ整形、初期化順序、フェールセーフ）
-
----
-
-## 2. 変更分類（全体像）
-
-## 2.1 バックエンド
-
-主な実質変更ファイル:
-
-- `materials/backend/src/config/environment.ts`
-- `materials/backend/src/config/database.ts`
-- `materials/backend/src/routes/index.ts`
-- `materials/backend/src/routes/health.routes.ts`（軽微）
-- `materials/backend/.env.example`
-
-補足:
-
-- `auth.middleware.ts` や主要な API ルート/サービス層は、実装ロジックとしてはほぼ同等
-- モデル層は大部分が互換（Mongoose 継続利用）
-
-## 2.2 フロントエンド
-
-主な実質変更ファイル:
-
-- `materials/frontend/index.html`
-- `materials/frontend/src/config/appConfig.ts`
-- `materials/frontend/src/config/msalInstance.ts`
-- `materials/frontend/vite.config.ts`
-- `materials/frontend/staticwebapp.config.json`（PaaS 側で追加）
-- `materials/frontend/.env.example`
-
-補足:
-
-- `services/api.ts`、主要ページコンポーネントは機能面ではほぼ同等
+1. **実行環境への適応**（App Service の標準ポート `8080`、`/health` と `/api/health` の両方でのヘルスチェック応答）
+2. **データベース接続の適応**（自前 MongoDB レプリカセットから Cosmos DB for MongoDB vCore への接続オプション対応）
+3. **フロントエンド設定注入の適応**（VM 上の設定ファイル配置から、Static Web Apps 配信時の `window.__APP_CONFIG__` / `runtime-config.js` 注入への切り替え）
+4. **監視とセキュリティの向上**（Key Vault 参照による環境変数注入、接続文字列のログマスク処理）
 
 ---
 
-## 3. バックエンド変更の詳細
+## 2. 主な変更ファイル一覧
 
-## 3.1 `src/config/environment.ts`
+### 2.1 バックエンド (`materials/backend/`)
+- `src/config/environment.ts`: デフォルトポートを `3000` から App Service 標準の `8080` に変更し、Key Vault 参照で注入される `COSMOS_CONNECTION_STRING` に対応。
+- `src/config/database.ts`: Cosmos DB 接続時に `tls=true` などを適用し、ログ出力時に接続文字列内の認証情報をマスク。
+- `src/routes/index.ts` / `src/routes/health.routes.ts`: App Service 直接の `/health` に加え、Static Web Apps の Linked Backend（`/api/*`）経由で疎通確認できる `/api/health` を追加。
 
-### 何を変えたか
-
-- デフォルトポートを `3000` → `8080` に変更
-- 接続文字列キーを `MONGODB_URI` だけでなく `COSMOS_CONNECTION_STRING` も受け付ける形に変更
-
-### 背景・理由
-
-- App Service の標準実行ポートに合わせる必要があるため
-- PaaS では Key Vault 経由で `COSMOS_CONNECTION_STRING` を注入する運用を採るため
-- ローカル（IaaS 互換）でも動くよう後方互換を持たせるため
-
-## 3.2 `src/config/database.ts`
-
-### 何を変えたか
-
-- 接続先 URI の判定ロジックを追加（Cosmos かローカル MongoDB か）
-- Cosmos 接続時のみ `retryWrites=false`、`tls=true` を設定
-- 接続文字列ログ出力をサニタイズ関数経由に統一
-
-### 背景・理由
-
-- Cosmos DB for MongoDB vCore の接続要件に適合させるため
-- ローカル開発（Docker MongoDB）と Azure 本番相当を同一コードで切り替えるため
-- 認証情報をログに出さないため（運用セキュリティ）
-
-## 3.3 `src/routes/index.ts`
-
-### 何を変えたか
-
-- `router.use('/api', healthRoutes)` を追加
-
-### 背景・理由
-
-- SWA 連携時に `/api/*` 経路でバックエンドへ到達するため、`/api/health` での疎通確認を可能にする必要があるため
-- 直接到達の `/health` と併用することで、経路別に診断しやすくするため
-
-## 3.4 `src/routes/health.routes.ts`
-
-### 何を変えたか
-
-- 文言の調整（IaaS の LB 表現から App Service ヘルスチェック表現へ）
-- `live` のレスポンスキーを `alive` → `live` に統一
-
-### 背景・理由
-
-- 実際の運用文脈（App Service）に合わせて意図を明確化するため
-- 監視系レスポンスの意味を分かりやすく揃えるため
-
-## 3.5 `.env.example`
-
-### 何を変えたか
-
-- ローカル開発デフォルトポートを 8080 基準に更新
-- Cosmos 接続例、Entra ID 前提、CORS 例を PaaS 実態に合わせて更新
-
-### 背景・理由
-
-- 受講者が「まず動く」状態に最短で到達できるようにするため
-- App Service + Entra + Cosmos の組み合わせを標準パスとして示すため
+### 2.2 フロントエンド (`materials/frontend/`)
+- `index.html` / `src/config/appConfig.ts`: デプロイ時に注入される `window.__APP_CONFIG__` から Entra ID の Client ID / Tenant ID と API ベース URL（`/api`）を読み取る仕組みを追加。
+- `src/config/msalInstance.ts`: MSAL の初期化とリダイレクト後のトークン取得処理を整理。
+- `staticwebapp.config.json`: Static Web Apps での SPA ルーティング（`navigationFallback`）と `/api/*` ルート、セキュリティヘッダーを定義。
 
 ---
 
-## 4. フロントエンド変更の詳細
+## 3. バックエンドの変更ポイント詳細
 
-## 4.1 `index.html`
+### 3.1 `src/config/environment.ts`
+- **変更内容**: デフォルトポートを `8080` に変更し、DB 接続文字列として `COSMOS_CONNECTION_STRING` と `MONGODB_URI` の両方を受け付けるようにしました。
+- **理由**: App Service (Linux) の標準ポートに合わせつつ、Key Vault 参照から渡される `COSMOS_CONNECTION_STRING` をコード修正なしで読み取れるようにするためです。
 
-### 何を変えたか
+### 3.2 `src/config/database.ts`
+- **変更内容**: 接続先が Cosmos DB かローカルの MongoDB かを判定し、Cosmos DB 接続時には TLS 設定などを自動適用します。また、ログ出力時にはパスワード部分をマスクします。
+- **理由**: ローカル開発（Docker 上の MongoDB）と Azure 上の Cosmos DB for MongoDB vCore を同じコードベースで扱えるようにするためです。
 
-- `window.__APP_CONFIG__` プレースホルダーを追加
-
-### 背景・理由
-
-- デプロイ時にランタイム設定をインライン注入できるようにするため
-- 設定配布方式を VM ファイル配置依存から切り離し、PaaS 配布に適合させるため
-
-## 4.2 `src/config/appConfig.ts`
-
-### 何を変えたか
-
-- 本番時の設定取得を `window.__APP_CONFIG__` 優先に変更
-- 互換のため `/config.json` フォールバックを残し、最終的に build-time env まで降りる多段フォールバックを実装
-
-### 背景・理由
-
-- PaaS ではデプロイ時注入と静的配信の組み合わせが扱いやすいため
-- 環境差異（SWA、本番、ローカル）で初期化失敗しにくい堅牢設計にするため
-
-## 4.3 `src/config/msalInstance.ts`
-
-### 何を変えたか
-
-- イベントコールバック設定順序と初期化手順を明確化
-- `handleRedirectPromise()` の完了をより明示的に待機する流れに整理
-
-### 背景・理由
-
-- 認証リダイレクト直後のアカウント復元を安定させるため
-- 環境差や初回アクセス時の race condition を避けるため
-
-## 4.4 `vite.config.ts`
-
-### 何を変えたか
-
-- 開発プロキシ先を `localhost:3000` → `localhost:8080` に変更
-
-### 背景・理由
-
-- バックエンドの PaaS 想定ポート（App Service 互換）に合わせるため
-
-## 4.5 `staticwebapp.config.json`（追加）
-
-### 何を追加したか
-
-- SPA ルーティング用 `navigationFallback`
-- `/api/*` のルート定義
-- セキュリティ系ヘッダー定義
-
-### 背景・理由
-
-- SWA 上で SPA と API 連携を安定動作させるため
-- 静的ホスティング層で最低限のセキュリティヘッダーを統一するため
-
-## 4.6 `.env.example`
-
-### 何を変えたか
-
-- PaaS 前提の開発ガイダンス（5173/4280、8080）へ更新
-- Entra ID 設定の説明を強化
-
-### 背景・理由
-
-- ローカル開発と SWA 近似検証の導線を明確化するため
-- 認証設定ミスの初期学習コストを下げるため
+### 3.3 `src/routes/index.ts`
+- **変更内容**: `/health` だけでなく `/api/health` でもヘルスチェックルートが応答するように構成しました。
+- **理由**: Static Web Apps の Linked Backend は `/api/*` パスを App Service へ転送するため、フロントエンド経由の疎通（`/api/health`）とバックエンド直接の疎通（`/health`）を切り分けられるようにするためです。
 
 ---
 
-## 5. ほぼ変えていない領域（重要）
+## 4. フロントエンドの変更ポイント詳細
 
-移行後も、次の領域は原則維持しています。
+### 4.1 `index.html` と `src/config/appConfig.ts`
+- **変更内容**: `window.__APP_CONFIG__` から設定値（Entra ID の Client ID や API URL）を優先的に読み取り、未設定時は `/config.json` やビルド時環境変数へフォールバックする構成にしました。
+- **理由**: Static Web Apps へのデプロイ時に各受講者の Entra アプリ登録情報を安全に注入できるようにするためです。
 
-- API の業務ロジック（投稿 CRUD の振る舞い）
-- 認証認可の基本モデル（Entra JWT 検証の中核）
-- フロントエンドの画面遷移/ユースケースの中心部分
-
-これは、**「インフラ方式を変えても、アプリケーションのドメインロジックは保ちやすい」** という移行設計の意図によるものです。
-
----
-
-## 6. なぜこの変更方針なのか（設計意図）
-
-1. **変更を最小化して学習価値を高める**
-   - IaaS/PaaS の違いを、主に運用境界・設定注入・接続要件に集中させる。
-
-2. **ローカル開発と Azure 実行環境を両立させる**
-   - 同一コードでローカル/本番系を切り替え可能にする。
-
-3. **運用観点（監視/障害切り分け）を強化する**
-   - `/health` と `/api/health` など、経路別診断をしやすくする。
-
-4. **将来の再デプロイ/DR を容易にする**
-   - ランタイム設定の外出しと環境変数整理により、再構築時の手戻りを減らす。
+### 4.2 `staticwebapp.config.json`
+- **変更内容**: SPA のクライアントサイドルーティング用フォールバック（`navigationFallback`）とセキュリティヘッダーを定義しました。
+- **理由**: Static Web Apps 上で React Router の画面遷移と `/api/*` のバックエンド連携を正しく動作させるためです。
 
 ---
 
-## 7. 実践チェックリスト（移行レビュー用）
+## 5. 移行レビュー用のチェックリスト
 
-- [ ] バックエンドが `PORT=8080` で起動する
-- [ ] `COSMOS_CONNECTION_STRING` と `MONGODB_URI` の両系で接続確認済み
-- [ ] `/health` と `/api/health` の両方で疎通確認済み
-- [ ] フロントエンド設定が `window.__APP_CONFIG__` で読める
-- [ ] `/config.json` フォールバック時も起動可能
-- [ ] ローカル開発時の Vite proxy が `:8080` に向いている
-- [ ] SWA 設定ファイルで SPA ルーティングと API ルートが機能する
+IaaS から PaaS へ Web アプリケーションを移行する際は、次の観点を確認するとスムーズです。
 
----
-
-## 8. 関連ドキュメント
-
-- `design/IaaS-to-PaaS-Migration-Changes.md`（現行の移行契約と、参考用に保持した旧設計案。旧コード例を実行手順としてコピーしない）
-- `materials/docs/bicep-guide.ja.md`（IaC 観点）
-- `materials/docs/monitoring-guide.ja.md`（監視観点）
-- `materials/docs/disaster-recovery-guide.ja.md`（BCDR 観点）
+- [ ] バックエンドが PaaS 標準ポート（`PORT=8080` など）で待ち受けているか
+- [ ] DB 接続文字列や API キーをソースコードやリポジトリ内ファイルから排除し、Key Vault 参照 + マネージド ID で注入しているか
+- [ ] バックエンド直接（`/health`）とフロントエンド経由（`/api/health`）の両方でヘルスチェックが通るか
+- [ ] SPA のリダイレクトルーティング（`staticwebapp.config.json`）が設定されているか

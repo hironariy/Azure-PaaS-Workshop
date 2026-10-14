@@ -1,14 +1,12 @@
-# Bicep ガイド（Azure PaaS ワークショップ ブログアプリケーション）
+# Bicep ガイド（Azure PaaS ワークショップ）
 
-このガイドでは、ワークショップの Bicep テンプレート構成、主要パラメータ、運用時の安全なデプロイ手順を解説します。
+このガイドでは、ワークショップで使用する Bicep テンプレート（`materials/bicep/`）の構成、主要パラメータ、および各モジュールの設計意図を解説します。
 
-> **受講者本線:** Cloud Shell 専用の手順は [Day 1: PaaS インフラをデプロイ](learner/day-1-deploy-infrastructure.ja.html) を参照してください。このガイドは Bicep の背景理解と参照用です。
->
-> この PaaS ワークショップの本線は Static Web Apps Linked Backend + App Service です。Application Gateway や Bastion は使用しません。
+> **受講手順について:** Cloud Shell から順番に実行する手順は [Day 1: インフラのデプロイ](learner/day-1-deploy-infrastructure.ja.html) を参照してください。このページはテンプレートの構造を理解するためのリファレンスです。
 
 ディレクトリ構成:
 
-```
+```text
 materials/bicep/
 ├── main.bicep
 ├── *.bicepparam
@@ -25,157 +23,93 @@ materials/bicep/
 
 ---
 
-## 1. Bicep が実装するデプロイ構成
+## 1. デプロイされる全体構成
 
-このテンプレートは、次の PaaS トポロジをデプロイします。
+`materials/bicep/main.bicep` をエントリポイントとして、以下の PaaS リソース群を一括でデプロイします。
 
-1. ネットワーク基盤（VNet、サブネット、NAT Gateway、Private DNS）
-2. 監視基盤（Log Analytics + Application Insights）
-3. Key Vault（Private Endpoint 付き）
-4. Cosmos DB for MongoDB vCore（Private Endpoint 付き）
-5. App Service（public HTTPS、Linux、outbound VNet Integration、Managed Identity）
-6. Static Web Apps Standard + Linked Backend（本線の必須 routing）
-7. API 向け EasyAuth 上書き（`Return401`、除外パス定義）
-
-エントリポイント:
-
-- `materials/bicep/main.bicep`
+1. **ネットワーク基盤**（VNet、サブネット、NAT Gateway、Private DNS ゾーン）
+2. **監視基盤**（Log Analytics ワークスペース + Application Insights）
+3. **Key Vault**（Private Endpoint 接続、RBAC 認可モード）
+4. **Cosmos DB for MongoDB vCore**（Private Endpoint 接続）
+5. **App Service**（Linux Node.js 22 LTS、VNet 統合、システム割り当てマネージド ID）
+6. **Static Web Apps (`Standard`) + Linked Backend**（`/api/*` を App Service へルーティング）
+7. **App Service 認証設定 (`authsettingsV2`)**（未認証 API アクセス時にログイン画面へリダイレクトせず HTTP 401 を返す設定）
 
 ---
 
-## 2. 重要パラメータの理解
+## 2. 主要パラメータ
 
-`main.bicep` の主要パラメータ:
+`main.bicep` で受け取る主なパラメータは次のとおりです。
 
-- `environment`: `dev` / `staging` / `prod`
-- `location`: プライマリ Azure リージョン
-- `baseName`: リソース名のベース
-- `deploymentMode`: 受講者本線では `standard`
-- `groupId`: ワークショップ用グループ識別子（`A`-`J`）
-- `entraTenantId`, `entraBackendClientId`, `entraFrontendClientId`
-- `cosmosDbAdminPassword`（secure）
-- `appServiceSku`, `cosmosDbTier`, `cosmosDbEnableHa`
-- `staticWebAppSku`, `staticWebAppLocation`
+| パラメータ名 | 説明 |
+|---|---|
+| `environment` | 環境識別子（`dev` / `staging` / `prod`） |
+| `location` | 主要リソースのデプロイ先リージョン（例: `japaneast`） |
+| `baseName` | リソース名のベース文字列 |
+| `deploymentMode` | ワークショップ標準構成では `standard` |
+| `groupId` | 受講グループ識別子（`A`〜`J` など） |
+| `entraTenantId` | Microsoft Entra テナント ID |
+| `entraBackendClientId` | バックエンド API アプリ登録の Client ID |
+| `entraFrontendClientId` | フロントエンド SPA アプリ登録の Client ID |
+| `cosmosDbAdminPassword` | Cosmos DB 管理者パスワード（`@secure()` パラメータ） |
+| `appServiceSku` | App Service Plan の SKU（標準は `B1`） |
+| `cosmosDbTier` | Cosmos DB for MongoDB vCore のクラスター層（標準は `M25`） |
+| `cosmosDbEnableHa` | Cosmos DB の高可用性設定（標準は `false`） |
+| `staticWebAppSku` | Static Web Apps の SKU（Linked Backend を使うため `Standard`） |
+| `staticWebAppLocation` | Static Web Apps のリージョン（例: `eastasia`） |
 
-本線は **B1 / M25 / HA=false / SWA Standard**。B1 の slots / zone redundancy と M25 の HA はありません。`environment='prod'` だけで production-ready にはなりません。既存 M30+ は実 tier を明示して保持し、新しい M25 default を downgrade として使いません。M30+→M25 は不可で、upgrade は可逆的な演習 toggle ではありません。
+> **SKU に関する補足:**
+> ワークショップの標準構成はコストを抑えるため **App Service `B1` / Cosmos DB `M25` (`HA=false`) / Static Web Apps `Standard`** を使用します。なお、Cosmos DB を `M30` 以上へスケールアップすると `M25` へダウングレードすることはできないため注意してください。
 
 ---
 
 ## 3. モジュール別の解説
 
-## 3.1 `network.bicep`
+### 3.1 `network.bicep`
 
-作成対象:
+- **作成リソース**: `snet-appservice` と `snet-privateendpoint` を持つ VNet、NAT Gateway、Public IP、Cosmos DB / Key Vault 用の Private DNS ゾーン
+- **設計意図**: App Service から閉域網（Private Endpoint）経由で Cosmos DB と Key Vault へ安全に通信できるようにし、外向き通信の送信元 IP も NAT Gateway で固定化します。
 
-- `snet-appservice` と `snet-privateendpoint` を持つ VNet
-- NAT Gateway と Public IP
-- Cosmos/Key Vault 用 Private DNS ゾーン
+### 3.2 `monitoring.bicep`
 
-設計意図:
+- **作成リソース**: Log Analytics ワークスペース、ワークスペースベースの Application Insights
+- **設計意図**: アプリケーションの要求・例外・依存関係トレースとプラットフォームログを一元的に検索・分析できるようにします。
 
-- App Service の外向き通信を安定化
-- DB / KV 向けの private endpoint / DNS / route を構成。effective isolation は実際の firewall・名前解決・接続で別途検証
+### 3.3 `keyvault.bicep` / `keyvault-rbac.bicep`
 
-## 3.2 `monitoring.bicep`
+- **作成リソース**: Key Vault（RBAC モード有効）、Private Endpoint、および App Service のマネージド ID に対する `Key Vault Secrets User` ロール割り当て
+- **設計意図**: 接続文字列やパスワードをアプリケーション設定に平文で持たせず、Key Vault 参照（`@Microsoft.KeyVault(SecretUri=...)`）経由で安全に注入します。
+- **必要な権限**: `keyvault-rbac.bicep` は `Microsoft.Authorization/roleAssignments` を作成するため、デプロイを実行する受講者にはサブスクリプションの **Owner** ロールが必要です。
 
-作成対象:
+### 3.4 `cosmosdb.bicep`
 
-- Log Analytics ワークスペース
-- ワークスペース連携 Application Insights
+- **作成リソース**: Cosmos DB for MongoDB vCore クラスター、Private Endpoint + Private DNS ゾーングループ、Key Vault シークレット（接続文字列）
+- **設計意図**: データベース接続文字列を Bicep デプロイ内で直接 Key Vault シークレットへ格納し、人間が接続文字列をコピー＆ペーストする手間と漏洩リスクをなくします。
 
-設計意図:
+### 3.5 `appservice.bicep`
 
-- アプリ/プラットフォーム両面の調査先を一元化
+- **作成リソース**: App Service Plan（Linux）、App Service（システム割り当てマネージド ID 有効）、VNet 統合、環境変数（Key Vault 参照・Application Insights 接続文字列）、ヘルスチェックパス `/health`
+- **設計意図**: OS 管理不要のマネージド実行環境を構成し、ヘルスチェックと Key Vault 連携を標準装備します。
 
-## 3.3 `keyvault.bicep`
+### 3.6 `staticwebapp.bicep`
 
-作成対象:
+- **作成リソース**: Static Web Apps (`Standard`)、App Service への Linked Backend
+- **設計意図**: フロントエンド SPA と同じオリジン（`https://<SWA_HOSTNAME>/api/*`）でバックエンド API を呼び出せるようにし、CORS 設定の複雑化を防ぎます。
 
-- Key Vault（Private Endpoint）
-- endpoint / DNS group。vault と network resources の writer はこの module のみ
+### 3.7 `appservice-auth.bicep`
 
-設計意図:
-
-- シークレットをソース/平文設定に置かない
-
-### `keyvault-rbac.bicep`
-
-既存 vault に App Service MI の **Key Vault Secrets User** を付与します。vault / endpoint を再作成しません。assignment は同じ vault scope / principal / role の deterministic GUID を保持します。Contributor は必要な `Microsoft.Authorization/roleAssignments/write` を持たないため、Contributor-only / 主催者準備なしの新規 deploy はここでブロックです。role を省略したり access policy へ降格したりしません。
-
-## 3.4 `cosmosdb.bicep`
-
-作成対象:
-
-- Cosmos DB for MongoDB vCore クラスター
-- Private Endpoint + DNS ゾーングループ
-- 接続文字列と管理者パスワードを Key Vault に格納
-
-設計意図:
-
-- バックエンドは平文ではなく Key Vault reference 経由で DB 接続
-
-pinned `Microsoft.DocumentDB/mongoClusters@2024-02-15-preview` は `publicNetworkAccess` property を持ちません。「Disabled を設定済み」と断定せず、private DNS / endpoint / effective firewall / app connectivity を検証します。RU Cosmos DB の quota と混同しません。
-
-## 3.5 `appservice.bicep`
-
-作成対象:
-
-- App Service Plan（Linux）
-- App Service（System-assigned Managed Identity）
-- VNet Integration
-- App Insights 接続文字列、Key Vault reference を含む app settings
-- ヘルスチェックパス `/health`
-
-設計意図:
-
-- マネージド実行環境 + セキュアなシークレット参照 + ヘルス監視
-
-## 3.6 `staticwebapp.bicep`
-
-作成対象:
-
-- Static Web App
-- `sku == 'Standard'` かつ backend ID 指定時のみ Linked Backend
-
-設計意図:
-
-- orchestrator は Standard を必須にして SWA→App Service 連携を作成。standalone module の Free は linked backend なしの別用途
-
-## 3.7 `appservice-auth.bicep`
-
-SWA/Backend 連携後に App Service `authsettingsV2` を設定:
-
-- `unauthenticatedClientAction: 'Return401'`
-- `/health`, `/api/health` と公開閲覧系投稿 API を除外
-- Entra ID と Azure Static Web Apps の identity provider を有効化
-
-設計意図:
-
-- API 呼び出し時のログインリダイレクト回避とヘルスチェック維持
+- **作成リソース**: App Service の `authsettingsV2` 設定
+- **設計意図**: 未認証リクエストに対してログインページへの HTML リダイレクトではなく HTTP `401 Unauthorized` を返すようにし、`/health` や公開記事一覧 API などの匿名アクセス対象パスを除外設定します。
 
 ---
 
-## 4. パラメータファイル運用
+## 4. パラメータファイルの扱い方
 
-利用可能な例:
-
-- `main.bicepparam`, `dev.bicepparam`
-- ローカル用 `*.local.bicepparam`
-
-推奨運用:
-
-1. 近いベースライン（通常は `dev`）をコピーする。
-2. Entra ID と secure 値を設定する。
-3. 受講者本線では `deploymentMode = 'standard'` のままにする。
-4. ローカル上書き値は非コミットのローカルパラメータに保持する。
-
-本線の PARAM_FILE は JSON state と同じ専用ディレクトリに置き、実 clone への `using` を生成します。初回だけ password をファイルへ直接生成し、再実行で既存 secret を保持します。JSON / terminal / Git に秘密値を保存しません。詳細は [Day 1](learner/day-1-deploy-infrastructure.ja.html) を参照してください。
+演習では、Git 管理下の `materials/bicep/dev.bicepparam` を直接編集せず、Cloud Shell の永続領域（`$HOME/clouddrive/paas-workshop/dev.local.bicepparam`）を生成して使用します。これにより、生成した DB 管理者パスワードや自分のテナント固有の Client ID を誤って Git にコミットすることを防ぎます。
 
 ---
 
-## 5. デプロイコマンド（参照）
-
-Day 0 の permissions / consent / catalog / quota / tier / capacity / 費用条件を満たした場合だけ実行します。catalog success は deploymentReady ではありません。先に state をロードし、保存した context と target を検証します。
+## 5. デプロイ・確認コマンド（リファレンス）
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -183,26 +117,21 @@ export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}
 source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
 workshop_state_load identity || exit 1
 
+# 1. 事前検証 (validate)
 az deployment group validate \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
   --parameters "$PARAM_FILE" || exit 1
-```
 
-デプロイ実行:
-
-```bash
+# 2. デプロイ実行 (create)
 az deployment group create \
   --subscription "$SUBSCRIPTION_ID" --name main \
   --resource-group "$RESOURCE_GROUP" \
   --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
   --parameters "$PARAM_FILE" || exit 1
-```
 
-出力確認:
-
-```bash
+# 3. 出力値の確認 (show)
 az deployment group show \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
@@ -211,44 +140,11 @@ az deployment group show \
   -o jsonc || exit 1
 ```
 
-今回の start / correlation ID / Succeeded を確認し、前回成功の outputs と取り違えません。Failed / Canceled / quota / capacity error なら保存・app deploy へ進みません。main.json は Bicep 0.44.1 で再生成し、[配布 ARM の parity](../bicep/README.md#maintain-the-compiled-arm-artifact) を保ちます。local compilation は live validation / idempotence の証拠ではありません。
-
 ---
 
-## 6. 安全な変更管理（Bicep）
+## 6. テンプレート改修時のベストプラクティス
 
-テンプレート更新時の推奨:
-
-1. 1 回の変更で 1 つの関心事に絞る。
-2. `create` 前に `validate` を必ず実施する。
-3. 破壊的変更リスクは検証用リソースグループで先行確認する。
-4. 出力値と依存サービス接続を確認する。
-5. パラメータ変更点を運用メモに残す。
-
----
-
-## 7. よくある落とし穴
-
-- `deploymentMode` が `standard` になっていない
-- パラメータファイルの Entra ID 未設定
-- ローカルパラメータ更新漏れ
-- SWA SKU 制約を無視した Linked Backend 前提運用
-- 認証設定変更後の EasyAuth 動作未確認
-
----
-
-## 8. デプロイ後タスク（運用）
-
-- state-scoped deploy script が SWA token を取得し環境渡し。値は表示しない
-- App Service へバックエンド成果物を ZIP deploy
-- actual hostname の直接 / SWA 公開契約と browser consent / CRUD を [検証](learner/day-1-validation.ja.html)
-- App Service で Key Vault secret 解決を確認
-- Application Insights / Log Analytics へのテレメトリ流入を確認
-
----
-
-## 9. 今後の拡張（任意）
-
-- 診断設定・アラートの Bicep モジュール化
-- DR 演習向けセカンダリリージョンパラメータの整備
-- SKU やネットワーク既定値に対するポリシー/ガードレール導入
+1. **1 回の変更で 1 つの関心事に絞る**: ネットワーク変更と認証変更を同時に行わず、段階的に検証します。
+2. **`create` の前に必ず `validate` を実行する**: 構文エラーやパラメータ不足を早期に検出できます。
+3. **SKU の制約を意識する**: Static Web Apps の Linked Backend は `Standard` SKU が必須であり、Cosmos DB の `M30` 以上から `M25` へのダウングレードはできません。
+4. **`main.json` の同期**: `materials/bicep/main.bicep` を更新した場合は、`az bicep build --file materials/bicep/main.bicep` で `main.json` も更新します。

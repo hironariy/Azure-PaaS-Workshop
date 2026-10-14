@@ -4,27 +4,23 @@ title: トラブルシューティング
 
 # トラブルシューティング
 
-Cloud Shell 専用手順で詰まりやすい問題を、症状別に確認します。
+Cloud Shell での演習中によくある問題と、症状別の確認・対処方法をまとめています。
 
-## Owner の前提権限が不足している
+## サブスクリプションの Owner 権限が不足している
 
-本ワークショップは、利用する Azure サブスクリプションの **Owner** を受講者の前提とします。Contributor のみでは、Day 1 の `Microsoft.Authorization/roleAssignments/write`（App Service の Managed Identity への Key Vault Secrets User 割り当て）が拒否されます。
+このワークショップでは、対象 Azure サブスクリプションの **Owner（所有者）** ロールが必要です。Contributor（共同作成者）のみでは、Day 1 の Bicep デプロイで App Service のマネージド ID に対する Key Vault ロール割り当て（`Microsoft.Authorization/roleAssignments/write`）を作成できません。
 
-[Day 0 の Owner 確認](day-0-prerequisites.ja.html)で、対象 subscription、グループ経由・継承の割り当て、PIM の有効化を確認してください。Owner を確認できなければデプロイ前に停止し、講師またはサブスクリプション管理担当に受講環境を確認します。必要な割り当ての省略、Key Vault RBAC 無効化、無断の権限昇格で回避しません。Owner 確認後も拒否される場合は、Deny Assignment・Azure Policy・対象スコープを調べます。
+- [Day 0: 事前準備 2](day-0-prerequisites.ja.html) の確認コマンドで、対象サブスクリプションの Owner ロールが有効になっているか確認してください。
+- PIM（Privileged Identity Management）を利用している場合は、ロールを有効化してから再実行してください。
+- Azure の Owner ロールと Microsoft Entra ID の Application Developer ロールは別の権限です。アプリ登録や同意で権限エラーになる場合は、Entra ID 側のロール割り当てを確認してください。
 
-Azure Owner は Entra の Application Developer や組織全体同意の権限を意味しません。アプリ登録・本人同意の失敗は別途切り分けます。
+## Cloud Shell の環境変数が消えてしまった
 
-## Cloud Shell の変数が空になる
+**症状:**
+`echo "$RESOURCE_GROUP"` などを実行しても空欄になる（Cloud Shell のセッション再接続後など）。
 
-症状:
-
-```bash
-echo "$RESOURCE_GROUP"
-```
-
-が空になる。
-
-対処:
+**対処:**
+永続ストレージ（`~/clouddrive/paas-workshop/paas-workshop.json`）に保存された変数を復元します。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -34,50 +30,62 @@ workshop_state_load base || exit 1
 printf 'State: %s / Subscription: %s / RG: %s\n' "$ENV_FILE" "$SUBSCRIPTION_ID" "$RESOURCE_GROUP"
 ```
 
-ファイルが無い場合は [受講者クイックスタート](cloud-shell-quickstart.ja.html) から変数を再設定します。
+Day 0 の Entra ID 設定まで完了している場合は `workshop_state_load identity`、Day 1 のインフラデプロイまで完了している場合は `workshop_state_load deployed` で復元できます。
 
-JSON 不正・version 不一致・clone 先の消失は明示的に停止します。旧 `.env` を代わりに `source` したり、破損 state を空の値で成功扱いにしたりしません。context 不一致なら保存済み subscription を確認し、`az account set --subscription "$SUBSCRIPTION_ID"` 後に再度ロードします。別グループへの変更は別の state ディレクトリで行います。
+もしサブスクリプションの不一致エラーが出た場合は、`az account set --subscription "$SUBSCRIPTION_ID"` を実行してから再度読み込んでください。
 
-`.paas-workshop.lock` が存在して保存できない場合は、同じ state を使う別セッションの保存処理が終わるまで待ちます。異常終了後も残った場合、すべての保存処理が停止していることと専用ディレクトリを確認してから、その lock ファイルだけを削除します。保存中に lock を削除したり、JSON を削除して初期化を強行したりしません。
+## リソースプロバイダーの登録で失敗する
 
-## Provider 登録で失敗する
+**症状:**
+`AuthorizationFailed` が表示される。
 
-症状:
-
-```text
-AuthorizationFailed
-```
-
-可能性:
-
-- サブスクリプションに対する権限が不足している。
-- 講師指定のサブスクリプションを選択していない。
-
-確認:
+**原因と確認:**
+選択しているサブスクリプションが異なるか、サブスクリプションの権限が有効になっていません。
 
 ```bash
 az account show --output table
 az role assignment list --assignee "$(az ad signed-in-user show --query id -o tsv)" --all -o table
 ```
 
-## Entra ID app registration を作成できない
+## Entra ID のアプリ登録を作成できない
 
-症状:
+**症状:**
+`az ad app create` や `az rest` 実行時に `Insufficient privileges` が表示される。
 
-```text
-Insufficient privileges
+**確認と対処:**
+- 対象テナントで **Application Developer（アプリケーション開発者）** ロールが割り当てられているか、PIM の有効化が必要でないか確認します。
+- すでに作成したアプリがある場合は、[Day 0: Entra ID と認証設定](day-0-entra-id.ja.html) の手順で自分が所有者（Owner）になっているアプリを使用します。
+
+## Day 0 の本人同意（`permission grant`）でエラーになる
+
+| 症状 | 確認と対処 |
+|---|---|
+| `permission grant` で権限不足になる | `--consent-type Principal` と `--principal-id "$USER_OBJECT_ID"` が指定されているか確認します。省略すると全ユーザー対象の `AllPrincipals` になり、Application Developer ロールでは実行できません。 |
+| サービスプリンシパルや grant の取得に失敗する | アプリ作成直後は Microsoft Graph への反映に数秒〜十数秒かかる場合があります。少し時間をおいて、[Day 0 手順 4](day-0-entra-id.ja.html#4-application-developer-として本人だけに同意する) のコードブロック全体を再実行してください。 |
+| 「別の grant があります」で停止する | 他のユーザーまたは `AllPrincipals` の既存同意を上書きしないよう保護しています。自分が所有する演習専用アプリであることを確認してください。 |
+| Day 1 のブラウザーサインインで同意画面が出ない | Day 0 で本人の `Principal` 同意がすでに付与されているため正常です。そのままサインインと記事作成（CRUD）へ進んでください。 |
+
+## Frontend の API アクセス許可が Azure Portal に表示されない
+
+Azure Portal の **アプリの登録 > フロントエンドアプリ > API のアクセス許可** 画面は、反映に少し時間がかかる場合があります。次の CLI コマンドで設定値と同意（grant）が確認できれば問題ありません。
+
+```bash
+az ad app show \
+  --id "$FRONTEND_CLIENT_ID" \
+  --query "requiredResourceAccess[?resourceAppId=='$BACKEND_CLIENT_ID']" \
+  -o jsonc
+
+az ad app permission list-grants \
+  --id "$FRONTEND_CLIENT_ID" \
+  -o jsonc
 ```
 
-対処:
-
-- 対象 tenant、本人の Application Developer、有効化が必要な PIM、適用ポリシーを確認します。Azure Owner があるだけでは Entra の権限不足は解消しません。
-- [Day 0 の Entra 手順](day-0-entra-id.ja.html)で本人が作成・所有する演習専用アプリを使います。共有 Client ID の配布や全ユーザーへの管理者同意を標準の回避策にしません。
-- 明示的に承認した専用アプリの値を保存する場合も、tenant を変更せず、Client ID / scope ID を確認して `workshop_state_save identity` を使います。state へ文字列を追記しません。
-- 解消できない場合はエラーを記録して停止し、講師・テナント管理担当へ相談してください。
+- `requiredResourceAccess[].resourceAppId` が `$BACKEND_CLIENT_ID`、スコープ ID が `$ACCESS_SCOPE_ID` になっていること。
+- `list-grants` の `consentType` が `Principal`、`principalId` が自分のユーザー Object ID、`scope` に `access_as_user` が含まれていること。
 
 ## Bicep デプロイが失敗する
 
-まず詳細を確認します。
+まずデプロイエラーの詳細を確認します。
 
 ```bash
 az deployment group show \
@@ -86,16 +94,16 @@ az deployment group show \
   --query "properties.error" -o jsonc
 ```
 
-よくある原因:
-
-| 症状 | 確認 |
+| よくある原因 | 確認ポイント |
 |---|---|
-| SKU quota | App Service Plan / Cosmos DB tier の quota |
-| region unavailable | `LOCATION` と `SWA_LOCATION` |
-| invalid password | `PARAM_FILE` の `cosmosDbAdminPassword` の設定有無。秘密値は出力しない |
-| app registration mismatch | `BACKEND_CLIENT_ID` / `FRONTEND_CLIENT_ID` |
+| SKU のクォータ不足・容量制限 | App Service Plan (`B1`) や Cosmos DB (`M25`) のリージョン制限・サブスクリプションクォータを確認する |
+| リージョン指定の誤り | `LOCATION` と `SWA_LOCATION`（Static Web Apps 対応リージョン）を確認する |
+| パスワード要件エラー | `$PARAM_FILE` の `cosmosDbAdminPassword` が空になっていないか確認する |
+| Entra ID パラメータの未設定 | `$PARAM_FILE` の `entraTenantId` / `entraBackendClientId` / `entraFrontendClientId` を確認する |
 
-## App Service `/health` が失敗する
+## App Service の `/health` が失敗する
+
+まずアプリケーションのログストリームを確認します。
 
 ```bash
 az webapp log tail \
@@ -103,13 +111,11 @@ az webapp log tail \
   --name "$APP_SERVICE_NAME"
 ```
 
-確認ポイント:
-
-- backend ZIP deploy が完了しているか。
-- App Service の startup command が `node dist/src/app.js` になっているか。
+主な確認ポイント:
+- バックエンドの ZIP デプロイが完了しているか。
+- スタートアップコマンドが `node dist/src/app.js` になっているか。
 - `SCM_DO_BUILD_DURING_DEPLOYMENT=false` が設定されているか。
-- Key Vault reference が解決できているか。
-- Cosmos DB 接続で失敗していないか。
+- Key Vault 参照（`COSMOS_CONNECTION_STRING`）が解決できているか。
 
 ```bash
 az webapp config show \
@@ -133,16 +139,9 @@ az webapp config appsettings list \
   -o table
 ```
 
-DB connection string は値を表示しません。Key Vault reference の解決状態・MI・private network・DB readiness は [アプリ検証の診断順序](day-1-validation.ja.html) に従います。未加工ログや app settings を Issue に貼らないでください。
+### `Cannot find module '/home/site/wwwroot/src/app.js'` が出る場合
 
-### `Cannot find module '/home/site/wwwroot/src/app.js'`
-
-原因:
-
-- 古い手順または古いスクリプトで App Service の startup command が `node src/app.js` のままになっている。
-- ZIP deploy が完了する前に App Service が再起動し、まだ起動ファイルが配置されていない。
-
-対処:
+スタートアップコマンドが古い `node src/app.js` になっているか、ZIP デプロイが完了する前に再起動されています。次のコマンドで修正して再デプロイします。
 
 ```bash
 az webapp config set \
@@ -153,17 +152,15 @@ az webapp config set \
 ./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
 ```
 
-`az webapp deploy` の出力が `Warmed up Kudu instance successfully.` でしばらく止まって見える場合があります。Cloud Shell から ZIP をアップロードしている間は追加ログが出ないことがあるため、数分待ってから App Service logs と `/health` を確認します。
+※ `az webapp deploy` の実行中、`Warmed up Kudu instance successfully.` の表示のまま 1〜2 分ほど待つ場合がありますが、バックグラウンドで展開処理が進んでいます。
 
-## SWA `/api/health` が 404
+## Static Web Apps の `/api/health` が 404 になる
 
-可能性:
+**主な原因:**
+- フロントエンド（`staticwebapp.config.json` を含む）がまだ Static Web Apps にデプロイされていない。
+- Static Web Apps が `Standard` SKU で作成されていない、または Linked Backend が設定されていない。
 
-- フロントエンド成果物が Static Web Apps にまだデプロイされていない。
-- Static Web Apps が Standard SKU ではない。
-- Linked Backend が作成されていない。
-
-確認:
+**確認コマンド:**
 
 ```bash
 az staticwebapp show \
@@ -177,9 +174,9 @@ az resource list \
   -o table
 ```
 
-## サインイン後に戻れない
+## サインイン後にリダイレクトエラー（`AADSTS50011`）が出る
 
-Frontend SPA app registration の redirect URI を確認します。
+フロントエンドのアプリ登録に Static Web Apps の URL が SPA リダイレクト URI として登録されているか確認します。
 
 ```bash
 az ad app show \
@@ -187,7 +184,7 @@ az ad app show \
   --query "spa.redirectUris" -o jsonc
 ```
 
-`https://<swa-hostname>` が無い場合は追加します。
+`https://<SWA_HOSTNAME>` が含まれていない場合は、次のコマンドで追加します。
 
 ```bash
 EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)" || exit 1
@@ -215,60 +212,15 @@ az rest \
   --body "$SPA_PATCH"
 ```
 
-## Frontend の API permissions が Portal に表示されない
+## サインイン時に `AADSTS900144`（`client_id` 不足）が出る
 
-`az ad app permission add` は API permission の**要求**であり、実際の同意ではありません。Portal の **App registrations > Frontend > API permissions** は要求を表示します。実際の同意は本線では MSAL のブラウザーサインインで行い、CLI grant は実行しません。Day 0 時点で grant がないこと自体は失敗ではありません。
+**症状:**
+`AADSTS900144: The request body must contain the following parameter: 'client_id'.`
 
-CLI で状態を確認します。
+**原因:**
+Static Web Apps に配信されている `index.html` の `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID` が設定されていません。
 
-```bash
-az ad app show \
-  --id "$FRONTEND_CLIENT_ID" \
-  --query "requiredResourceAccess[?resourceAppId=='$BACKEND_CLIENT_ID']" \
-  -o jsonc
-
-az ad app permission list-grants \
-  --id "$FRONTEND_CLIENT_ID" \
-  -o jsonc
-```
-
-期待値:
-
-- `requiredResourceAccess[].resourceAppId` が `$BACKEND_CLIENT_ID`
-- `requiredResourceAccess[].resourceAccess[].id` が `$ACCESS_SCOPE_ID`
-- `list-grants` の `clientId` は Frontend service principal object ID、`resourceId` は Backend service principal object ID（application の object ID / Client ID とは別）
-- `scope` に `access_as_user`、`consentType` は `Principal`、`principalId` は `az ad signed-in-user show --query id -o tsv` で取得する本人の user object ID
-
-CLI では見えるのに Portal で見えない場合は、ブラウザー更新、Portal 再ログイン、正しい tenant と Frontend app registration を開いているかを確認します。
-
-## Day 0 の本人同意が拒否される・既存 grant で停止する
-
-| 症状 | 確認と対処 |
-|---|---|
-| `permission grant` が権限不足 | `--consent-type Principal` と `--principal-id` があるか確認します。省略時は `AllPrincipals` となり、Application Developer 単独では不足します。 |
-| 正しい `Principal` でも拒否 | `az account show --query "{tenant:tenantId,userType:user.type}" -o jsonc` で対象 tenant と本人ログインを確認。Application Developer の PIM 有効化、所有アプリ、`type: User` の scope、適用 consent policy と CLI の Graph OAuth 認可を切り分けます。Azure Owner / Contributor では代替できません。 |
-| service principal の検索・grant の読み取りが失敗 | 読み取り拒否を「存在しない」と解釈して作成・上書きしません。実エラーを確認し、Graph 反映待ちなら時間をおいて Day 0 のガード付きブロックを再実行します。 |
-| 「別の grant があります」で停止 | 他ユーザーや全ユーザーへの既存同意を保護しています。grant を削除せず、本人専用の新規アプリで演習するか、既存アプリの管理担当に確認します。 |
-| Day 1 で同意画面が出ない | Day 0 で本人の `Principal` grant を作成済みなら正常です。本人の grant と認証 CRUD を確認します。同意画面が出ないことだけで新規同意の成否を判断しません。 |
-
-CLI バージョン (`az version`)、実効ロール・PIM 状態、失敗した操作、エラーコードと本文を記録してください。共有 Issue へ token、資格情報、本人の object ID などの個人情報を貼らないでください。講師への相談時も必要な tenant/client/scope の値は承認済みの連絡経路で共有します。管理者は対象・ポリシー・CLI 認可を調査する担当であり、受講者全員への管理者ロール付与や無条件の組織全体同意を依頼する手順ではありません。
-
-参考: [CLI の consent type と principal ID](https://learn.microsoft.com/en-us/cli/azure/ad/app/permission?view=azure-cli-latest#az-ad-app-permission-grant)、[Application Developer の権限](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference#application-developer)。
-
-## ログイン時に `AADSTS900144` が出る
-
-症状:
-
-```text
-AADSTS900144: The request body must contain the following parameter: 'client_id'.
-```
-
-原因:
-
-- Static Web Apps にデプロイされた `index.html` の `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID` が入っていない。
-- JSON state の frontend ID が異なる、または古い frontend 成果物を再デプロイしている。
-
-確認:
+**確認と対処:**
 
 ```bash
 curl -fsS "https://${SWA_HOSTNAME}" \
@@ -278,21 +230,11 @@ workshop_state_load deployed || exit 1
 printf 'Tenant: %s / Frontend: %s / Backend: %s\n' "$TENANT_ID" "$FRONTEND_CLIENT_ID" "$BACKEND_CLIENT_ID"
 ```
 
-期待値は `window.__APP_CONFIG__` に `ENTRA_FRONTEND_CLIENT_ID`、`ENTRA_TENANT_ID`、`ENTRA_BACKEND_CLIENT_ID` が含まれることです。
+値が空または古い場合は、[Day 1: フロントエンドのデプロイ](day-1-deploy-frontend.ja.html) に従って `./scripts/deploy-frontend.sh "$RESOURCE_GROUP"` を再実行してください。
 
-`window.__APP_CONFIG__` が正しいのに同じエラーが続く場合は、古いデプロイスクリプトで Vite の development bundle をデプロイしている可能性があります。`git pull` 後に [ARM frontend 手順](day-1-deploy-frontend.ja.html) で ZIP を prepare し直し、許可済み保管先へ upload して deploy してください。スクリプトは `NODE_ENV=production` を強制し、development bundle が混入した場合はデプロイ前に停止します。また、このワークショップ本線では Static Web Apps 組み込み認証の `/.auth/login/aad` ではなく、アプリ画面の **Sign in with Microsoft** ボタンから MSAL でログインします。
+## フロントエンドまたはバックエンドのビルドが失敗する
 
-対処:
-
-```bash
-workshop_state_load deployed || exit 1
-FRONTEND_ZIP="$WORKSHOP_STATE_DIR/frontend-$(node -p 'require("node:crypto").randomUUID()').zip"
-bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP" || exit 1
-```
-
-この時点では未デプロイです。上記 ARM 手順で hosted ZIP / completion / readiness / cleanup を確認し、CLI に自動 fallback しません。
-
-## フロントエンド build が失敗する
+フロントエンドの手動ビルド確認:
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -306,24 +248,13 @@ npm ci
 npm run build
 ```
 
-Node.js が古い場合、Cloud Shell 環境差異の可能性があります。講師に相談してください。
-
-## バックエンド build / ZIP deploy が失敗する
+バックエンドの再デプロイ確認:
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
 export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
 source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
 workshop_state_load deployed || exit 1
-node --version
-npm --version
-zip -v | head -1
+cd "$WORKSHOP_REPO_DIR"
 ./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
 ```
-
-確認ポイント:
-
-- `materials/backend/package-lock.json` が存在する。
-- `npm run build` が成功している。
-- `deploy.zip` の中身に `dist/src/app.js` があり、パスが `/` 区切りになっている。
-- App Service logs に `Cannot find module` や Key Vault reference のエラーが出ていない。

@@ -4,11 +4,14 @@ title: "Day 2: 信頼性と復旧"
 
 # Day 2: 信頼性と復旧
 
-このページでは、**B1 / M25 / HA=false** の計画再起動・再 deploy・既知 revision の code rollback を観測します。これは managed DB failover / SLA / DR の実証ではありません。VM の OS 復旧、MongoDB replica-set 管理、Bastion/SSH、ASR は扱いません。
+このページでは、ワークショップの標準構成（**App Service B1 / Cosmos DB M25 / HA=false**）において、計画的な再起動・再デプロイ・ロールバックを行った際の挙動と、データの永続性を確認します。
 
-## 1. 実施条件と障害前のデータを確認する
+> **PaaS における復旧の特徴:**
+> IaaS のように VM の OS 再起動や MongoDB レプリカセットの手動復旧を行うのではなく、App Service のプロセス再起動やビルド成果物の再デプロイによってアプリケーション層を復旧させます。一方、データ層（Cosmos DB for MongoDB vCore）はステートフルなマネージドサービスとして独立しているため、アプリケーションを再起動・再デプロイしても記事データはそのまま保持されます。
 
-[Day 1 の検証](day-1-validation.ja.html) を完了し、実 deploy / release、本人同意、認証付き CRUD、telemetry を確認したグループだけ実施します。利用するサブスクリプションの Owner と Key Vault RBAC 割り当て（#16）、およびフロントエンドの公開状態（#15）が満たされていない場合は、先に Day 0 / Day 1 の前提を完了してください。共有アプリ・実ユーザーデータには障害注入しません。
+## 1. 事前状態とテストデータを確認する
+
+まず、[Day 1: アプリケーションの動作確認](day-1-validation.ja.html) が完了しており、現在の環境が正常に応答することを確認します。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -19,27 +22,27 @@ workshop_state_load deployed || exit 1
 node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
 ```
 
-ブラウザーで、自分の published テスト記事と draft を 1 件ずつ作成します。post ID / slug、固定した title / content / tags / status、作成時刻を手元の私的なメモに記録し、公開の証拠には本文を貼りません。未認証では draft を参照できないことも確認します。詳細 GET は viewCount を増やすため、比較対象は **内容・所有者・状態** とし、viewCount や意図的編集後の updatedAt の違いをデータ破損としません。
+ブラウザーでサインインし、**公開済み（Published）の記事 1 件**と**下書き（Draft）の記事 1 件**が存在することを確認します（未作成の場合は作成しておきます）。再起動や再デプロイの後に、同じ記事の内容・公開状態が保持されていることを確認します。
 
-各演習の合格条件は、control-plane 操作完了、公開契約、同じ記事の内容保持、認証付き更新/作成/削除、draft 非公開、telemetry の実流入です。health だけで合格にしません。
-
-| 演習 | 影響・元に戻す方法 | 合格条件 |
+| 演習項目 | 内容 | 確認ポイント |
 |---|---|---|
-| restart | B1 の API が一時停止し得る。自動起動を待ち、失敗時は startup / MI / KV / DB を診断 | 操作成功 + 下記の検証。outage 未観測なら復旧時間は未測定 |
-| 同じ source の redeploy | 再 build / ZIP / Frontend upload。既知 revision を再 build して戻せることを先に確認 | 今回の release 完了 + 同じデータ + 認証付き CRUD |
-| code rollback | 専用・clean checkout の revision だけを変更。DB schema / secret / app ID は変更しない | 既知 revision の配信 + 同じデータ + 認証付き CRUD |
+| 1. App Service の再起動 (`restart`) | `az webapp restart` を実行し、ヘルスチェックの応答推移を観測する | 再起動後に `/health` と `/api/health` が正常復帰し、既存の記事データが保持されていること |
+| 2. 同一ソースからの再デプロイ (`redeploy`) | バックエンドとフロントエンドを再デプロイする | 再デプロイ後も公開 API・認証・既存記事データが維持されていること |
+| 3. 既知の正常コミットへのロールバック (`rollback`) | 記録しておいた正常コミット（SHA）から再ビルド・再デプロイする | 問題発生時に特定のリビジョンへ安全に戻せること |
 
-## 2. 先に観測を開始してから再起動する
+## 2. ヘルスチェックを観測しながら App Service を再起動する
 
-**Cloud Shell 1** で state を復元して観測を開始します。最初の `sample` が healthy であることを確認してから、Cloud Shell 2 で操作します。
+Cloud Shell で 2 つのターミナル（タブ）を開き、片方でヘルスチェックの連続観測を行いながら、もう片方で App Service を再起動します。
+
+**ターミナル 1（観測用）** で次のスクリプトを実行します。App Service 直接の `/health` と Static Web Apps 経由の `/api/health` を 15 秒間隔で並行チェックし、結果を JSON Lines 形式で表示します。
 
 ```bash
+export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
 node "$WORKSHOP_REPO_DIR/scripts/observe-workshop-recovery.cjs" "$WORKSHOP_STATE_DIR" || exit 1
 ```
 
-実 hostname / saved context を照合し、直接 `/health` と SWA `/api/health` を並行 GET します。デフォルトは最大 30 sample、要求は各 10 秒 / 1 MiB、sample 間隔 15 秒です。API 記事詳細を連続アクセスせず、body / token を表示しません。`observation_started` / `sample` / `result` を JSON lines で表示します。
-
-**Cloud Shell 2** でも同じ state をロードしてから、専用ターゲットを再起動します。
+最初の `sample` で `directHealthy: true` と `swaHealthy: true` が表示されたら、**ターミナル 2（操作用）** で App Service を再起動します。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -56,59 +59,41 @@ printf 'restart control-plane completed UTC=%s elapsed=%ss\n' \
   "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$((SECONDS - OPERATION_SECONDS))"
 ```
 
-結果の読み方:
+### 観測結果の見方
 
-| 出力 | 意味 |
+| `status` の値 | 意味 |
 |---|---|
-| `observed_recovery` | 失敗を観測し、その後に両経路で 2 回連続 healthy を確認した |
-| `detectedAfterMs` / `confirmedAfterMs` | 観測開始から失敗 sample / healthy 確定までの monotonic 経過 |
-| `observedRecoveryMs` | 最初の失敗 sample から healthy 確定まで。真の停止時間や DB failover RTO ではない |
-| `healthy_without_observed_outage` | sample 間で短い停止を見逃した可能性。復旧時間は null、0 秒成功ではない |
-| `observation_exhausted` | 上限内に healthy を確定できず exit 1。自動で SKU / DB / network / auth を変更しない |
-| `rate_limited` | 429。停止時刻へ換算せず、stable healthy もリセットする |
+| `observed_recovery` | 再起動に伴う一時的な応答失敗（502/503 など）を検知し、その後に両経路で 2 回連続の正常応答（`healthy`）を確認した状態。`observedRecoveryMs` に検知から復旧確認までの経過時間が記録されます。 |
+| `healthy_without_observed_outage` | ポーリング間隔（15 秒）の間に再起動と復帰が完了し、一度もエラーが観測されずに正常応答が継続した状態。 |
+| `observation_exhausted` | 最大試行回数内に正常応答へ復帰しなかった状態。`az webapp log tail` や [Day 1 の切り分け手順](day-1-validation.ja.html) で起動エラーを確認します。 |
 
-sample は要求完了後の値で、15 秒間隔に要求時間が加わります。UTC は別 session / telemetry の照合、duration は単調増加 clock を使います。control-plane 操作時間と sample 上の復旧時間を別に記録します。HTTP 401/403/404/5xx、transport、JSON 契約エラーは診断対象ですが、それだけで DB failover と判定しません。`workshopReady: false` は常に維持します。
+## 3. 正常動作コミットを記録して再デプロイする
 
-観測上限後は [Day 1 diagnostics](day-1-validation.ja.html) に戻ります。承認なく再起動を繰り返したり、public DB / Key Vault RBAC 無効化へ切り替えたりしません。
-
-## 3. 既知の正常 revision を記録して再 deploy する
-
-Cloud Shell 2 の専用 checkout が clean で、今回の release / CRUD が実際に正常だった場合だけ記録します。`git status` が dirty なら自分や他人の変更を reset / stash で隠さず、演習を止めます。
+現在正常に動作している Git コミットのハッシュ（SHA）を記録し、同じソースから再デプロイしても環境とデータが維持されることを確認します。
 
 ```bash
 cd "$WORKSHOP_REPO_DIR" || exit 1
 if [ -n "$(git status --porcelain)" ]; then
-  echo "Clean dedicated checkout is required." >&2
+  echo "未コミットの変更があります。git status を確認してください。" >&2
   exit 1
 fi
 KNOWN_GOOD_REVISION="$(git rev-parse --verify HEAD)" || exit 1
 printf 'Known-good source revision: %s\n' "$KNOWN_GOOD_REVISION"
 ```
 
-この full SHA は非秘密の演習記録へ残します。package-lock、compiler/runtime、公開 registry の version/integrity、パラメータ、runtime settings も再 build に必要です。source SHA だけで ZIP が byte-identical になる保証はありません。既知 revision に JSON state 対応 scripts が含まれることを確認し、古い unsafe deploy script へ戻しません。
-
-Cloud Shell 1 で再度観測を開始してから、Cloud Shell 2 で同じ source を再 deploy します。
+バックエンドとフロントエンドを再デプロイし、公開エンドポイントのチェックを実行します。
 
 ```bash
-bash "$WORKSHOP_REPO_DIR/scripts/deploy-backend.sh" "$RESOURCE_GROUP" "$APP_SERVICE_NAME" || exit 1
-FRONTEND_ZIP="$WORKSHOP_STATE_DIR/frontend-$(node -p 'require("node:crypto").randomUUID()').zip"
-bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP" || exit 1
-```
-
-[Frontend 手順](day-1-deploy-frontend.ja.html) に従い、この ZIP を許可済み保管先の一意な object へ upload して temporary read-only URL を取得します。保管先・費用・cleanup が未承認なら演習を止めます。その後:
-
-```bash
-bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" deploy "$FRONTEND_ZIP" || exit 1
+./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME" || exit 1
+./scripts/deploy-frontend.sh "$RESOURCE_GROUP" || exit 1
 node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
 ```
 
-backend は一時 ZIP を削除するため、rollback は **既知 revision と lockfile からの rebuild** です。frontend は source revision / checksum を含む ZIP と receipt を保持できます。ARM completion 後に exact index/public readiness を確認し、保管先の owned object を削除・URL を失効します。upload acceptance、古い instance の healthy と今回の release 完了を分け、Deployment Center の今回の時刻・成功状態・deployment ID と、対象 frontend 内容を照合します。registry / artifact が再取得不能なら rollback capability は未確認であり、演習を始めません。データを失う schema migration・password rotation・app registration 再作成はこの演習に含めません。
+また、Bicep テンプレートも同じパラメータファイル（`$PARAM_FILE`）を使って冪等に再実行できます（既存の DB パスワードや Key Vault ロール割り当てはそのまま保持されます）。
 
-インフラの再現性も確認する場合は、[Day 1](day-1-deploy-infrastructure.ja.html) の同じ PARAM_FILE / names / context で validate → deploy → outputs 確認を実施します。既存 secret を再生成しません。これは RBAC / policy / quota と追加承認条件を満たした場合の確認であり、local compilation だけで idempotence 成功としません。
+## 4. 記録したコミットへロールバックする
 
-## 4. 既知 revision へ code rollback する
-
-演習用の別 revision を実際に配信・確認してから、記録済みの known-good full SHA に戻します。意図的に本番障害を作ったり、他人の変更を削除したりする操作ではありません。
+コード変更後に問題が見つかった場合を想定し、手順 3 で記録した `KNOWN_GOOD_REVISION` をチェックアウトして再デプロイする手順を確認します。
 
 ```bash
 cd "$WORKSHOP_REPO_DIR" || exit 1
@@ -126,9 +111,9 @@ git rev-parse --verify "${KNOWN_GOOD_REVISION}^{commit}" > /dev/null || exit 1
 git switch --detach "$KNOWN_GOOD_REVISION" || exit 1
 ```
 
-Cloud Shell 1 の観測を開始し、手順 3 の build/deploy を再実行します。B1 に slot swap はありません。失敗時は diagnostics → known-good rebuild / deployment 完了確認を行い、DB や secrets を削除しません。
+この状態で `./scripts/deploy-backend.sh` や `./scripts/deploy-frontend.sh` を実行することで、正常動作を確認済みのリビジョンへロールバックできます。
 
-演習後はローカル source を元に戻します。これは **ローカル checkout の復元だけ** で、配信コードは自動では変わりません。
+確認が終わったら、ローカルのブランチを元に戻します。
 
 ```bash
 if [ -n "$CURRENT_BRANCH" ]; then
@@ -138,20 +123,24 @@ else
 fi
 ```
 
-## 5. 同じデータ・認証・telemetry を確認する
+## 5. 再起動・再デプロイ後のデータとテレメトリを確認する
 
-各操作後に元の post ID / slug で再表示し、title / content / tags / status / author が保たれていることを確認します。自分の published 記事だけを更新して reload し、新しい確認用 draft を作成→再表示→削除します。元の baseline 記事は演習終了まで残します。未認証で draft が隠れること、別ユーザーの投稿を操作しないことも維持します。
+1. ブラウザーでブログアプリを再読み込みし、手順 1 で確認した**公開記事**と**下書き記事**のタイトル・本文・タグ・公開状態がそのまま保持されていることを確認します。
+2. 新しい下書き記事を 1 件作成して削除し、認証付きの書き込み操作も正常に行えることを確認します。
+3. [Day 2: 監視と運用](day-2-operations.ja.html) の KQL クエリを実行し、再起動・再デプロイ中のリクエストや応答時間が Application Insights / Log Analytics に記録されていることを確認します。
 
-[Day 1 の公開契約・browser CRUD・telemetry](day-1-validation.ja.html) と [監視と運用](day-2-operations.ja.html) で今回の UTC 範囲を照合します。telemetry 0 件は成功ではありません。記録は revision / deployment ID、operation start/end、sample 結果、content 比較の pass/fail、CRUD / consent / telemetry 結果だけにし、token / password / raw logs / 本文は共有しません。
+## 6. ワークショップ標準構成と本番向け高可用性（HA / DR）の違い
 
-**この手順と native fixtures の成功は Azure 実証ではありません。** 実 restart / redeploy / rollback / DB persistence が成立するまで #17 は未解決です。
+このワークショップの標準構成（`B1` / `M25` / `HA=false`）は学習・検証向けにコストを最小化した構成であり、本番環境向けの高可用性構成とは次の点が異なります。
 
-## 6. Optional の HA / restore / DR を本線と分離する
+| 観点 | ワークショップ標準構成 (`dev`) | 本番向け拡張構成（参考） |
+|---|---|---|
+| App Service | `B1`（単一インスタンス、デプロイスロットなし） | `Standard` / `Premium`（複数インスタンス、デプロイスロットによるゼロダウンタイム切り替え、ゾーン冗長） |
+| Cosmos DB (MongoDB vCore) | `M25`（開発・検証用、高可用性 `HA=false`） | `M30` 以上（ゾーン冗長 HA 有効化、バックアップ・ポイントインタイムリストア）※ `M30` 以上へ変更すると `M25` には戻せません |
+| リージョン構成 | 単一リージョン構成 | セカンダリリージョンへの Bicep 展開とトラフィック切り替え |
 
-B1 の slots / zone redundancy、M25 の HA は利用できません。M30+ への upgrade は M25 へ戻せないため、単なる可逆的な workshop toggle としません。backup/restore、secondary region、Premium compute、Front Door などは、対応 SKU / region / quota / restore point / RPO / 費用 / rollback / cleanup と追加承認を確認した別演習です。現環境で実行していない optional 手順を検証済みとしません。
-
-[BCDR reference](../disaster-recovery-guide.ja.html) は追加設計の参考であり、VM / ASR 演習を取り込んだり、baseline で multi-region failover が有効と解釈したりしません。
+本番システム向けの事業継続・災害復旧（BCDR）の設計ポイントについては、[BCDR ガイド](../disaster-recovery-guide.ja.html) を参照してください。
 
 ## 次に進む
 
-- [Cleanup](cleanup.ja.html)
+- [クリーンアップ（リソース削除）](cleanup.ja.html)

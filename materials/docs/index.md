@@ -4,7 +4,7 @@ title: Azure PaaS Workshop 受講者ポータル
 
 # Azure PaaS Workshop 受講者ポータル
 
-<p class="wp-lead">このポータルは、Azure PaaS Workshop を <strong>Azure Cloud Shell (Bash)</strong> だけで進めるための受講者向け入口です。App Service、Static Web Apps、Cosmos DB/DocumentDB、Key Vault、Managed Identity、Application Insights / Azure Monitor を使う PaaS 構成を、事前準備から cleanup まで順番に確認します。<br/>もととなっているリポジトリは<a href='https://github.com/hironariy/Azure-PaaS-Workshop'>こちら</a>です</p>
+<p class="wp-lead">このポータルは、Azure PaaS Workshop を <strong>Azure Cloud Shell (Bash)</strong> だけで進めるための受講者向けガイドです。App Service、Static Web Apps、Cosmos DB (MongoDB vCore)、Key Vault、Managed Identity、Application Insights / Azure Monitor を使った PaaS 構成を、事前準備からクリーンアップまで順番に構築・確認します。<br/>ワークショップのリポジトリは<a href='https://github.com/hironariy/Azure-PaaS-Workshop'>こちら</a>です。</p>
 
 <style>
   :root {
@@ -336,9 +336,9 @@ title: Azure PaaS Workshop 受講者ポータル
 </style>
 
 <div class="workshop-portal">
-  <nav class="workshop-toc" aria-label="ワークショップ教材 TOC">
-    <h2 class="wp-toc-title"><span class="wp-dot" aria-hidden="true"></span>ワークショップ進行 TOC</h2>
-    <p class="wp-toc-note">上から順に進めます。右側のチェックは進捗確認用で、ブラウザに自動保存されます。</p>
+  <nav class="workshop-toc" aria-label="ワークショップ教材目次">
+    <h2 class="wp-toc-title"><span class="wp-dot" aria-hidden="true"></span>ワークショップ手順</h2>
+    <p class="wp-toc-note">上から順に進めてください。右側のチェックボックスは進捗管理用で、ブラウザに自動保存されます。</p>
 
     <div class="wp-progress">
       <div class="wp-progress__head">
@@ -356,7 +356,7 @@ title: Azure PaaS Workshop 受講者ポータル
         <span class="wp-step__num" aria-hidden="true">1</span>
         <span class="wp-step__body">
           <span class="wp-badge wp-badge--d0">Day 0</span>
-          <a class="wp-step__link" href="learner/cloud-shell-quickstart.ja.html" target="workshop-content-frame">事前準備 1</a>
+          <a class="wp-step__link" href="learner/cloud-shell-quickstart.ja.html" target="workshop-content-frame">事前準備 1: Cloud Shell 設定</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="lp-quickstart" aria-label="Day 0 事前準備 1 完了"></label>
       </li>
@@ -364,7 +364,7 @@ title: Azure PaaS Workshop 受講者ポータル
         <span class="wp-step__num" aria-hidden="true">2</span>
         <span class="wp-step__body">
           <span class="wp-badge wp-badge--d0">Day 0</span>
-          <a class="wp-step__link" href="learner/day-0-prerequisites.ja.html" target="workshop-content-frame">事前準備 2</a>
+          <a class="wp-step__link" href="learner/day-0-prerequisites.ja.html" target="workshop-content-frame">事前準備 2: サブスクリプションとリソースグループ</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="lp-day0-prereq" aria-label="Day 0 事前準備 2 完了"></label>
       </li>
@@ -380,7 +380,7 @@ title: Azure PaaS Workshop 受講者ポータル
         <span class="wp-step__num" aria-hidden="true">4</span>
         <span class="wp-step__body">
           <span class="wp-badge wp-badge--d1">Day 1</span>
-          <a class="wp-step__link" href="learner/day-1-deploy-infrastructure.ja.html" target="workshop-content-frame">PaaS インフラをデプロイ</a>
+          <a class="wp-step__link" href="learner/day-1-deploy-infrastructure.ja.html" target="workshop-content-frame">PaaS インフラのデプロイ</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="lp-day1-infra" aria-label="Day 1 インフラデプロイ完了"></label>
       </li>
@@ -388,7 +388,7 @@ title: Azure PaaS Workshop 受講者ポータル
         <span class="wp-step__num" aria-hidden="true">5</span>
         <span class="wp-step__body">
           <span class="wp-badge wp-badge--d1">Day 1</span>
-          <a class="wp-step__link" href="learner/day-1-deploy-backend.ja.html" target="workshop-content-frame">バックエンドをデプロイ</a>
+          <a class="wp-step__link" href="learner/day-1-deploy-backend.ja.html" target="workshop-content-frame">バックエンドのデプロイ</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="lp-day1-backend" aria-label="Day 1 バックエンドデプロイ完了"></label>
       </li>
@@ -396,7 +396,7 @@ title: Azure PaaS Workshop 受講者ポータル
         <span class="wp-step__num" aria-hidden="true">6</span>
         <span class="wp-step__body">
           <span class="wp-badge wp-badge--d1">Day 1</span>
-          <a class="wp-step__link" href="learner/day-1-deploy-frontend.ja.html" target="workshop-content-frame">フロントエンドをデプロイ</a>
+          <a class="wp-step__link" href="learner/day-1-deploy-frontend.ja.html" target="workshop-content-frame">フロントエンドのデプロイ</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="lp-day1-frontend" aria-label="Day 1 フロントエンドデプロイ完了"></label>
       </li>
@@ -404,7 +404,7 @@ title: Azure PaaS Workshop 受講者ポータル
         <span class="wp-step__num" aria-hidden="true">7</span>
         <span class="wp-step__body">
           <span class="wp-badge wp-badge--d1">Day 1</span>
-          <a class="wp-step__link" href="learner/day-1-validation.ja.html" target="workshop-content-frame">アプリを検証</a>
+          <a class="wp-step__link" href="learner/day-1-validation.ja.html" target="workshop-content-frame">アプリケーションの動作確認</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="lp-day1-validation" aria-label="Day 1 検証完了"></label>
       </li>
@@ -428,14 +428,14 @@ title: Azure PaaS Workshop 受講者ポータル
         <span class="wp-step__num" aria-hidden="true">10</span>
         <span class="wp-step__body">
           <span class="wp-badge wp-badge--pre">終了</span>
-          <a class="wp-step__link" href="learner/cleanup.ja.html" target="workshop-content-frame">Cleanup</a>
+          <a class="wp-step__link" href="learner/cleanup.ja.html" target="workshop-content-frame">クリーンアップ（リソース削除）</a>
         </span>
-        <label class="wp-check"><input type="checkbox" data-progress-id="lp-cleanup" aria-label="Cleanup 完了"></label>
+        <label class="wp-check"><input type="checkbox" data-progress-id="lp-cleanup" aria-label="クリーンアップ完了"></label>
       </li>
     </ol>
 
-    <h2 class="wp-toc-title wp-toc-sub"><span class="wp-dot" aria-hidden="true"></span>迷ったときの参照</h2>
-    <p class="wp-toc-note">順番に関係なく、必要なときに開く参照ページです。</p>
+    <h2 class="wp-toc-title wp-toc-sub"><span class="wp-dot" aria-hidden="true"></span>リファレンス・補足資料</h2>
+    <p class="wp-toc-note">順番に関係なく、必要に応じて参照できるページです。</p>
 
     <ul class="wp-refs">
       <li class="wp-ref" data-page="learner/troubleshooting.ja.html">
@@ -447,21 +447,21 @@ title: Azure PaaS Workshop 受講者ポータル
       </li>
       <li class="wp-ref" data-page="reference/quick-reference-card.ja.html">
         <span class="wp-ref__body">
-          <span class="wp-ref__use">変数とコマンド</span>
+          <span class="wp-ref__use">変数とコマンド一覧</span>
           <a class="wp-ref__link" href="reference/quick-reference-card.ja.html" target="workshop-content-frame">クイックリファレンス</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="ref-quickref" aria-label="クイックリファレンス確認済み"></label>
       </li>
       <li class="wp-ref" data-page="learner/day-1-github-actions-alternative.ja.html">
         <span class="wp-ref__body">
-          <span class="wp-ref__use">任意: CI/CD 代替</span>
+          <span class="wp-ref__use">任意: CI/CD による代替手順</span>
           <a class="wp-ref__link" href="learner/day-1-github-actions-alternative.ja.html" target="workshop-content-frame">GitHub Actions でデプロイ</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="ref-github-actions" aria-label="GitHub Actions 代替手順確認済み"></label>
       </li>
       <li class="wp-ref" data-page="bicep-guide.ja.html">
         <span class="wp-ref__body">
-          <span class="wp-ref__use">IaC の背景</span>
+          <span class="wp-ref__use">IaC の解説</span>
           <a class="wp-ref__link" href="bicep-guide.ja.html" target="workshop-content-frame">Bicep ガイド</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="ref-bicep" aria-label="Bicep ガイド確認済み"></label>
@@ -475,22 +475,22 @@ title: Azure PaaS Workshop 受講者ポータル
       </li>
       <li class="wp-ref" data-page="disaster-recovery-guide.ja.html">
         <span class="wp-ref__body">
-          <span class="wp-ref__use">BCDR</span>
+          <span class="wp-ref__use">事業継続・災害復旧</span>
           <a class="wp-ref__link" href="disaster-recovery-guide.ja.html" target="workshop-content-frame">BCDR ガイド</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="ref-bcdr" aria-label="BCDR ガイド確認済み"></label>
       </li>
       <li class="wp-ref" data-page="application-code-comparison-iaas-paas.ja.html">
         <span class="wp-ref__body">
-          <span class="wp-ref__use">任意: コード差分</span>
+          <span class="wp-ref__use">任意: コード差分の解説</span>
           <a class="wp-ref__link" href="application-code-comparison-iaas-paas.ja.html" target="workshop-content-frame">IaaS / PaaS アプリコード比較</a>
         </span>
         <label class="wp-check"><input type="checkbox" data-progress-id="ref-code-comparison" aria-label="アプリコード比較確認済み"></label>
       </li>
     </ul>
 
-    <h2 class="wp-toc-title wp-toc-sub"><span class="wp-dot" aria-hidden="true"></span>Development / Instructor</h2>
-    <p class="wp-toc-note">Cloud Shell 本線ではありません。必要な場合だけ参照します。</p>
+    <h2 class="wp-toc-title wp-toc-sub"><span class="wp-dot" aria-hidden="true"></span>開発・講師向け資料</h2>
+    <p class="wp-toc-note">通常の Cloud Shell 演習では使用しません。必要な場合のみ参照してください。</p>
 
     <ul class="wp-refs">
       <li class="wp-ref" data-page="development/local-development-setup.ja.html">

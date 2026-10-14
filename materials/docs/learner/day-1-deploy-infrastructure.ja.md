@@ -1,14 +1,17 @@
 ---
-title: "Day 1: PaaS インフラをデプロイ"
+title: "Day 1: PaaS インフラのデプロイ"
 ---
 
-# Day 1: PaaS インフラをデプロイ
+# Day 1: PaaS インフラのデプロイ
 
-Cloud Shell から Bicep を実行し、PaaS リソースを作成します。このページでは `dev.bicepparam` をコピーして **標準 mode (`deploymentMode = 'standard'`)** でデプロイします。バックエンドのアプリケーションコードは次のページでリポジトリから build して App Service に ZIP deploy するため、外部の既成コンテナイメージには依存しません。
+Cloud Shell から Bicep テンプレートを実行し、Azure PaaS リソース一式を作成します。このページでは `dev.bicepparam` をベースに自分用のパラメータファイルを作成し、**標準モード (`deploymentMode = 'standard'`)** でデプロイします。バックエンドのアプリケーションコードは次のページでソースコードからビルドして App Service へ ZIP デプロイするため、外部のコンテナイメージには依存しません。
 
-> **利用するサブスクリプションの Owner が必須です。** Bicep は App Service の Managed Identity に Key Vault Secrets User を割り当てます。Contributor のみでは `Microsoft.Authorization/roleAssignments/write` がなく、この処理を実行できません。[Day 0 の Owner 確認](day-0-prerequisites.ja.html)を済ませてから進めてください。Owner でも policy、Deny Assignment、quota などの制約は別途確認します。
+> **前提条件:**
+> Bicep デプロイでは、App Service のマネージド ID に対して Key Vault の `Key Vault Secrets User` ロールを割り当てます。そのため、対象サブスクリプションの **Owner（所有者）** ロールが必要です。[Day 0 の事前準備](day-0-prerequisites.ja.html)を完了してから進めてください。
 
 ## 1. 変数と作業ディレクトリを確認する
+
+Day 0 で保存した設定値を読み込み、すべての変数が揃っていることを確認します。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -25,15 +28,11 @@ echo "$FRONTEND_CLIENT_ID"
 echo "$PARAM_FILE"
 ```
 
-値が空の場合は、[受講者クイックスタート](cloud-shell-quickstart.ja.html) と [Day 0: Entra ID と認証設定](day-0-entra-id.ja.html) に戻って設定してください。
+空の値がある場合は、[事前準備 1: Cloud Shell 設定](cloud-shell-quickstart.ja.html) または [Day 0: Entra ID と認証設定](day-0-entra-id.ja.html) に戻って設定してください。
 
-## 2. Cosmos DB 管理者パスワードの扱いを確認する
+## 2. パラメータファイルを初期化する
 
-次の手順で初めてパラメータファイルを作る場合だけ、暗号学的乱数から URL-safe なパスワードを生成してファイルへ直接保存します。大文字・小文字・数字・記号を必ず含めます。パスワードをターミナルへ表示せず、JSON state に保存しません。再実行時は既存の値を保持し、意図しない DB パスワード変更を防ぎます。
-
-## 3. 標準デプロイ用パラメータファイルを作成する
-
-テンプレートをローカル用ファイルにコピーし、Cloud Shell のエディターで自分の値に変更します。この章では、パラメータの意味を確認しながら手動で編集します。
+テンプレート（`materials/bicep/dev.bicepparam`）から自分用のパラメータファイル（`$PARAM_FILE`）を作成します。初回作成時は、暗号学的に安全な乱数で Cosmos DB 管理者パスワード（大文字・小文字・数字・記号を含む文字列）を自動生成してファイルへ直接書き込みます。再実行時は既存のファイルとパスワードをそのまま保持します。
 
 ```bash
 node <<'NODE' || exit 1
@@ -65,9 +64,9 @@ console.log(created ? 'パラメータを作成しました（秘密値は非表
 NODE
 ```
 
-`PARAM_FILE` は state ディレクトリ直下に保存します。`using` は実際の clone 先への相対パスから生成するため、ディレクトリ名を固定しません。再実行時は既存パラメータ・秘密値を上書きせず、テンプレート変更は手動で確認します。
+## 3. パラメータファイルを編集する
 
-編集に使う公開設定値だけを確認します。`cosmosDbAdminPassword` は生成済みで、表示・コピーする必要はありません。
+設定する公開パラメータの値を確認します（`cosmosDbAdminPassword` はすでに自動設定されているため、変更する必要はありません）。
 
 ```bash
 cat <<EOF
@@ -88,23 +87,23 @@ Cloud Shell の `code` エディターでパラメータファイルを開きま
 code "$PARAM_FILE"
 ```
 
-エディターが開いたら、次の行を変更します。変更後は `Ctrl+S` で保存します。
+エディターが開いたら、次の表に合わせて各パラメータを設定し、`Ctrl+S`（macOS は `Cmd+S`）で保存します。
 
-| パラメータ | 設定する値 | 補足 |
+| パラメータ | 設定する値 | 説明 |
 |---|---|---|
-| `param location` | `$LOCATION` の値 | App Service、DocumentDB、Key Vault などのリージョン |
-| `param baseName` | `$BASE_NAME` の値 | リソース名のベース |
-| `param groupId` | `$GROUP_ID` の値 | 個人演習では空文字、グループ演習では割り当てられた文字 |
-| `param deploymentMode` | `'standard'` のまま | App Service へ ZIP deploy する本線 |
-| `param appServiceContainerImage` | `''` のまま | 標準デプロイでは使いません |
-| `param entraTenantId` | `$TENANT_ID` の値 | Day 0 で確認した tenant ID |
-| `param entraBackendClientId` | `$BACKEND_CLIENT_ID` の値 | Backend API app registration の client ID |
-| `param entraFrontendClientId` | `$FRONTEND_CLIENT_ID` の値 | Frontend SPA app registration の client ID |
-| `param cosmosDbAdminPassword` | 生成済みの値を保持 | 表示・コピー・再生成しない |
-| `param staticWebAppSku` | `'Standard'` のまま | Static Web Apps Linked Backend に必要 |
-| `param staticWebAppLocation` | `$SWA_LOCATION` の値 | Static Web Apps のリージョン |
+| `param location` | `$LOCATION` の値 | App Service、Cosmos DB、Key Vault などのデプロイ先リージョン |
+| `param baseName` | `$BASE_NAME` の値 | リソース名のベース文字列 |
+| `param groupId` | `$GROUP_ID` の値 | グループ識別子（個人演習では空文字または `'A'`） |
+| `param deploymentMode` | `'standard'` のまま | ソースからビルドして App Service へ ZIP デプロイする標準モード |
+| `param appServiceContainerImage` | `''` のまま | 標準モードでは使用しません |
+| `param entraTenantId` | `$TENANT_ID` の値 | Microsoft Entra テナント ID |
+| `param entraBackendClientId` | `$BACKEND_CLIENT_ID` の値 | バックエンド API アプリの Client ID |
+| `param entraFrontendClientId` | `$FRONTEND_CLIENT_ID` の値 | フロントエンド SPA アプリの Client ID |
+| `param cosmosDbAdminPassword` | 生成済みの値を保持 | 自動生成されたパスワードをそのまま使います |
+| `param staticWebAppSku` | `'Standard'` のまま | Static Web Apps Linked Backend の利用に必要です |
+| `param staticWebAppLocation` | `$SWA_LOCATION` の値 | Static Web Apps のデプロイ先リージョン |
 
-保存後、編集結果を確認します。パスワード値は表示しません。
+保存後、設定内容をコマンドで確認します（パスワードの値は表示されません）。
 
 ```bash
 grep -E "param (location|baseName|groupId|deploymentMode|entraTenantId|entraBackendClientId|entraFrontendClientId|staticWebAppSku|staticWebAppLocation)" "$PARAM_FILE"
@@ -116,9 +115,11 @@ else
 fi
 ```
 
-`deploymentMode` が `standard`、`staticWebAppSku` が `Standard` であることを確認します。
+`deploymentMode` が `'standard'`、`staticWebAppSku` が `'Standard'` になっており、Entra ID の 3 つの GUID が正しく入っていることを確認します。
 
-## 4. Bicep を検証する
+## 4. Bicep テンプレートを検証する
+
+デプロイを実行する前に、`az deployment group validate` でテンプレートとパラメータの整合性を検証します。
 
 ```bash
 az deployment group validate \
@@ -130,7 +131,7 @@ az deployment group validate \
 
 ## 5. PaaS リソースをデプロイする
 
-[Day 0 の catalog / quota / tier 確認](day-0-prerequisites.ja.html#5-quota-と費用の前提を確認する) と RBAC・Entra の条件を満たした場合だけ実行します。catalog が成功しても `deploymentReady: false` のままです。制約を無視して deployment を試す手順ではありません。
+検証が通ったら、Bicep デプロイを実行します。
 
 ```bash
 az deployment group create \
@@ -141,7 +142,7 @@ az deployment group create \
   --parameters "$PARAM_FILE" || exit 1
 ```
 
-このコマンドはリソース作成を待つため、数分以上かかる場合があります。進捗を見る場合は別の Cloud Shell セッションで同じ state をロードし、次を実行します。リソース名・type・状態だけを表示し、パラメータや秘密値は出しません。
+Cosmos DB for MongoDB vCore クラスターの作成を含むため、完了まで **10〜15 分程度**かかる場合があります。進捗を確認したい場合は、別の Cloud Shell タブを開いて次のコマンドを実行してください。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -155,18 +156,18 @@ az deployment operation group list --subscription "$SUBSCRIPTION_ID" --resource-
   -o table
 ```
 
-再実行時は前回の `Succeeded` と取り違えず、開始時刻・correlation ID と現在の作成コマンドの結果を照合します。`Failed` / `Canceled` / quota / regional capacity エラーでは deployment 出力の保存やアプリ deploy へ進みません。region/SKU/HA を自動変更せず、エラーコード・resource type・correlation ID を記録します。
+このデプロイで作成される主なリソースは次のとおりです。
 
-作成される主なリソース:
-
-- Azure Static Web Apps (Standard)
-- Azure App Service for Linux
-- Azure Cosmos DB for MongoDB vCore / DocumentDB 互換リソース
-- Azure Key Vault
-- Virtual Network / Private Endpoints
-- Application Insights / Log Analytics
+- Azure Static Web Apps (`Standard`) + Linked Backend
+- Azure App Service Plan (`B1`) + App Service for Linux
+- Azure Cosmos DB for MongoDB vCore (`M25`)
+- Azure Key Vault + ロール割り当て (`Key Vault Secrets User`)
+- Virtual Network / サブネット / NAT Gateway / Private Endpoint / Private DNS Zone
+- Application Insights + Log Analytics ワークスペース
 
 ## 6. デプロイ出力を保存する
+
+デプロイが完了したら、作成された App Service 名と Static Web Apps のホスト名を取得し、設定ファイル（`$ENV_FILE`）に保存します。
 
 ```bash
 APP_SERVICE_NAME="$(az deployment group show \
@@ -197,11 +198,7 @@ echo "Static Web App: https://$SWA_HOSTNAME"
 
 ## 7. Static Web Apps URL を Entra ID に追加する
 
-Day 0 で自分のグループが作成した Frontend アプリ登録に、手順 6 で取得した実際の SWA URL を **SPA のリダイレクト URI** として追加します。Azure への配備だけでは、この登録は自動更新されません。アプリは `window.location.origin` をログイン後の戻り先に使います。
-
-既存の localhost や他のリダイレクト URI は保持します。共有アプリや別グループの Client ID は使わないでください。この操作は自分のアプリ登録の設定であり、テナントの管理者同意やポリシー変更ではありません。Azure Contributor と Entra アプリの所有権は別の権限です。
-
-`SUBSCRIPTION_ID` は現在選択中のサブスクリプションから取得し、Day 0 に保存した `TENANT_ID` と一致することを確認します。既定のサブスクリプションは変更しません。
+Day 0 で作成したフロントエンドのアプリ登録に対して、手順 6 で確定した Static Web Apps の URL（`https://$SWA_HOSTNAME`）を **SPA のリダイレクト URI** として追加します。既存の `http://localhost:4280` などの設定は保持されます。
 
 ```bash
 if ! ACCOUNT_JSON="$(az account show -o json)"; then
@@ -258,7 +255,7 @@ az rest \
   --body "$SPA_PATCH"
 ```
 
-読み戻して、実際の SWA URL が含まれ、既存 URI が残っていることを確認します。
+リダイレクト URI が正しく登録されたことを確認します。
 
 ```bash
 az ad app show \
@@ -267,11 +264,11 @@ az ad app show \
   --query "spa.redirectUris" -o jsonc
 ```
 
-期待値は、既存の `http://localhost:4280` などに加えて `https://$SWA_HOSTNAME` が表示されることです。同じ手順を繰り返しても同じ URI は重複追加されません。`Insufficient privileges` が出た場合は別の共有アプリに切り替えず、Day 0 の自分のアプリ登録とテナントを確認します。
+`http://localhost:4280` に加えて `https://<SWA_HOSTNAME>` が表示されれば完了です。
 
-## 8. App Service の作成状態を確認する
+## 8. App Service の状態を確認する
 
-この時点ではまだバックエンドコードをデプロイしていないため、`/health` は成功しなくて構いません。App Service が作成され、`Running` になっていることだけ確認します。
+この時点ではまだバックエンドのアプリケーションコードをデプロイしていませんが、App Service リソース自体が作成され、`state` が `Running` になっていることを確認します。
 
 ```bash
 az webapp show \
@@ -283,4 +280,4 @@ az webapp show \
 
 ## 次に進む
 
-- [Day 1: バックエンドをデプロイ](day-1-deploy-backend.ja.html)
+- [Day 1: バックエンドのデプロイ](day-1-deploy-backend.ja.html)

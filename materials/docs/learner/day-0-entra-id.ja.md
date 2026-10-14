@@ -4,13 +4,14 @@ title: "Day 0: Entra ID と認証設定"
 
 # Day 0: Entra ID と認証設定
 
-このアプリは Microsoft Entra ID でサインインし、フロントエンド SPA がバックエンド API を呼び出します。Cloud Shell から 2 つのアプリ登録を作成します。
+このワークショップのブログアプリは Microsoft Entra ID でサインインし、フロントエンド SPA が取得したアクセストークンを使ってバックエンド API を呼び出します。このページでは、Cloud Shell からバックエンド用とフロントエンド用の 2 つのアプリ登録を作成します。
 
-> **Entra の必要ロールは Application Developer（アプリケーション開発者）です。** 自分が作成・所有する演習専用アプリと、自分だけへの `Principal` 同意を使います。Application Administrator / Cloud Application Administrator / Global Administrator による組織全体同意は不要です。
->
-> Application Developer が PIM の対象の場合は開始前に有効化してください。
+> **必要な Entra ロール:**
+> **Application Developer（アプリケーション開発者）** ロールを使用します。受講者自身が作成・所有するアプリに対して、`--consent-type Principal`（サインイン中の本人に対する個人同意）を付与することで、テナント全体の管理者同意（Global Administrator 等）なしで完結できます。PIM を利用している場合は開始前に有効化してください。
 
-## 1. 名前を決める
+## 1. アプリ名とスコープ ID を準備する
+
+保存済みの共通変数を読み込み、登録するアプリの表示名と OAuth2 スコープ用の UUID を準備します。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -25,9 +26,11 @@ SIGNED_IN_USER_ID="$(az ad signed-in-user show --query id -o tsv)" || exit 1
 workshop_state_save base || exit 1
 ```
 
-保存済みの `BACKEND_CLIENT_ID` / `FRONTEND_CLIENT_ID` がある場合、以下のコードは作成を省略して既存アプリを確認します。削除済み・権限不足・tenant 不一致を区別し、新しいアプリを無断で作成しません。1 組の Backend / Frontend は作成者本人の演習専用とし、他グループや複数受講者で同意コマンドを共有・並行実行しません。
+すでに `BACKEND_CLIENT_ID` や `FRONTEND_CLIENT_ID` が保存されている場合は、以下の手順を再実行しても新しいアプリは重複作成されず、既存のアプリ登録がそのまま使われます。
 
-## 2. Backend API アプリ登録を作成する
+## 2. バックエンド API 用のアプリ登録を作成する
+
+バックエンド API を表すアプリ登録を作成し、識別子 URI（`api://<BACKEND_CLIENT_ID>`）を設定します。
 
 ```bash
 if [ -z "$BACKEND_CLIENT_ID" ]; then
@@ -57,13 +60,9 @@ az ad app update \
   --identifier-uris "api://$BACKEND_CLIENT_ID"
 ```
 
-`access_as_user` スコープを追加します。
+続けて、フロントエンドから委任アクセスするための `access_as_user` スコープを公開します。
 
-Backend は `api://$BACKEND_CLIENT_ID/access_as_user` を要求した **user access token** を検証します。token の `aud` は v1 では Backend の GUID または `api://$BACKEND_CLIENT_ID`、v2 では Backend の GUID です。scope を要求する URI と、token に返る audience の表現は同じとは限りません。Frontend の ID token、app-only role token、別 API の token は代替にしません。
-
-API は signature / tenant issuer / expiry / Backend audience と、`scp` の `access_as_user`、user identity を検査します。無効な token は 401、正しい user resource token でも必要 scope がなければ 403 です。403 の場合は Frontend の API permission 要求と実際の consent/grant を確認し、tenant policy を無断で変更しません。token 本文を教材・ログ・Issue に貼り付けないでください。
-
-> `az ad app update --set api.oauth2PermissionScopes=...` は、新規 app registration の `api` プロパティがまだ初期化されていない場合に `Couldn't find 'api' in ''` で失敗することがあります。この手順では Microsoft Graph の application object ID (`BACKEND_OBJECT_ID`) に対して `az rest` で PATCH します。`BACKEND_OBJECT_ID` が空だと `/applications/` への PATCH になり `Method Not Allowed` になるため、PATCH 直前に再取得して確認します。
+> **補足:** 新規作成した直後のアプリ登録に対して `az ad app update --set api.oauth2PermissionScopes=...` を実行すると、`api` プロパティが未初期化のためエラーになることがあります。ここでは Microsoft Graph REST API（`az rest`）を使ってオブジェクト ID（`BACKEND_OBJECT_ID`）へ直接 PATCH します。
 
 ```bash
 export BACKEND_OBJECT_ID="$(az ad app show \
@@ -100,7 +99,7 @@ az rest \
   --body "$API_PATCH"
 ```
 
-確認します。
+設定された内容を確認します。`scopes` に `["access_as_user"]` が含まれていれば成功です。
 
 ```bash
 az ad app show \
@@ -109,7 +108,9 @@ az ad app show \
   -o jsonc
 ```
 
-## 3. Frontend SPA アプリ登録を作成する
+## 3. フロントエンド SPA 用のアプリ登録を作成する
+
+次に、React フロントエンド（SPA）用のアプリ登録を作成します。
 
 ```bash
 if [ -z "$FRONTEND_CLIENT_ID" ]; then
@@ -135,7 +136,7 @@ printf '%s' "$APP_OWNERS" | jq -e --arg user "$SIGNED_IN_USER_ID" 'any(.[]; .id 
 }
 ```
 
-Cloud Shell では本番の Static Web Apps URL がまだ分からないため、まずローカル/検証用 URI を入れておきます。Day 1 のデプロイ後に SWA URL を追加します。
+この時点では本番の Static Web Apps の URL がまだ決まっていないため、まずローカル検証用のリダイレクト URI（`http://localhost:4280`）を SPA として登録します。Static Web Apps の本番 URL は Day 1 のインフラデプロイ後に追加します。
 
 ```bash
 export FRONTEND_OBJECT_ID="$(az ad app show \
@@ -162,7 +163,7 @@ az rest \
   --body "$SPA_PATCH"
 ```
 
-Frontend から Backend API のスコープを呼べるようにします。
+続いて、フロントエンドからバックエンド API の `access_as_user` スコープを呼び出せるように API アクセス許可を追加します。
 
 ```bash
 echo "Waiting for Microsoft Graph propagation..."
@@ -174,15 +175,11 @@ az ad app permission add \
   --api-permissions "${ACCESS_SCOPE_ID}=Scope"
 ```
 
-`az ad app permission add` は API permission の**要求設定**です。同意の付与ではありません。Backend scope の `type: "User"` は本人同意の対象であることを示しますが、組織全体同意の権限を与える設定ではありません。
-
 ## 4. Application Developer として本人だけに同意する
 
-`--consent-type Principal` と `--principal-id` によって、**Cloud Shell にサインイン中の本人だけ**に `access_as_user` を付与します。`--principal-id` はメールアドレスや Client ID ではなく、対象テナント内の本人の user object ID です。省略時の `AllPrincipals` は全ユーザーへの同意であり、Application Developer 単独では実行できません。
+`az ad app permission add` は「アプリが必要とする API アクセス許可の定義」を追加するコマンドです。続けて `--consent-type Principal` と `--principal-id` を指定し、**現在 Cloud Shell にサインインしている受講者本人**に対して `access_as_user` スコープの同意（grant）を付与します。
 
-**再実行の注意:** Azure CLI の grant 実装は同じ client/resource の既存 grant を削除してから作成するため、単に `Principal` を付けて繰り返してはいけません。次のブロックは本人の完全な既存 grant があれば再利用し、他ユーザー・全ユーザー・不足 scope の既存 grant があれば変更せず停止します。共有アプリでは実行しないでください。
-
-括弧内は subshell です。読み取りや作成のエラーで停止しても Cloud Shell 自体は終了しません。
+> **補足:** `--consent-type` を省略するとテナント全ユーザー対象の `AllPrincipals` となり、Application Developer ロールでは権限不足になります。また、再実行時に既存の同意を上書きしないよう、以下のスクリプトではサービスプリンシパルと既存の同意状態を確認してから付与します。
 
 ```bash
 (
@@ -275,9 +272,9 @@ az ad app permission add \
 )
 ```
 
-`--scope` は scope ID (`ACCESS_SCOPE_ID`) ではなく scope value `access_as_user` です。Graph の反映待ちや権限不足の場合は実エラーを確認し、時間をおいてこの**ガード付きブロック全体**を再実行します。CLI に必要な Graph OAuth 権限と本人の Entra ロールは別の認可要素です。拒否されたときに受講者アプリへ Graph の強い権限を追加したり、`AllPrincipals` に変更したりしません。
+Microsoft Graph の反映待ちでエラーになった場合は、10〜20 秒ほど待ってから上のコードブロック全体を再実行してください。
 
-要求設定と実際の grant を確認します。
+設定された API アクセス許可と所有者を確認します。
 
 ```bash
 echo "TENANT_ID=$TENANT_ID"
@@ -292,34 +289,31 @@ az ad app owner list --id "$BACKEND_CLIENT_ID" --query "[].id" -o jsonc
 az ad app owner list --id "$FRONTEND_CLIENT_ID" --query "[].id" -o jsonc
 ```
 
-確認の見方:
-
-| 確認先 | 何を見ているか | 期待値 |
+| 確認コマンド | 確認内容 | 期待される結果 |
 |---|---|---|
-| `az ad app permission list` | Frontend app registration の API permission 要求 (`requiredResourceAccess`) | Backend API の `access_as_user` が含まれる |
-| `az ad app owner list` | 登録アプリの所有者 | 自分のユーザー object ID が含まれる。グループ専用アプリ以外は変更しない |
-| `az ad app permission list-grants` | Frontend service principal に対する delegated permission grant | `clientId` は Frontend **service principal object ID**、`resourceId` は Backend **service principal object ID**。`scope` に `access_as_user`、`consentType` は `Principal`、`principalId` はサインイン中の本人の **user object ID** |
-| Azure Portal の **App registrations > Frontend > API permissions** | `requiredResourceAccess` の表示 | 反映に時間がかかる場合があります。ブラウザー更新、Portal 再ログイン、対象 tenant/app の確認を行います。 |
+| `az ad app permission list` | フロントエンドアプリの API アクセス許可設定 (`requiredResourceAccess`) | バックエンド API のスコープ ID (`$ACCESS_SCOPE_ID`) が含まれていること |
+| `az ad app owner list` | アプリ登録の所有者 | サインイン中の自分のユーザー Object ID が含まれていること |
+| `az ad app permission list-grants` | フロントエンドに対する委任されたアクセス許可の同意 (`oauth2PermissionGrants`) | `consentType` が `Principal`、`principalId` が自分のユーザー Object ID、`scope` に `access_as_user` が含まれていること |
 
-Portal に表示されない場合でも、次の CLI で `resourceAppId` が `$BACKEND_CLIENT_ID`、`resourceAccess[].id` が `$ACCESS_SCOPE_ID` であれば、Frontend app registration には API permission 要求が入っています。
+> Azure Portal の **アプリの登録 > フロントエンドアプリ > API のアクセス許可** 画面には反映まで少し時間がかかる場合があります。次のコマンドで `requiredResourceAccess` が表示されていれば設定は完了しています。
+>
+> ```bash
+> az ad app show \
+>   --id "$FRONTEND_CLIENT_ID" \
+>   --query "requiredResourceAccess[?resourceAppId=='$BACKEND_CLIENT_ID']" \
+>   -o jsonc
+> ```
 
-```bash
-az ad app show \
-  --id "$FRONTEND_CLIENT_ID" \
-  --query "requiredResourceAccess[?resourceAppId=='$BACKEND_CLIENT_ID']" \
-  -o jsonc
-```
+## 5. 設定値を Cloud Shell に保存する
 
-## 5. 値を Cloud Shell に保存する
-
-Cloud Shell のセッション切断に備え、再利用する値を Azure Files 側の state ファイルに保存します。
+作成した Client ID とスコープ ID を永続ストレージ（`$ENV_FILE`）に保存します。
 
 ```bash
 workshop_state_save identity || exit 1
 printf 'State saved: %s\n' "$ENV_FILE"
 ```
 
-次回 Cloud Shell を開いたら、次で復元できます。
+Cloud Shell のセッションが切れた場合は、次のコマンドでここまでの変数を復元できます。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -330,31 +324,4 @@ workshop_state_load identity || exit 1
 
 ## 次に進む
 
-- [Day 1: PaaS インフラをデプロイ](day-1-deploy-infrastructure.ja.html)
-
-## Day 1 のサインイン後に自己同意を検証する
-
-Frontend の SWA URL を SPA redirect URI に追加し、デプロイした画面の **Sign in with Microsoft** から同じテナントの受講者アカウントでサインインします。要求先が自分の Backend API の `api://<BACKEND_CLIENT_ID>/access_as_user` であることを同意画面で確認します。管理者の承認が必要と表示されたら、その時点で本線はブロックです。テナント設定を変更しません。
-
-次の確認は service principal が作成された**サインイン後**に行います。Client ID と service principal object ID は別です。Cloud Shell とブラウザーで異なるアカウントを使わないでください。
-
-```bash
-BACKEND_SP_ID="$(az ad sp show --id "$BACKEND_CLIENT_ID" --query id -o tsv)"
-FRONTEND_SP_ID="$(az ad sp show --id "$FRONTEND_CLIENT_ID" --query id -o tsv)"
-SIGNED_IN_USER_ID="$(az ad signed-in-user show --query id -o tsv)"
-
-if [ -z "$BACKEND_SP_ID" ] || [ -z "$FRONTEND_SP_ID" ] || [ -z "$SIGNED_IN_USER_ID" ]; then
-  echo "同意検証に必要な object ID を取得できません。tenant、アカウント、Graph 読み取り権限を確認してください。"
-  exit 1
-fi
-
-az ad app permission list-grants --id "$FRONTEND_CLIENT_ID" \
-  --query "[?clientId=='$FRONTEND_SP_ID' && resourceId=='$BACKEND_SP_ID'].{clientId:clientId,resourceId:resourceId,consentType:consentType,principalId:principalId,scope:scope}" \
-  -o jsonc
-```
-
-自己同意の期待値は `consentType: Principal`、`principalId: <SIGNED_IN_USER_ID>`、`scope` の空白区切りの値に `access_as_user` があることです。`AllPrincipals` / `principalId: null` は組織全体同意であり、自己同意成功の証拠ではありません。読み取りが拒否された場合も「grant がない」とは断定せず、検証不能として記録します。
-
-続けて [アプリ検証](day-1-validation.ja.html) の認証付き記事作成を行います。同意、API の audience/scope、アプリ起動・DB 接続は別々の検証です。トークンをログへ出力したり、外部の解析サイトへ送信したりしないでください。管理者による組織全体同意は [インストラクターガイド（GitHub 上の補足資料）](https://github.com/hironariy/Azure-PaaS-Workshop/blob/main/docs/instructor-guide.ja.md) の任意例外で、本線の自己完結の証拠にはなりません。
-
-参考: [Microsoft Graph: delegated permission grant](https://learn.microsoft.com/en-us/graph/api/oauth2permissiongrant-post)、[ユーザー同意の設定](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/configure-user-consent)、[Azure CLI: permission grant](https://learn.microsoft.com/en-us/cli/azure/ad/app/permission#az-ad-app-permission-grant)。
+- [Day 1: PaaS インフラのデプロイ](day-1-deploy-infrastructure.ja.html)

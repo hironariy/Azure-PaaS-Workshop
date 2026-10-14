@@ -4,7 +4,7 @@ title: "Day 2: 監視と運用"
 
 # Day 2: 監視と運用
 
-Day 2 では、PaaS アプリケーションの状態を Azure の標準機能で確認します。OS へ SSH するのではなく、App Service、Application Insights、Log Analytics、Key Vault、Managed Identity を使って切り分けます。
+Day 2 では、PaaS アプリケーションの稼働状態を Azure の標準機能で確認します。仮想マシン（VM）へ SSH 接続して調査するのではなく、App Service、Application Insights、Log Analytics、Key Vault、マネージド ID を組み合わせて状態を確認・切り分けます。
 
 ## 1. 変数を復元する
 
@@ -17,6 +17,8 @@ workshop_state_load deployed || exit 1
 
 ## 2. App Service の設定を確認する
 
+App Service の稼働状態や HTTPS 設定を確認します。
+
 ```bash
 az webapp show \
   --subscription "$SUBSCRIPTION_ID" \
@@ -26,7 +28,7 @@ az webapp show \
   -o jsonc
 ```
 
-ヘルスチェックパスを確認します。
+ランタイムバージョン、ヘルスチェックパス（`/health`）、Always On の設定を確認します。
 
 ```bash
 az webapp config show \
@@ -39,6 +41,8 @@ az webapp config show \
 
 ## 3. アプリケーションログを確認する
 
+App Service のリアルタイムログストリームを表示します。
+
 ```bash
 az webapp log tail \
   --subscription "$SUBSCRIPTION_ID" \
@@ -46,13 +50,13 @@ az webapp log tail \
   --name "$APP_SERVICE_NAME"
 ```
 
-終了するときは `Ctrl+C` を押します。
+確認を終えたら `Ctrl+C` を押して終了します。
 
-必要な期間の startup / error code を確認し、connection string、password、token、request body、個人データを伏せます。未加工の logs ZIP / headers / app settings を Issue / PR に共有しません。復旧検証では操作の UTC 時刻と集計を対応付けます。
+> **注意:** ログをチーム内や Issue で共有する際は、接続文字列・パスワード・アクセストークン・個人情報などが含まれていないことを確認してください。
 
-## 4. Key Vault reference を確認する
+## 4. Key Vault 参照とマネージド ID を確認する
 
-App Service の Managed Identity が Key Vault の secret を参照します。設定名だけを確認し、秘密値・接続文字列は表示しません。Portal の Key Vault reference **status** が解決済みかを確認します。reference の文字列が設定されているだけでは secret の取得成功とは言えません。
+App Service はシステム割り当てマネージド ID を使って Key Vault から接続文字列を参照しています。秘密情報そのものは表示せず、環境変数名（設定キー）が存在することを確認します。
 
 ```bash
 az webapp config appsettings list \
@@ -63,7 +67,9 @@ az webapp config appsettings list \
   -o table
 ```
 
-Managed Identity の principalId を確認します。
+Azure Portal の **App Service > 環境変数** 画面では、Key Vault 参照のステータスに緑色のチェックマークが付いているかも確認できます。
+
+続けて、App Service のマネージド ID（`principalId`）を確認します。
 
 ```bash
 APP_PRINCIPAL_ID="$(az webapp identity show \
@@ -75,7 +81,9 @@ APP_PRINCIPAL_ID="$(az webapp identity show \
 echo "$APP_PRINCIPAL_ID"
 ```
 
-## 5. Application Insights / Log Analytics を開く
+## 5. Application Insights / Log Analytics でクエリを実行する
+
+デプロイ出力から Application Insights 名と Log Analytics ワークスペース ID を確認します。
 
 ```bash
 APPINSIGHTS_NAME="$(az deployment group show \
@@ -94,9 +102,10 @@ echo "Application Insights: $APPINSIGHTS_NAME"
 echo "Workspace ID: $WORKSPACE_ID"
 ```
 
-Log Analytics ワークスペースの Logs から実行する場合、workspace-based Application Insights のテーブル名は `AppRequests` / `AppExceptions` です。Application Insights リソースの Logs では `requests` / `exceptions` の別名が使える場合があります。
+> **テーブル名の違いについて:**
+> Log Analytics ワークスペースの **Logs（ログ）** 画面からクエリを実行する場合、テーブル名は `AppRequests` / `AppExceptions` になります（Application Insights リソース側の **Logs** 画面では `requests` / `exceptions` が使われます）。
 
-まず、直近でデータが入っているテーブルを確認します。
+まず、直近 24 時間でデータが記録されているテーブルを確認します。
 
 ```kusto
 search *
@@ -105,7 +114,7 @@ search *
 | order by Records desc
 ```
 
-KQL 例:
+直近 1 時間のリクエスト数と失敗数を 5 分単位で集計します。
 
 ```kusto
 AppRequests
@@ -114,6 +123,8 @@ AppRequests
 | order by TimeGenerated desc
 ```
 
+直近 1 時間の例外（Exceptions）を種類別に集計します。
+
 ```kusto
 AppExceptions
 | where TimeGenerated > ago(1h)
@@ -121,24 +132,24 @@ AppExceptions
 | order by TimeGenerated desc
 ```
 
-`AppRequests` / `AppExceptions` も表示されない場合は、先にアプリへリクエストを送ってから数分待ちます。
+`AppRequests` や `AppExceptions` がまだ表示されない場合は、次のスクリプトでアプリケーションへリクエストを送信し、数分待ってから再度クエリを実行してください。
 
 ```bash
 node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
 ```
 
-それでも表示されない場合は、対象 resource / 時間範囲 / SDK startup / instrumentation 設定を Portal で確認します。0 件は「障害が無い」「監視が正常」という証拠ではありません。原因確認なしで再起動・SKU 変更を行わず、[Day 1 diagnostics](day-1-validation.ja.html) の Resource Health → startup → MI / KV → DB の順で切り分けます。
+さらに詳しい KQL クエリ例やアラート設計については、[監視ガイド](../monitoring-guide.ja.html) を参照してください。
 
-詳細は [監視ガイド](../monitoring-guide.ja.html) を参照してください。
+## 6. PaaS アプリケーションの基本的な切り分け順序
 
-## 6. PaaS らしい切り分け順
+障害や応答異常が発生した際は、上から順番に確認すると原因を素早く切り分けられます。
 
-1. Static Web Apps の URL が開けるか。
-2. `https://<swa>/api/health` が成功するか。
-3. `https://<app-service>/health` が成功するか。
-4. App Service logs に起動エラーがないか。
-5. Key Vault reference が解決できているか。
-6. Application Insights に failed requests / exceptions が出ていないか。
+1. Static Web Apps のトップページ（`https://<SWA_HOSTNAME>`）が表示されるか。
+2. Static Web Apps 経由の API ヘルスチェック（`https://<SWA_HOSTNAME>/api/health`）が成功するか。
+3. App Service 直接のヘルスチェック（`https://<APP_HOSTNAME>/health`）が成功するか。
+4. App Service のログストリーム（`az webapp log tail`）に起動エラーや例外が出ていないか。
+5. App Service の環境変数で Key Vault 参照が正常に解決されているか。
+6. Application Insights / Log Analytics に失敗リクエスト（`AppRequests`）や例外（`AppExceptions`）が記録されていないか。
 
 ## 次に進む
 

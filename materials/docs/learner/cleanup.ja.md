@@ -1,12 +1,14 @@
 ---
-title: Cleanup
+title: "クリーンアップ（リソース削除）"
 ---
 
-# Cleanup
+# クリーンアップ（リソース削除）
 
-課金停止は削除要求の受付ではなく、対象リソースが存在しないことまで確認します。共有 RG・共有 Entra アプリは削除しません。タグは専用対象の確認材料であり、それだけで所有権を証明するものではありません。
+ワークショップ終了後は、不要な課金が発生しないよう、作成した Azure リソースグループと Microsoft Entra ID のアプリ登録を削除し、削除が完了したことまで確認します。
 
-## 1. 保存した対象を復元する
+## 1. 保存済みの設定値を確認する
+
+削除対象のサブスクリプション、テナント、リソースグループ名を確認します。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
@@ -16,31 +18,32 @@ workshop_state_load base || exit 1
 printf 'Subscription: %s / Tenant: %s / RG: %s\n' "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP"
 ```
 
-別 subscription/tenant のまま進めることはできません。JSON が壊れている場合も、空の変数や別 RG で続行しません。
+## 2. Azure リソースと Entra アプリ登録を削除する
 
-## 2. 専用対象を確認して Azure 側を削除する
+クリーンアップスクリプト（`scripts/cleanup-workshop.sh`）を実行します。
 
 ```bash
 bash scripts/cleanup-workshop.sh
 ```
 
-スクリプトは、Day 0 の `Workshop` / `GroupId` タグ、RG 内リソース一覧、保存した app ID と現在の所有者を確認した後、`<SUBSCRIPTION_ID>/<RESOURCE_GROUP>` 全体の入力を求めます。表示した **すべてのリソースとアプリが自分のグループ専用** であることを確認して入力してください。未確認・共有対象なら中止します。
+スクリプトは次の順序で安全に削除を行います。
 
-RG 削除は非同期で要求し、最大 900 秒待機した後 `az group exists` の `false` を確認します。途中の timeout・権限不足・通信エラーは成功扱いにせず、Entra アプリとローカル state を保持します。後で同じ state から再試行できます。
+1. リソースグループに付与された `Workshop=Azure-PaaS-Workshop` タグと `GroupId` タグ、リソース一覧、および保存されている Entra アプリ登録の所有者を確認します。
+2. 確認プロンプトが表示されたら、表示されたすべてのリソースが自分の演習用であることを確認したうえで `<SUBSCRIPTION_ID>/<RESOURCE_GROUP>` を入力します。
+3. リソースグループの削除を開始し、削除が完了してリソースグループが存在しないこと（`az group exists` が `false` になること）を確認します。
+4. 自分が所有する演習用の Backend / Frontend アプリ登録を Entra ID から削除し、削除されたことを確認します。
 
-アプリは現在のユーザーが所有するものだけを削除し、正常に取得した app 一覧が空であることを確認します。`az ad app show` の失敗だけで「削除済み」と判断しません。Graph の読み取りが拒否された場合は検証不能です。旧手順のタグ無し RG や共有 app は、自動でタグを付け直して削除せず、管理責任者と対象を確認します。
-
-期待値:
+完了すると、次のメッセージが表示されます。
 
 ```text
 Saved Azure targets are confirmed absent. Local checkout, state and parameter file were retained.
 ```
 
-任意の GitHub Actions 用アプリ・他 RG のリソースはこのスクリプトの対象外です。削除記録には subscription、RG、app ID、時刻、確認結果だけを残し、パスワードやトークンを含めません。
+※ 万が一途中でタイムアウトやエラーが発生した場合は、ローカルの設定ファイル（`$ENV_FILE`）がそのまま残るため、再度 `bash scripts/cleanup-workshop.sh` を実行して再試行できます。
 
-## 3. 秘密値を含むローカルファイルを整理する
+## 3. ローカルの設定ファイルを削除する
 
-Azure 側の削除確認が済んだ後だけ、不要になった以下の 2 ファイルを削除できます。次のコマンドはリポジトリや state ディレクトリ全体を再帰削除しません。
+Azure 側のリソース削除が完了したことを確認できたら、Cloud Shell 上の設定ファイル（`$PARAM_FILE` と `$ENV_FILE`）を必要に応じて削除します。
 
 ```bash
 printf '削除候補: %s\n削除候補: %s\n' "$PARAM_FILE" "$ENV_FILE"
@@ -52,8 +55,6 @@ else
 fi
 ```
 
-リポジトリは学習記録として保持します。state ディレクトリに他ファイルが残っていても、自動では削除しません。`PARAM_FILE` は秘密値を含むため、保持する場合も Git に追加・共有しないでください。
+## 4. 課金状況を確認する
 
-## 4. 費用の反映を確認する
-
-Azure Portal の Cost Management で、同じ subscription と RG の費用を確認します。削除後も反映に時間差があり、累計費用は消えません。RG 以外に作成したリソースも別途確認してください。
+Azure Portal の **コストの管理と請求（Cost Management + Billing）** で、対象サブスクリプションとリソースグループのコストを確認します（リソース削除後もコスト画面への反映には少し時間差があります）。
