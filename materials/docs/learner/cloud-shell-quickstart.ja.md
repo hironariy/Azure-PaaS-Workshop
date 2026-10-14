@@ -105,22 +105,23 @@ zip -v | head -1
 
 ## 4. ワークショップ共通変数を設定する
 
-以降のページで使用する環境変数を初期化し、`~/clouddrive/paas-workshop/paas-workshop.json` に保存します。グループ演習で `GROUP_ID` が指定されている場合は、自分のグループ名（`A`、`B` など）に変更してください。
+以降のページで使用する環境変数を設定し、`~/clouddrive/paas-workshop/paas-workshop.json` に保存します。グループ演習で `GROUP_ID` が指定されている場合は、自分のグループ名（`A`、`B` など）に変更してください。同じ Cloud Shell セッションで作業を続ける限り、これらの変数は以降のページでもそのまま引き継がれます。
 
 ```bash
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
+export LOCATION="japaneast"
+export SWA_LOCATION="eastasia"
+export BASE_NAME="blogapp"
+export GROUP_ID="A"
+export RESOURCE_GROUP="rg-${BASE_NAME}${GROUP_ID:+-${GROUP_ID}}-paas-workshop"
+export PARAM_FILE="$WORKSHOP_STATE_DIR/dev.local.bicepparam"
+export SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+export TENANT_ID="$(az account show --query tenantId -o tsv)"
+
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh"
 if [ -f "$ENV_FILE" ]; then
-  workshop_state_load base || exit 1
+  workshop_state_save base
 else
-  export LOCATION="japaneast"
-  export SWA_LOCATION="eastasia"
-  export BASE_NAME="blogapp"
-  export GROUP_ID="A"
-  export RESOURCE_GROUP="rg-${BASE_NAME}${GROUP_ID:+-${GROUP_ID}}-paas-workshop"
-  export PARAM_FILE="$WORKSHOP_STATE_DIR/dev.local.bicepparam"
-  export SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
-  export TENANT_ID="$(az account show --query tenantId -o tsv)"
-  workshop_state_init || exit 1
+  workshop_state_init
 fi
 ```
 
@@ -140,14 +141,15 @@ echo "$SUBSCRIPTION_ID"
 echo "$TENANT_ID"
 ```
 
-Cloud Shell のセッションが切断されたり再起動した場合は、いつでも次のコマンドで変数を復元できます。
-
-```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load base || exit 1
-```
+> 💡 **Cloud Shell のセッションが切れた場合の復元方法:**
+> 同じウィンドウで連続して進める場合は再読み込み不要です。Cloud Shell がタイムアウトして再接続された場合のみ、次のコマンドで変数を復元できます。
+>
+> ```bash
+> export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
+> export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
+> source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh"
+> workshop_state_load base
+> ```
 
 ## 次に進む
 

@@ -11,49 +11,38 @@ title: "Day 0: Entra ID と認証設定"
 
 ## 1. アプリ名とスコープ ID を準備する
 
-保存済みの共通変数を読み込み、登録するアプリの表示名と OAuth2 スコープ用の UUID を準備します。
+登録するアプリの表示名と OAuth2 スコープ用の UUID を準備します。
+
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load base` を先に実行してください。
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load base || exit 1
-
 export BACKEND_APP_NAME="paas-blog-backend-${GROUP_ID}"
 export FRONTEND_APP_NAME="paas-blog-frontend-${GROUP_ID}"
 export ACCESS_SCOPE_ID="${ACCESS_SCOPE_ID:-$(node -p 'require("node:crypto").randomUUID()')}"
-SIGNED_IN_USER_ID="$(az ad signed-in-user show --query id -o tsv)" || exit 1
-workshop_state_save base || exit 1
+SIGNED_IN_USER_ID="$(az ad signed-in-user show --query id -o tsv)"
 ```
 
-すでに `BACKEND_CLIENT_ID` や `FRONTEND_CLIENT_ID` が保存されている場合は、以下の手順を再実行しても新しいアプリは重複作成されず、既存のアプリ登録がそのまま使われます。
+すでに `BACKEND_CLIENT_ID` や `FRONTEND_CLIENT_ID` が設定されている場合は、以下の手順を再実行しても新しいアプリは重複作成されず、既存のアプリ登録がそのまま使われます。
 
 ## 2. バックエンド API 用のアプリ登録を作成する
 
 バックエンド API を表すアプリ登録を作成し、識別子 URI（`api://<BACKEND_CLIENT_ID>`）を設定します。
 
 ```bash
-if [ -z "$BACKEND_CLIENT_ID" ]; then
+if [ -z "${BACKEND_CLIENT_ID:-}" ]; then
   BACKEND_CLIENT_ID="$(az ad app create \
     --display-name "$BACKEND_APP_NAME" \
     --sign-in-audience AzureADMyOrg \
-    --query appId -o tsv)" || exit 1
+    --query appId -o tsv)"
   export BACKEND_CLIENT_ID
 else
-  az ad app show --id "$BACKEND_CLIENT_ID" --output none || exit 1
+  az ad app show --id "$BACKEND_CLIENT_ID" --output none
 fi
-workshop_state_save base || exit 1
 
 BACKEND_OBJECT_ID="$(az ad app show \
   --id "$BACKEND_CLIENT_ID" \
-  --query id -o tsv)" || exit 1
+  --query id -o tsv)"
 export BACKEND_OBJECT_ID
-
-APP_OWNERS="$(az ad app owner list --id "$BACKEND_CLIENT_ID" -o json)" || exit 1
-printf '%s' "$APP_OWNERS" | jq -e --arg user "$SIGNED_IN_USER_ID" 'any(.[]; .id == $user)' >/dev/null || {
-  echo "自分が所有する Backend アプリでないため、変更を停止します。"
-  exit 1
-}
 
 az ad app update \
   --id "$BACKEND_CLIENT_ID" \
@@ -68,11 +57,6 @@ az ad app update \
 export BACKEND_OBJECT_ID="$(az ad app show \
   --id "$BACKEND_CLIENT_ID" \
   --query id -o tsv)"
-
-if [ -z "$BACKEND_OBJECT_ID" ]; then
-  echo "BACKEND_OBJECT_ID を取得できませんでした。BACKEND_CLIENT_ID=$BACKEND_CLIENT_ID を確認してください。"
-  exit 1
-fi
 
 echo "BACKEND_OBJECT_ID=$BACKEND_OBJECT_ID"
 
@@ -113,27 +97,20 @@ az ad app show \
 次に、React フロントエンド（SPA）用のアプリ登録を作成します。
 
 ```bash
-if [ -z "$FRONTEND_CLIENT_ID" ]; then
+if [ -z "${FRONTEND_CLIENT_ID:-}" ]; then
   FRONTEND_CLIENT_ID="$(az ad app create \
     --display-name "$FRONTEND_APP_NAME" \
     --sign-in-audience AzureADMyOrg \
-    --query appId -o tsv)" || exit 1
+    --query appId -o tsv)"
   export FRONTEND_CLIENT_ID
 else
-  az ad app show --id "$FRONTEND_CLIENT_ID" --output none || exit 1
+  az ad app show --id "$FRONTEND_CLIENT_ID" --output none
 fi
-workshop_state_save base || exit 1
 
 FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
-  --query id -o tsv)" || exit 1
+  --query id -o tsv)"
 export FRONTEND_OBJECT_ID
-
-APP_OWNERS="$(az ad app owner list --id "$FRONTEND_CLIENT_ID" -o json)" || exit 1
-printf '%s' "$APP_OWNERS" | jq -e --arg user "$SIGNED_IN_USER_ID" 'any(.[]; .id == $user)' >/dev/null || {
-  echo "自分が所有する Frontend アプリでないため、変更を停止します。"
-  exit 1
-}
 ```
 
 この時点では本番の Static Web Apps の URL がまだ決まっていないため、まずローカル検証用のリダイレクト URI（`http://localhost:4280`）を SPA として登録します。Static Web Apps の本番 URL は Day 1 のインフラデプロイ後に追加します。
@@ -143,14 +120,9 @@ export FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
   --query id -o tsv)"
 
-if [ -z "$FRONTEND_OBJECT_ID" ]; then
-  echo "FRONTEND_OBJECT_ID を取得できませんでした。FRONTEND_CLIENT_ID=$FRONTEND_CLIENT_ID を確認してください。"
-  exit 1
-fi
-
 echo "FRONTEND_OBJECT_ID=$FRONTEND_OBJECT_ID"
 
-EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)" || exit 1
+EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)"
 SPA_PATCH="$(jq -nc --argjson existing "$EXISTING_REDIRECTS" '{
   spa: {
     redirectUris: (($existing // []) + ["http://localhost:4280"] | unique)
@@ -309,18 +281,11 @@ az ad app owner list --id "$FRONTEND_CLIENT_ID" --query "[].id" -o jsonc
 作成した Client ID とスコープ ID を永続ストレージ（`$ENV_FILE`）に保存します。
 
 ```bash
-workshop_state_save identity || exit 1
+workshop_state_save identity
 printf 'State saved: %s\n' "$ENV_FILE"
 ```
 
-Cloud Shell のセッションが切れた場合は、次のコマンドでここまでの変数を復元できます。
-
-```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load identity || exit 1
-```
+> 💡 Cloud Shell のセッションが切れた場合は、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load identity` でここまでの変数を復元できます。
 
 ## 次に進む
 

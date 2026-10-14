@@ -15,12 +15,9 @@ title: "Day 1: GitHub Actions でデプロイ（代替）"
 - Day 1 の Bicep デプロイが完了し、`RESOURCE_GROUP`、`APP_SERVICE_NAME`、`SWA_NAME` が保存されていること。
 - Day 0 の Entra ID 設定が完了し、`TENANT_ID`、`BACKEND_CLIENT_ID`、`FRONTEND_CLIENT_ID` が保存されていること。
 
-```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load deployed` を先に実行してください。
 
+```bash
 echo "$RESOURCE_GROUP"
 echo "$APP_SERVICE_NAME"
 echo "$SWA_NAME"
@@ -31,13 +28,11 @@ echo "$SWA_NAME"
 GitHub CLI（`gh`）を使って、デプロイ元となる自分の GitHub リポジトリ（`owner/repository`）を指定します。
 
 ```bash
-cd "$WORKSHOP_REPO_DIR" || exit 1
-command -v gh >/dev/null || { echo "GitHub CLI が必要です。" >&2; exit 1; }
-gh api user --silent || exit 1
+cd "$WORKSHOP_REPO_DIR"
+gh api user --silent
 read -r -p "自分が管理する GitHub repository (owner/repository): " GITHUB_REPO
 export GITHUB_REPO
-[[ "$GITHUB_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || exit 1
-gh repo view "$GITHUB_REPO" --json nameWithOwner --jq .nameWithOwner || exit 1
+gh repo view "$GITHUB_REPO" --json nameWithOwner --jq .nameWithOwner
 ```
 
 ## 3. フロントエンド用の Variables と Secret を設定する
@@ -45,23 +40,20 @@ gh repo view "$GITHUB_REPO" --json nameWithOwner --jq .nameWithOwner || exit 1
 Entra ID の公開設定値を GitHub Actions の **Variables** に登録し、Static Web Apps のデプロイトークンを **Secrets** に登録します（デプロイトークンは画面に出力せずパイプで直接渡します）。
 
 ```bash
-gh variable set ENTRA_TENANT_ID --repo "$GITHUB_REPO" --body "$TENANT_ID" || exit 1
-gh variable set ENTRA_FRONTEND_CLIENT_ID --repo "$GITHUB_REPO" --body "$FRONTEND_CLIENT_ID" || exit 1
-gh variable set ENTRA_BACKEND_CLIENT_ID --repo "$GITHUB_REPO" --body "$BACKEND_CLIENT_ID" || exit 1
+gh variable set ENTRA_TENANT_ID --repo "$GITHUB_REPO" --body "$TENANT_ID"
+gh variable set ENTRA_FRONTEND_CLIENT_ID --repo "$GITHUB_REPO" --body "$FRONTEND_CLIENT_ID"
+gh variable set ENTRA_BACKEND_CLIENT_ID --repo "$GITHUB_REPO" --body "$BACKEND_CLIENT_ID"
 
-set +x
-SWA_DEPLOYMENT_TOKEN="$(az staticwebapp secrets list --subscription "$SUBSCRIPTION_ID" \
-  --resource-group "$RESOURCE_GROUP" --name "$SWA_NAME" --query properties.apiKey -o tsv)" || exit 1
-if [ -z "$SWA_DEPLOYMENT_TOKEN" ] || [ "$SWA_DEPLOYMENT_TOKEN" = null ]; then
-  unset SWA_DEPLOYMENT_TOKEN
-  echo "Deployment token を取得できませんでした。" >&2
-  exit 1
-fi
-if ! printf '%s' "$SWA_DEPLOYMENT_TOKEN" | gh secret set SWA_DEPLOYMENT_TOKEN --repo "$GITHUB_REPO"; then
-  unset SWA_DEPLOYMENT_TOKEN
-  exit 1
-fi
-unset SWA_DEPLOYMENT_TOKEN
+(
+  set +x
+  SWA_DEPLOYMENT_TOKEN="$(az staticwebapp secrets list --subscription "$SUBSCRIPTION_ID" \
+    --resource-group "$RESOURCE_GROUP" --name "$SWA_NAME" --query properties.apiKey -o tsv)" || exit 1
+  if [ -z "$SWA_DEPLOYMENT_TOKEN" ] || [ "$SWA_DEPLOYMENT_TOKEN" = null ]; then
+    echo "Deployment token を取得できませんでした。" >&2
+    exit 1
+  fi
+  printf '%s' "$SWA_DEPLOYMENT_TOKEN" | gh secret set SWA_DEPLOYMENT_TOKEN --repo "$GITHUB_REPO"
+)
 ```
 
 ## 4. バックエンドも GitHub Actions でデプロイする場合（OIDC 設定）
@@ -72,7 +64,7 @@ unset SWA_DEPLOYMENT_TOKEN
 
 ```bash
 node "$WORKSHOP_REPO_DIR/scripts/check-role-assignment-permission.cjs" \
-  "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP" || exit 1
+  "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP"
 ```
 
 デプロイ専用の Entra アプリとサービスプリンシパルを作成し、リソースグループスコープで `Contributor` ロールを割り当てます。
@@ -80,15 +72,15 @@ node "$WORKSHOP_REPO_DIR/scripts/check-role-assignment-permission.cjs" \
 ```bash
 AZURE_CLIENT_ID="$(az ad app create \
   --display-name "github-actions-paas-blog-${GROUP_ID}" \
-  --query appId -o tsv)" || exit 1
+  --query appId -o tsv)"
 export AZURE_CLIENT_ID
 
-az ad sp create --id "$AZURE_CLIENT_ID" --output none || exit 1
-SP_OBJECT_ID="$(az ad sp show --id "$AZURE_CLIENT_ID" --query id -o tsv)" || exit 1
+az ad sp create --id "$AZURE_CLIENT_ID" --output none
+SP_OBJECT_ID="$(az ad sp show --id "$AZURE_CLIENT_ID" --query id -o tsv)"
 az role assignment create --subscription "$SUBSCRIPTION_ID" \
   --assignee-object-id "$SP_OBJECT_ID" --assignee-principal-type ServicePrincipal \
   --role Contributor --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP" \
-  --output none || exit 1
+  --output none
 ```
 
 続けて、`main` ブランチ用のフェデレーション資格情報を作成し、GitHub リポジトリの Variables を設定します。
@@ -98,16 +90,16 @@ FED_PARAMETERS="$(node -e 'console.log(JSON.stringify({
   name: "github-main", issuer: "https://token.actions.githubusercontent.com",
   subject: `repo:${process.env.GITHUB_REPO}:ref:refs/heads/main`,
   audiences: ["api://AzureADTokenExchange"]
-}))')" || exit 1
+}))')"
 az ad app federated-credential create --id "$AZURE_CLIENT_ID" \
-  --parameters "$FED_PARAMETERS" --output none || exit 1
+  --parameters "$FED_PARAMETERS" --output none
 unset FED_PARAMETERS
 
-gh variable set AZURE_CLIENT_ID --repo "$GITHUB_REPO" --body "$AZURE_CLIENT_ID" || exit 1
-gh variable set AZURE_TENANT_ID --repo "$GITHUB_REPO" --body "$TENANT_ID" || exit 1
-gh variable set AZURE_SUBSCRIPTION_ID --repo "$GITHUB_REPO" --body "$SUBSCRIPTION_ID" || exit 1
-gh variable set AZURE_RESOURCE_GROUP --repo "$GITHUB_REPO" --body "$RESOURCE_GROUP" || exit 1
-gh variable set AZURE_WEBAPP_NAME --repo "$GITHUB_REPO" --body "$APP_SERVICE_NAME" || exit 1
+gh variable set AZURE_CLIENT_ID --repo "$GITHUB_REPO" --body "$AZURE_CLIENT_ID"
+gh variable set AZURE_TENANT_ID --repo "$GITHUB_REPO" --body "$TENANT_ID"
+gh variable set AZURE_SUBSCRIPTION_ID --repo "$GITHUB_REPO" --body "$SUBSCRIPTION_ID"
+gh variable set AZURE_RESOURCE_GROUP --repo "$GITHUB_REPO" --body "$RESOURCE_GROUP"
+gh variable set AZURE_WEBAPP_NAME --repo "$GITHUB_REPO" --body "$APP_SERVICE_NAME"
 ```
 
 ## 5. ワークフローを有効化して実行する
@@ -116,18 +108,10 @@ gh variable set AZURE_WEBAPP_NAME --repo "$GITHUB_REPO" --body "$APP_SERVICE_NAM
 
 ```bash
 mkdir -p .github/workflows
-if [ -e .github/workflows/deploy-frontend.yml ]; then
-  echo "既存 frontend workflow を確認し、手動で差分を統合してください。" >&2
-  exit 1
-fi
-cp .github/workflow-templates/deploy-frontend.yml .github/workflows/deploy-frontend.yml
+cp -i .github/workflow-templates/deploy-frontend.yml .github/workflows/deploy-frontend.yml
 read -r -p "Backend OIDC 設定済みで backend workflow も有効化しますか？ (y/N): " ENABLE_BACKEND
 if [ "$ENABLE_BACKEND" = y ]; then
-  if [ -e .github/workflows/deploy-backend.yml ]; then
-    echo "既存 backend workflow を確認し、手動で差分を統合してください。" >&2
-    exit 1
-  fi
-  cp .github/workflow-templates/deploy-backend.yml .github/workflows/deploy-backend.yml
+  cp -i .github/workflow-templates/deploy-backend.yml .github/workflows/deploy-backend.yml
 fi
 ```
 
@@ -140,7 +124,7 @@ git add .github/workflows/deploy-frontend.yml
 if [ "$ENABLE_BACKEND" = y ]; then git add .github/workflows/deploy-backend.yml; fi
 git commit -m "ci: enable optional application deployment"
 git push
-gh workflow run deploy-frontend.yml --repo "$GITHUB_REPO" --ref main || exit 1
+gh workflow run deploy-frontend.yml --repo "$GITHUB_REPO" --ref main
 ```
 
 ## 6. デプロイ結果を確認する

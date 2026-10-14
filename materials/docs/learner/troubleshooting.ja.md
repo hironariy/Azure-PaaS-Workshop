@@ -25,8 +25,8 @@ Cloud Shell での演習中によくある問題と、症状別の確認・対�
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
 export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load base || exit 1
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh"
+workshop_state_load base
 printf 'State: %s / Subscription: %s / RG: %s\n' "$ENV_FILE" "$SUBSCRIPTION_ID" "$RESOURCE_GROUP"
 ```
 
@@ -187,29 +187,31 @@ az ad app show \
 `https://<SWA_HOSTNAME>` が含まれていない場合は、次のコマンドで追加します。
 
 ```bash
-EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)" || exit 1
-REDIRECT_URIS="$(jq -nc --argjson existing "$EXISTING_REDIRECTS" --arg swa "https://$SWA_HOSTNAME" \
-  '(($existing // []) + ["http://localhost:4280", $swa, ($swa + "/")]) | unique')" || exit 1
+(
+  EXISTING_REDIRECTS="$(az ad app show --id "$FRONTEND_CLIENT_ID" --query spa.redirectUris -o json)" || exit 1
+  REDIRECT_URIS="$(jq -nc --argjson existing "$EXISTING_REDIRECTS" --arg swa "https://$SWA_HOSTNAME" \
+    '(($existing // []) + ["http://localhost:4280", $swa, ($swa + "/")]) | unique')" || exit 1
 
-FRONTEND_OBJECT_ID="$(az ad app show \
-  --id "$FRONTEND_CLIENT_ID" \
-  --query id -o tsv)"
+  FRONTEND_OBJECT_ID="$(az ad app show \
+    --id "$FRONTEND_CLIENT_ID" \
+    --query id -o tsv)"
 
-if [ -z "$FRONTEND_OBJECT_ID" ]; then
-  echo "FRONTEND_OBJECT_ID を取得できませんでした。FRONTEND_CLIENT_ID=$FRONTEND_CLIENT_ID を確認してください。"
-  exit 1
-fi
+  if [ -z "$FRONTEND_OBJECT_ID" ]; then
+    echo "FRONTEND_OBJECT_ID を取得できませんでした。FRONTEND_CLIENT_ID=$FRONTEND_CLIENT_ID を確認してください。"
+    exit 1
+  fi
 
-SPA_PATCH="$(jq -nc --argjson redirectUris "$REDIRECT_URIS" '{
-  spa: {
-    redirectUris: $redirectUris
-  }
-}')"
+  SPA_PATCH="$(jq -nc --argjson redirectUris "$REDIRECT_URIS" '{
+    spa: {
+      redirectUris: $redirectUris
+    }
+  }')"
 
-az rest \
-  --method PATCH \
-  --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
-  --body "$SPA_PATCH"
+  az rest \
+    --method PATCH \
+    --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
+    --body "$SPA_PATCH"
+)
 ```
 
 ## サインイン時に `AADSTS900144`（`client_id` 不足）が出る
@@ -226,7 +228,6 @@ Static Web Apps に配信されている `index.html` の `window.__APP_CONFIG__
 curl -fsS "https://${SWA_HOSTNAME}" \
   | grep -o 'window.__APP_CONFIG__=[^<]*'
 
-workshop_state_load deployed || exit 1
 printf 'Tenant: %s / Frontend: %s / Backend: %s\n' "$TENANT_ID" "$FRONTEND_CLIENT_ID" "$BACKEND_CLIENT_ID"
 ```
 
@@ -237,10 +238,6 @@ printf 'Tenant: %s / Frontend: %s / Backend: %s\n' "$TENANT_ID" "$FRONTEND_CLIEN
 フロントエンドの手動ビルド確認:
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
 cd "$WORKSHOP_REPO_DIR/materials/frontend"
 node --version
 npm --version
@@ -251,10 +248,6 @@ npm run build
 バックエンドの再デプロイ確認:
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
 cd "$WORKSHOP_REPO_DIR"
 ./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
 ```

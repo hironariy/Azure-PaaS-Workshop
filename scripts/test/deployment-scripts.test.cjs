@@ -231,7 +231,7 @@ test('exact learner parameter snippet hides generated secrets and preserves them
   fs.copyFileSync(path.join(repository, 'materials/bicep/dev.bicepparam'),
     path.join(checkout, 'materials/bicep/dev.bicepparam'));
   const document = fs.readFileSync(path.join(repository, 'materials/docs/learner/day-1-deploy-infrastructure.ja.md'), 'utf8');
-  const snippet = document.match(/node <<'NODE' \|\| exit 1\n([\s\S]*?)\nNODE/);
+  const snippet = document.match(/node <<'NODE'(?: \|\| exit 1)?\n([\s\S]*?)\nNODE/);
   assert(snippet, 'Exact parameter creation snippet must exist');
   const execute = () => spawnSync(process.execPath, ['-'], { env, input: snippet[1], encoding: 'utf8' });
   const first = execute();

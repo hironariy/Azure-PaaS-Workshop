@@ -6,13 +6,13 @@ title: "Day 2: 監視と運用"
 
 Day 2 では、PaaS アプリケーションの稼働状態を Azure の標準機能で確認します。仮想マシン（VM）へ SSH 接続して調査するのではなく、App Service、Application Insights、Log Analytics、Key Vault、マネージド ID を組み合わせて状態を確認・切り分けます。
 
-## 1. 変数を復元する
+## 1. 変数を確認する
+
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load deployed` を先に実行してください。
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
+echo "RESOURCE_GROUP=$RESOURCE_GROUP"
+echo "APP_SERVICE_NAME=$APP_SERVICE_NAME"
 ```
 
 ## 2. App Service の設定を確認する
@@ -76,7 +76,7 @@ APP_PRINCIPAL_ID="$(az webapp identity show \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name "$APP_SERVICE_NAME" \
-  --query principalId -o tsv)" || exit 1
+  --query principalId -o tsv)"
 
 echo "$APP_PRINCIPAL_ID"
 ```
@@ -90,13 +90,13 @@ APPINSIGHTS_NAME="$(az deployment group show \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query "properties.outputs.appInsightsName.value" -o tsv)" || exit 1
+  --query "properties.outputs.appInsightsName.value" -o tsv)"
 
 WORKSPACE_ID="$(az deployment group show \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query "properties.outputs.logAnalyticsWorkspaceId.value" -o tsv)" || exit 1
+  --query "properties.outputs.logAnalyticsWorkspaceId.value" -o tsv)"
 
 echo "Application Insights: $APPINSIGHTS_NAME"
 echo "Workspace ID: $WORKSPACE_ID"
@@ -135,7 +135,7 @@ AppExceptions
 `AppRequests` や `AppExceptions` がまだ表示されない場合は、次のスクリプトでアプリケーションへリクエストを送信し、数分待ってから再度クエリを実行してください。
 
 ```bash
-node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
+node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR"
 ```
 
 さらに詳しい KQL クエリ例やアラート設計については、[監視ガイド](../monitoring-guide.ja.html) を参照してください。

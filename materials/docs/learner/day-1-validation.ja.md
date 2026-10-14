@@ -6,20 +6,21 @@ title: "Day 1: アプリケーションの動作確認"
 
 デプロイした PaaS アプリケーションが、App Service への直接アクセスと Static Web Apps 経由の両方で正しく動作することを確認します。
 
-## 1. 変数を復元する
+## 1. 変数を確認する
+
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load deployed` を先に実行してください。
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
+echo "RESOURCE_GROUP=$RESOURCE_GROUP"
+echo "APP_SERVICE_NAME=$APP_SERVICE_NAME"
+echo "SWA_HOSTNAME=$SWA_HOSTNAME"
 ```
 
 ## 2. App Service の直接ヘルスチェック
 
 ```bash
 APP_HOSTNAME="$(az webapp show --subscription "$SUBSCRIPTION_ID" \
-  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" --query defaultHostName -o tsv)" || exit 1
+  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" --query defaultHostName -o tsv)"
 curl --connect-timeout 5 --max-time 10 -fsS "https://${APP_HOSTNAME}/health" | jq .
 ```
 
@@ -54,7 +55,7 @@ curl --connect-timeout 5 --max-time 10 -fsS "https://${SWA_HOSTNAME}/api/health"
 次のスクリプトを実行すると、App Service 直接の `/health`、Static Web Apps 経由の `/api/health`、両経路での公開記事一覧 API（`/api/posts`）、およびフロントエンドの `window.__APP_CONFIG__` をまとめて確認できます。
 
 ```bash
-node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
+node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR"
 ```
 
 出力に `"status": "public_checks_passed"` が表示されれば、公開エンドポイントの疎通確認は完了です。
@@ -118,7 +119,7 @@ APPINSIGHTS_NAME="$(az deployment group show \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query "properties.outputs.appInsightsName.value" -o tsv)" || exit 1
+  --query "properties.outputs.appInsightsName.value" -o tsv)"
 
 echo "$APPINSIGHTS_NAME"
 ```

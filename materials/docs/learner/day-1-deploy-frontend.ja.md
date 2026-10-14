@@ -8,11 +8,9 @@ Cloud Shell 上で React フロントエンド（`materials/frontend`）をビ�
 
 ## 1. 変数とツールを確認する
 
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load deployed` を先に実行してください。
+
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
 node --version
 npm --version
 az version
@@ -29,8 +27,8 @@ Static Web Apps 名、ホスト名、Entra ID の各 ID が表示されること
 リポジトリに含まれる `scripts/deploy-frontend.sh` を実行します。
 
 ```bash
-cd "$WORKSHOP_REPO_DIR" || exit 1
-./scripts/deploy-frontend.sh "$RESOURCE_GROUP" || exit 1
+cd "$WORKSHOP_REPO_DIR"
+./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
 ```
 
 このスクリプトは内部で次の処理を順番に実行します。
@@ -65,7 +63,7 @@ echo ""
 
    ```bash
    FRONTEND_ZIP="$WORKSHOP_STATE_DIR/frontend-$(node -p 'require("node:crypto").randomUUID()').zip"
-   bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP" || exit 1
+   bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" prepare "$FRONTEND_ZIP"
    ```
 
 2. **一時 HTTPS URL（Blob Storage の読み取り専用 SAS URL など）の準備とデプロイ (`deploy`)**
@@ -73,7 +71,7 @@ echo ""
    生成された `$FRONTEND_ZIP` を Azure Blob Storage などの HTTPS ストレージへアップロードし、有効期限の短い読み取り専用 URL を発行したうえで次のコマンドを実行します（プロンプトに URL を貼り付けます）。
 
    ```bash
-   bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" deploy "$FRONTEND_ZIP" || exit 1
+   bash "$WORKSHOP_REPO_DIR/scripts/deploy-frontend-arm.sh" "$RESOURCE_GROUP" deploy "$FRONTEND_ZIP"
    ```
 
    デプロイ完了後は、アップロードした一時ファイルと SAS URL を削除・失効させてください。

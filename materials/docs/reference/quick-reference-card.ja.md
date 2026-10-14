@@ -9,13 +9,13 @@ Cloud Shell のセッションが切れたときや、よく使うコマンド�
 - **標準構成**: Static Web Apps (`Standard`) + App Service (`B1`) + Cosmos DB for MongoDB vCore (`M25`, `HA=false`)
 - **前提ロール**: Azure サブスクリプションの **Owner** + Microsoft Entra ID の **Application Developer**
 
-## 1. 環境変数の復元
+## 1. 環境変数の復元（Cloud Shell 再接続時のみ）
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
 export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load base || exit 1
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh"
+workshop_state_load base
 ```
 
 （Day 0 完了後は `workshop_state_load identity`、Day 1 インフラ構築後は `workshop_state_load deployed` を使用できます。）
@@ -42,9 +42,8 @@ workshop_state_load base || exit 1
 ## 3. 公開 URL とヘルスチェックの確認
 
 ```bash
-workshop_state_load deployed || exit 1
 APP_HOSTNAME="$(az webapp show --subscription "$SUBSCRIPTION_ID" \
-  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" --query defaultHostName -o tsv)" || exit 1
+  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" --query defaultHostName -o tsv)"
 echo "Frontend: https://$SWA_HOSTNAME"
 echo "API via SWA: https://$SWA_HOSTNAME/api/health"
 echo "API direct: https://$APP_HOSTNAME/health"
@@ -53,7 +52,7 @@ echo "API direct: https://$APP_HOSTNAME/health"
 公開エンドポイントの一括検証:
 
 ```bash
-node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
+node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR"
 ```
 
 ## 4. Bicep デプロイ出力の確認
@@ -70,21 +69,15 @@ az deployment group show \
 ## 5. バックエンドのデプロイ
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
-./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME" || exit 1
+cd "$WORKSHOP_REPO_DIR"
+./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
 ```
 
 ## 6. フロントエンドのデプロイ
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
-./scripts/deploy-frontend.sh "$RESOURCE_GROUP" || exit 1
+cd "$WORKSHOP_REPO_DIR"
+./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
 ```
 
 （ARM ZIP API を使う代替手順については [Day 1: フロントエンドのデプロイ](../learner/day-1-deploy-frontend.ja.html) を参照してください。）
@@ -112,7 +105,7 @@ az ad app show \
 ## 9. クリーンアップ（リソース削除）
 
 ```bash
-bash "$WORKSHOP_REPO_DIR/scripts/cleanup-workshop.sh" || exit 1
+bash "$WORKSHOP_REPO_DIR/scripts/cleanup-workshop.sh"
 ```
 
 詳細は [クリーンアップ（リソース削除）](../learner/cleanup.ja.html) を参照してください。

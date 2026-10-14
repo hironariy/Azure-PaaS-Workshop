@@ -6,15 +6,13 @@ title: "クリーンアップ（リソース削除）"
 
 ワークショップ終了後は、不要な課金が発生しないよう、作成した Azure リソースグループと Microsoft Entra ID のアプリ登録を削除し、削除が完了したことまで確認します。
 
-## 1. 保存済みの設定値を確認する
+## 1. 削除対象の設定値を確認する
+
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load base` を先に実行してください。
 
 削除対象のサブスクリプション、テナント、リソースグループ名を確認します。
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load base || exit 1
 printf 'Subscription: %s / Tenant: %s / RG: %s\n' "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP"
 ```
 

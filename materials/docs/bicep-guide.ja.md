@@ -112,24 +112,19 @@ materials/bicep/
 ## 5. デプロイ・確認コマンド（リファレンス）
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load identity || exit 1
-
 # 1. 事前検証 (validate)
 az deployment group validate \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
-  --parameters "$PARAM_FILE" || exit 1
+  --parameters "$PARAM_FILE"
 
 # 2. デプロイ実行 (create)
 az deployment group create \
   --subscription "$SUBSCRIPTION_ID" --name main \
   --resource-group "$RESOURCE_GROUP" \
   --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
-  --parameters "$PARAM_FILE" || exit 1
+  --parameters "$PARAM_FILE"
 
 # 3. 出力値の確認 (show)
 az deployment group show \
@@ -137,7 +132,7 @@ az deployment group show \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
   --query '{state:properties.provisioningState,started:properties.timestamp,outputs:properties.outputs}' \
-  -o jsonc || exit 1
+  -o jsonc
 ```
 
 ---

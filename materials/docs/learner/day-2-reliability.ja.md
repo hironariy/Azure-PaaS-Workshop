@@ -13,13 +13,10 @@ title: "Day 2: 信頼性と復旧"
 
 まず、[Day 1: アプリケーションの動作確認](day-1-validation.ja.html) が完了しており、現在の環境が正常に応答することを確認します。
 
-```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load deployed` を先に実行してください。
 
-node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
+```bash
+node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR"
 ```
 
 ブラウザーでサインインし、**公開済み（Published）の記事 1 件**と**下書き（Draft）の記事 1 件**が存在することを確認します（未作成の場合は作成しておきます）。再起動や再デプロイの後に、同じ記事の内容・公開状態が保持されていることを確認します。
@@ -39,22 +36,22 @@ Cloud Shell で 2 つのターミナル（タブ）を開き、片方でヘル�
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
 export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-node "$WORKSHOP_REPO_DIR/scripts/observe-workshop-recovery.cjs" "$WORKSHOP_STATE_DIR" || exit 1
+node "$WORKSHOP_REPO_DIR/scripts/observe-workshop-recovery.cjs" "$WORKSHOP_STATE_DIR"
 ```
 
-最初の `sample` で `directHealthy: true` と `swaHealthy: true` が表示されたら、**ターミナル 2（操作用）** で App Service を再起動します。
+最初の `sample` で `directHealthy: true` と `swaHealthy: true` が表示されたら、**ターミナル 2（操作用・新しいタブ）** で App Service を再起動します。
 
 ```bash
 export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
 export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh"
+workshop_state_load deployed
 
 OPERATION_STARTED="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 OPERATION_SECONDS=$SECONDS
 printf 'restart started UTC=%s\n' "$OPERATION_STARTED"
 az webapp restart --subscription "$SUBSCRIPTION_ID" \
-  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" || exit 1
+  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME"
 printf 'restart control-plane completed UTC=%s elapsed=%ss\n' \
   "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$((SECONDS - OPERATION_SECONDS))"
 ```
@@ -72,21 +69,18 @@ printf 'restart control-plane completed UTC=%s elapsed=%ss\n' \
 現在正常に動作している Git コミットのハッシュ（SHA）を記録し、同じソースから再デプロイしても環境とデータが維持されることを確認します。
 
 ```bash
-cd "$WORKSHOP_REPO_DIR" || exit 1
-if [ -n "$(git status --porcelain)" ]; then
-  echo "未コミットの変更があります。git status を確認してください。" >&2
-  exit 1
-fi
-KNOWN_GOOD_REVISION="$(git rev-parse --verify HEAD)" || exit 1
+cd "$WORKSHOP_REPO_DIR"
+git status --short
+KNOWN_GOOD_REVISION="$(git rev-parse --verify HEAD)"
 printf 'Known-good source revision: %s\n' "$KNOWN_GOOD_REVISION"
 ```
 
 バックエンドとフロントエンドを再デプロイし、公開エンドポイントのチェックを実行します。
 
 ```bash
-./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME" || exit 1
-./scripts/deploy-frontend.sh "$RESOURCE_GROUP" || exit 1
-node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
+./scripts/deploy-backend.sh "$RESOURCE_GROUP" "$APP_SERVICE_NAME"
+./scripts/deploy-frontend.sh "$RESOURCE_GROUP"
+node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR"
 ```
 
 また、Bicep テンプレートも同じパラメータファイル（`$PARAM_FILE`）を使って冪等に再実行できます（既存の DB パスワードや Key Vault ロール割り当てはそのまま保持されます）。
@@ -96,19 +90,16 @@ node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" |
 コード変更後に問題が見つかった場合を想定し、手順 3 で記録した `KNOWN_GOOD_REVISION` をチェックアウトして再デプロイする手順を確認します。
 
 ```bash
-cd "$WORKSHOP_REPO_DIR" || exit 1
+cd "$WORKSHOP_REPO_DIR"
+CURRENT_SOURCE="$(git rev-parse --verify HEAD)"
+CURRENT_BRANCH="$(git branch --show-current)"
 if [ -n "$(git status --porcelain)" ]; then
-  echo "Dirty checkout: refusing revision switch." >&2
-  exit 1
+  echo "未コミットの変更があるため、コミット切り替えをスキップします。" >&2
+elif [[ "${KNOWN_GOOD_REVISION:-}" =~ ^[0-9a-f]{40}$ ]]; then
+  git switch --detach "$KNOWN_GOOD_REVISION"
+else
+  echo "手順 3 で記録した KNOWN_GOOD_REVISION を設定してください。" >&2
 fi
-if ! [[ "${KNOWN_GOOD_REVISION:-}" =~ ^[0-9a-f]{40}$ ]]; then
-  echo "Set the verified full SHA recorded in step 3." >&2
-  exit 1
-fi
-CURRENT_SOURCE="$(git rev-parse --verify HEAD)" || exit 1
-CURRENT_BRANCH="$(git branch --show-current)" || exit 1
-git rev-parse --verify "${KNOWN_GOOD_REVISION}^{commit}" > /dev/null || exit 1
-git switch --detach "$KNOWN_GOOD_REVISION" || exit 1
 ```
 
 この状態で `./scripts/deploy-backend.sh` や `./scripts/deploy-frontend.sh` を実行することで、正常動作を確認済みのリビジョンへロールバックできます。
@@ -117,9 +108,9 @@ git switch --detach "$KNOWN_GOOD_REVISION" || exit 1
 
 ```bash
 if [ -n "$CURRENT_BRANCH" ]; then
-  git switch "$CURRENT_BRANCH" || exit 1
+  git switch "$CURRENT_BRANCH"
 else
-  git switch --detach "$CURRENT_SOURCE" || exit 1
+  git switch --detach "$CURRENT_SOURCE"
 fi
 ```
 

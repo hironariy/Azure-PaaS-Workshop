@@ -98,11 +98,7 @@ AppExceptions
 デプロイ直後などでまだリクエストが送信されていない場合、`AppRequests` や `AppExceptions` テーブルが表示されないことがあります。次のコマンドでヘルスチェックと公開 API へのリクエストを発生させ、数分待ってから再度クエリを実行してください。
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
-node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR" || exit 1
+node "$WORKSHOP_REPO_DIR/scripts/check-workshop-app.cjs" "$WORKSHOP_STATE_DIR"
 ```
 
 また、App Service に `APPLICATIONINSIGHTS_CONNECTION_STRING` が設定されているかは次のコマンドで確認できます。

@@ -184,15 +184,11 @@ M30+ cannot scale back to M25.
 Only run after permissions/consent/provider/region/quota/tier/capacity/cost checks:
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load identity || exit 1
 az deployment group validate \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
-  --parameters "$PARAM_FILE" || exit 1
+  --parameters "$PARAM_FILE"
 ```
 
 Deploy:
@@ -202,7 +198,7 @@ az deployment group create \
   --subscription "$SUBSCRIPTION_ID" --name main \
   --resource-group "$RESOURCE_GROUP" \
   --template-file "$WORKSHOP_REPO_DIR/materials/bicep/main.bicep" \
-  --parameters "$PARAM_FILE" || exit 1
+  --parameters "$PARAM_FILE"
 ```
 
 Read outputs:
@@ -213,7 +209,7 @@ az deployment group show \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
   --query '{state:properties.provisioningState,started:properties.timestamp,outputs:properties.outputs}' \
-  -o jsonc || exit 1
+  -o jsonc
 ```
 
 Confirm this operation's start/correlation ID/Succeeded, not previous outputs.

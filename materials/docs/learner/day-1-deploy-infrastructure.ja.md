@@ -11,14 +11,12 @@ Cloud Shell から Bicep テンプレートを実行し、Azure PaaS リソー�
 
 ## 1. 変数と作業ディレクトリを確認する
 
-Day 0 で保存した設定値を読み込み、すべての変数が揃っていることを確認します。
+Day 0 から続けて作業している場合は、そのまますべての変数が揃っていることを確認します。
+
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load identity` を先に実行してください。
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load identity || exit 1
-
+cd "$WORKSHOP_REPO_DIR"
 echo "$WORKSHOP_REPO_DIR"
 echo "$WORKSHOP_STATE_DIR"
 echo "$RESOURCE_GROUP"
@@ -35,7 +33,7 @@ echo "$PARAM_FILE"
 テンプレート（`materials/bicep/dev.bicepparam`）から自分用のパラメータファイル（`$PARAM_FILE`）を作成します。初回作成時は、暗号学的に安全な乱数で Cosmos DB 管理者パスワード（大文字・小文字・数字・記号を含む文字列）を自動生成してファイルへ直接書き込みます。再実行時は既存のファイルとパスワードをそのまま保持します。
 
 ```bash
-node <<'NODE' || exit 1
+node <<'NODE'
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
@@ -126,7 +124,7 @@ az deployment group validate \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --template-file materials/bicep/main.bicep \
-  --parameters "$PARAM_FILE" || exit 1
+  --parameters "$PARAM_FILE"
 ```
 
 ## 5. PaaS リソースをデプロイする
@@ -139,16 +137,14 @@ az deployment group create \
   --name main \
   --resource-group "$RESOURCE_GROUP" \
   --template-file materials/bicep/main.bicep \
-  --parameters "$PARAM_FILE" || exit 1
+  --parameters "$PARAM_FILE"
 ```
 
 Cosmos DB for MongoDB vCore クラスターの作成を含むため、完了まで **10〜15 分程度**かかる場合があります。進捗を確認したい場合は、別の Cloud Shell タブを開いて次のコマンドを実行してください。
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load identity || exit 1
+source "$HOME/Azure-PaaS-Workshop/scripts/workshop-state.sh"
+workshop_state_load identity
 az deployment group show --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --name main \
   --query '{state:properties.provisioningState,started:properties.timestamp,correlationId:properties.correlationId}' -o jsonc
 az deployment operation group list --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --name main \
@@ -174,23 +170,23 @@ APP_SERVICE_NAME="$(az deployment group show \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query "properties.outputs.appServiceName.value" -o tsv)" || exit 1
+  --query "properties.outputs.appServiceName.value" -o tsv)"
 
 SWA_NAME="$(az deployment group show \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name main \
-  --query "properties.outputs.staticWebAppName.value" -o tsv)" || exit 1
+  --query "properties.outputs.staticWebAppName.value" -o tsv)"
 
 SWA_HOSTNAME="$(az staticwebapp show \
   --subscription "$SUBSCRIPTION_ID" \
   --resource-group "$RESOURCE_GROUP" \
   --name "$SWA_NAME" \
-  --query defaultHostname -o tsv)" || exit 1
+  --query defaultHostname -o tsv)"
 
 export APP_SERVICE_NAME SWA_NAME SWA_HOSTNAME
 
-workshop_state_save deployed || exit 1
+workshop_state_save deployed
 
 echo "App Service: $APP_SERVICE_NAME"
 echo "Static Web App: https://$SWA_HOSTNAME"
@@ -201,58 +197,60 @@ echo "Static Web App: https://$SWA_HOSTNAME"
 Day 0 で作成したフロントエンドのアプリ登録に対して、手順 6 で確定した Static Web Apps の URL（`https://$SWA_HOSTNAME`）を **SPA のリダイレクト URI** として追加します。既存の `http://localhost:4280` などの設定は保持されます。
 
 ```bash
-if ! ACCOUNT_JSON="$(az account show -o json)"; then
-  echo "Azure のログイン状態を確認できません。" >&2
-  exit 1
-fi
-if ! SUBSCRIPTION_ID="$(jq -er --arg tenant "$TENANT_ID" \
-  'select(.tenantId == $tenant) | .id | select(type == "string" and length > 0)' \
-  <<< "$ACCOUNT_JSON")"; then
-  echo "現在のテナントが Day 0 の TENANT_ID と一致しません。更新を中止します。" >&2
-  exit 1
-fi
-export SUBSCRIPTION_ID
-if [ -z "$SWA_HOSTNAME" ] || [ "$SWA_HOSTNAME" = null ]; then
-  echo "手順 6 の SWA_HOSTNAME を確認してください。" >&2
-  exit 1
-fi
+(
+  if ! ACCOUNT_JSON="$(az account show -o json)"; then
+    echo "Azure のログイン状態を確認できません。" >&2
+    exit 1
+  fi
+  if ! SUBSCRIPTION_ID="$(jq -er --arg tenant "$TENANT_ID" \
+    'select(.tenantId == $tenant) | .id | select(type == "string" and length > 0)' \
+    <<< "$ACCOUNT_JSON")"; then
+    echo "現在のテナントが Day 0 の TENANT_ID と一致しません。更新を中止します。" >&2
+    exit 1
+  fi
+  export SUBSCRIPTION_ID
+  if [ -z "$SWA_HOSTNAME" ] || [ "$SWA_HOSTNAME" = null ]; then
+    echo "手順 6 の SWA_HOSTNAME を確認してください。" >&2
+    exit 1
+  fi
 
-if ! FRONTEND_APP_JSON="$(az ad app show \
-  --subscription "$SUBSCRIPTION_ID" \
-  --id "$FRONTEND_CLIENT_ID" \
-  -o json)"; then
-  echo "Frontend アプリ登録を取得できません。テナント、Client ID、アプリの所有権を確認してください。" >&2
-  exit 1
-fi
+  if ! FRONTEND_APP_JSON="$(az ad app show \
+    --subscription "$SUBSCRIPTION_ID" \
+    --id "$FRONTEND_CLIENT_ID" \
+    -o json)"; then
+    echo "Frontend アプリ登録を取得できません。テナント、Client ID、アプリの所有権を確認してください。" >&2
+    exit 1
+  fi
 
-if ! FRONTEND_OBJECT_ID="$(jq -er --arg client "$FRONTEND_CLIENT_ID" \
-  'select(.appId == $client) | .id | select(type == "string" and length > 0)' \
-  <<< "$FRONTEND_APP_JSON")"; then
-  echo "Frontend アプリ登録の Client ID と Object ID を確認できませんでした。" >&2
-  exit 1
-fi
+  if ! FRONTEND_OBJECT_ID="$(jq -er --arg client "$FRONTEND_CLIENT_ID" \
+    'select(.appId == $client) | .id | select(type == "string" and length > 0)' \
+    <<< "$FRONTEND_APP_JSON")"; then
+    echo "Frontend アプリ登録の Client ID と Object ID を確認できませんでした。" >&2
+    exit 1
+  fi
 
-if ! REDIRECT_URIS="$(jq -ce --arg swa "https://$SWA_HOSTNAME" '
-  (.spa.redirectUris // []) |
-  if type == "array" and all(.[]; type == "string") then
-    (. + [$swa] | unique)
-  else error("SPA redirectUris must be an array of strings") end
-' <<< "$FRONTEND_APP_JSON")"; then
-  echo "既存の SPA リダイレクト URI を読み取れないため、更新を中止します。" >&2
-  exit 1
-fi
+  if ! REDIRECT_URIS="$(jq -ce --arg swa "https://$SWA_HOSTNAME" '
+    (.spa.redirectUris // []) |
+    if type == "array" and all(.[]; type == "string") then
+      (. + [$swa] | unique)
+    else error("SPA redirectUris must be an array of strings") end
+  ' <<< "$FRONTEND_APP_JSON")"; then
+    echo "既存の SPA リダイレクト URI を読み取れないため、更新を中止します。" >&2
+    exit 1
+  fi
 
-SPA_PATCH="$(jq -nc --argjson redirectUris "$REDIRECT_URIS" '{
-  spa: {
-    redirectUris: $redirectUris
-  }
-}')"
+  SPA_PATCH="$(jq -nc --argjson redirectUris "$REDIRECT_URIS" '{
+    spa: {
+      redirectUris: $redirectUris
+    }
+  }')"
 
-az rest \
-  --subscription "$SUBSCRIPTION_ID" \
-  --method PATCH \
-  --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
-  --body "$SPA_PATCH"
+  az rest \
+    --subscription "$SUBSCRIPTION_ID" \
+    --method PATCH \
+    --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
+    --body "$SPA_PATCH"
+)
 ```
 
 リダイレクト URI が正しく登録されたことを確認します。

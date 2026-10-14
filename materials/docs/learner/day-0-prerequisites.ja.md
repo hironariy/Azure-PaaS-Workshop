@@ -27,21 +27,18 @@ AWS に慣れている方は、EC2 インスタンスを自分で運用するの
 
 ## 2. サブスクリプションを確認する
 
-保存済みの共通変数を読み込み、現在選択されているサブスクリプションとテナントを確認します。
+[事前準備 1: Cloud Shell の設定](cloud-shell-quickstart.ja.html) から続けて作業している場合は、そのまま現在選択されているサブスクリプションとテナントを確認します。
+
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load base` を実行してください。
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load base || exit 1
 az account show --query "{name:name,id:id,tenantId:tenantId}" --output table
 ```
 
-Cloud Shell の現在のサブスクリプションが保存済みの値と異なる場合は、次のコマンドで切り替えてから再度読み込みます。
+Cloud Shell の現在のサブスクリプションが `$SUBSCRIPTION_ID` と異なる場合は、次のコマンドで切り替えます。
 
 ```bash
 az account set --subscription "$SUBSCRIPTION_ID"
-workshop_state_load base || exit 1
 ```
 
 ### サブスクリプションの Owner を確認する
@@ -91,7 +88,7 @@ Day 1 の Bicep デプロイでは、App Service のマネージド ID に対し
 
 ```bash
 node scripts/check-role-assignment-permission.cjs \
-  "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP" || exit "$?"
+  "$SUBSCRIPTION_ID" "$TENANT_ID" "$RESOURCE_GROUP"
 ```
 
 | 終了コード | 意味 | 対処 |
@@ -105,41 +102,43 @@ node scripts/check-role-assignment-permission.cjs \
 このワークショップでは、App Service、Static Web Apps、Cosmos DB (MongoDB vCore)、Key Vault、Azure Monitor / Alerts、Virtual Network を使用します。必要なリソースプロバイダーが登録されているか確認し、未登録のものがあれば登録します。
 
 ```bash
-for ns in \
-  Microsoft.Web \
-  Microsoft.DocumentDB \
-  Microsoft.KeyVault \
-  Microsoft.Insights \
-  Microsoft.AlertsManagement \
-  Microsoft.OperationalInsights \
-  Microsoft.Network \
-  Microsoft.Authorization
-do
-  info="$(az provider show --subscription "$SUBSCRIPTION_ID" --namespace "$ns" \
-    --query '{state:registrationState,policy:registrationPolicy}' -o json)" || exit 1
-  state="$(printf '%s' "$info" | jq -er '.state')" || exit 1
-  policy="$(printf '%s' "$info" | jq -r '.policy')" || exit 1
-  printf '%s: %s / %s\n' "$ns" "$state" "$policy"
-  if [ "$state" = Registered ] || [ "$policy" = RegistrationFree ]; then continue; fi
-  case "$state" in
-    NotRegistered)
-      az provider register --subscription "$SUBSCRIPTION_ID" --namespace "$ns" --output none || exit 1 ;;
-    Registering) ;;
-    *) echo "想定外の provider 状態です。"; exit 1 ;;
-  esac
-  for attempt in $(seq 1 20); do
-    state="$(az provider show --subscription "$SUBSCRIPTION_ID" --namespace "$ns" \
-      --query registrationState -o tsv)" || exit 1
-    printf '%s: %s (%s/20)\n' "$ns" "$state" "$attempt"
+(
+  for ns in \
+    Microsoft.Web \
+    Microsoft.DocumentDB \
+    Microsoft.KeyVault \
+    Microsoft.Insights \
+    Microsoft.AlertsManagement \
+    Microsoft.OperationalInsights \
+    Microsoft.Network \
+    Microsoft.Authorization
+  do
+    info="$(az provider show --subscription "$SUBSCRIPTION_ID" --namespace "$ns" \
+      --query '{state:registrationState,policy:registrationPolicy}' -o json)" || exit 1
+    state="$(printf '%s' "$info" | jq -er '.state')" || exit 1
+    policy="$(printf '%s' "$info" | jq -r '.policy')" || exit 1
+    printf '%s: %s / %s\n' "$ns" "$state" "$policy"
+    if [ "$state" = Registered ] || [ "$policy" = RegistrationFree ]; then continue; fi
     case "$state" in
-      Registered) break ;;
-      Registering|NotRegistered) ;;
-      *) echo "Provider 登録が正常に進んでいません。"; exit 1 ;;
+      NotRegistered)
+        az provider register --subscription "$SUBSCRIPTION_ID" --namespace "$ns" --output none || exit 1 ;;
+      Registering) ;;
+      *) echo "想定外の provider 状態です。"; exit 1 ;;
     esac
-    if [ "$attempt" -eq 20 ]; then echo "Provider 登録待ちを打ち切りました。"; exit 1; fi
-    sleep 15
+    for attempt in $(seq 1 20); do
+      state="$(az provider show --subscription "$SUBSCRIPTION_ID" --namespace "$ns" \
+        --query registrationState -o tsv)" || exit 1
+      printf '%s: %s (%s/20)\n' "$ns" "$state" "$attempt"
+      case "$state" in
+        Registered) break ;;
+        Registering|NotRegistered) ;;
+        *) echo "Provider 登録が正常に進んでいません。"; exit 1 ;;
+      esac
+      if [ "$attempt" -eq 20 ]; then echo "Provider 登録待ちを打ち切りました。"; exit 1; fi
+      sleep 15
+    done
   done
-done
+)
 ```
 
 一覧で登録状態を確認します。
@@ -148,7 +147,7 @@ done
 for ns in Microsoft.Web Microsoft.DocumentDB Microsoft.KeyVault Microsoft.Insights Microsoft.AlertsManagement Microsoft.OperationalInsights Microsoft.Network Microsoft.Authorization
 do
   az provider show --subscription "$SUBSCRIPTION_ID" --namespace "$ns" \
-    --query "{namespace:namespace,state:registrationState,policy:registrationPolicy}" -o table || exit 1
+    --query "{namespace:namespace,state:registrationState,policy:registrationPolicy}" -o table
 done
 ```
 
@@ -173,7 +172,7 @@ done
 
 ```bash
 node scripts/check-paas-catalog.cjs \
-  "$SUBSCRIPTION_ID" "$TENANT_ID" "$LOCATION" "$SWA_LOCATION" B1 || exit 1
+  "$SUBSCRIPTION_ID" "$TENANT_ID" "$LOCATION" "$SWA_LOCATION" B1
 ```
 
 出力に `"status": "catalog_checks_passed"` が表示されれば、リージョンとリソースカタログの事前チェックは完了です。
@@ -194,21 +193,23 @@ node scripts/check-paas-catalog.cjs \
 演習用のリソースグループを作成します。すでに同名のリソースグループが存在する場合は、このワークショップ用のタグ（`Workshop=Azure-PaaS-Workshop` および `GroupId`）が付いていることを確認します。
 
 ```bash
-GROUP_EXISTS="$(az group exists --subscription "$SUBSCRIPTION_ID" --name "$RESOURCE_GROUP")" || exit 1
-case "$GROUP_EXISTS" in
-  false)
-    az group create --subscription "$SUBSCRIPTION_ID" \
-      --name "$RESOURCE_GROUP" --location "$LOCATION" \
-      --tags Workshop=Azure-PaaS-Workshop GroupId="$GROUP_ID" || exit 1 ;;
-  true)
-    TAGS="$(az group show --subscription "$SUBSCRIPTION_ID" --name "$RESOURCE_GROUP" --query tags -o json)" || exit 1
-    printf '%s' "$TAGS" | jq -e --arg group "$GROUP_ID" \
-      '.Workshop == "Azure-PaaS-Workshop" and .GroupId == $group' >/dev/null || {
-      echo "既存 RG の workshop/group tag が一致しません。対象を確認し、上書きしないでください。"
-      exit 1
-    } ;;
-  *) echo "RG の存在確認結果が不正です。"; exit 1 ;;
-esac
+(
+  GROUP_EXISTS="$(az group exists --subscription "$SUBSCRIPTION_ID" --name "$RESOURCE_GROUP")" || exit 1
+  case "$GROUP_EXISTS" in
+    false)
+      az group create --subscription "$SUBSCRIPTION_ID" \
+        --name "$RESOURCE_GROUP" --location "$LOCATION" \
+        --tags Workshop=Azure-PaaS-Workshop GroupId="$GROUP_ID" || exit 1 ;;
+    true)
+      TAGS="$(az group show --subscription "$SUBSCRIPTION_ID" --name "$RESOURCE_GROUP" --query tags -o json)" || exit 1
+      printf '%s' "$TAGS" | jq -e --arg group "$GROUP_ID" \
+        '.Workshop == "Azure-PaaS-Workshop" and .GroupId == $group' >/dev/null || {
+        echo "既存 RG の workshop/group tag が一致しません。対象を確認し、上書きしないでください。"
+        exit 1
+      } ;;
+    *) echo "RG の存在確認結果が不正です。"; exit 1 ;;
+  esac
+)
 ```
 
 作成されたリソースグループを確認します。

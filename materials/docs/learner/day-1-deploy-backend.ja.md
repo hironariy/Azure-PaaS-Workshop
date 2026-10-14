@@ -6,14 +6,13 @@ title: "Day 1: バックエンドのデプロイ"
 
 このページでは、`materials/backend` の Node.js / TypeScript アプリケーションを Cloud Shell 上でビルドし、Azure App Service に ZIP デプロイします。
 
-## 1. 変数を復元する
+## 1. 変数を確認する
+
+[Day 1: PaaS インフラのデプロイ](day-1-deploy-infrastructure.ja.html) から続けて作業している場合は、そのまま対象のリソースグループ名と App Service 名を確認します。
+
+> 💡 Cloud Shell が再接続されて変数が消えた場合のみ、`source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load deployed` を先に実行してください。
 
 ```bash
-export WORKSHOP_REPO_DIR="${WORKSHOP_REPO_DIR:-$HOME/Azure-PaaS-Workshop}"
-export WORKSHOP_STATE_DIR="${WORKSHOP_STATE_DIR:-$HOME/clouddrive/paas-workshop}"
-source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" || exit 1
-workshop_state_load deployed || exit 1
-
 echo "$RESOURCE_GROUP"
 echo "$APP_SERVICE_NAME"
 ```
@@ -68,7 +67,7 @@ App Service のデフォルトホスト名に対して `/health` を呼び出し
 
 ```bash
 APP_HOSTNAME="$(az webapp show --subscription "$SUBSCRIPTION_ID" \
-  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" --query defaultHostName -o tsv)" || exit 1
+  --resource-group "$RESOURCE_GROUP" --name "$APP_SERVICE_NAME" --query defaultHostName -o tsv)"
 curl --connect-timeout 5 --max-time 10 -fsS "https://${APP_HOSTNAME}/health" | jq .
 ```
 
