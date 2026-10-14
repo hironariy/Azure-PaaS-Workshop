@@ -399,12 +399,14 @@ You need access to the following:
 > 4. If you see an error or the button is disabled, contact your IT administrator ❌
 >
 > **For Workshop Organizers:**
-> If participants cannot create app registrations, you have two options:
-> 1. **Ask IT admin** to assign the "Application Developer" role to participants
-> 2. **Pre-create app registrations** and share the Client IDs with participants
+> The learner baseline uses **Application Developer**, learner-owned isolated applications, and consent for the signed-in learner only. Activate the role through PIM if applicable. Administrator roles and pre-created shared applications are not required for this path.
+>
+> App registration, API permission requests, and actual consent are different operations. [Day 0](materials/docs/learner/day-0-entra-id.ja.md) explicitly uses `az ad app permission grant --consent-type Principal --principal-id <signed-in user object ID>`, with an existing-grant guard and verification of client/resource service principal IDs, scope, consent type, and principal. Omitting `--consent-type` defaults to **AllPrincipals**, which Application Developer alone cannot grant.
+>
+> Azure Owner / Contributor does not grant Entra consent permissions. Applicable tenant policies and the CLI's Microsoft Graph authorization must also allow the operation. On denial, record the error and check tenant, role activation, ownership, scope and Graph authorization; do not add tenant-wide consent or broad Graph permissions as a workaround. Application Developer covers the Entra path, not the separate Azure Key Vault role-assignment requirement (#16).
 >
 > **For Personal/Free Azure Accounts:**
-> If you created your own Azure account, you are automatically the Global Administrator and can create app registrations without any additional setup.
+> Verify your actual Entra role; an Azure subscription or free account alone does not establish Global Administrator privileges.
 
 #### 2.1.4 Clone the Repository
 
@@ -527,9 +529,9 @@ You need to create **two app registrations** in Microsoft Entra ID. This is requ
    - Check the box next to `access_as_user`
    - Click "Add permissions"
 
-3. **(Optional) Grant Admin Consent**
-   - If you're an admin, click "Grant admin consent for [Your Organization]"
-   - This prevents users from needing to consent individually
+3. **Grant Consent for Yourself**
+   - Follow the guarded **Principal** consent commands in [Day 0](materials/docs/learner/day-0-entra-id.ja.md) as Application Developer.
+   - API permission configuration alone is not a grant. Do not use organization-wide admin consent or run the grant command unguarded on a shared application.
 
 </details>
 

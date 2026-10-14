@@ -101,10 +101,10 @@ High は受講者の完了を妨げる問題、依存関係の是正、失敗・
 ### 実装方針
 
 - アプリ登録作成、所有アプリの設定、API permission 要求、実際の同意付与を別操作として説明する。
-- 本線は per-group owned app と browser/MSAL の自己同意を使えるか確認する。現行の無条件 AllPrincipals grant は受講者手順から外す。
+- 本線は本人専用の owned app と Application Developer による CLI の自己同意とする。`--consent-type Principal` とサインイン中の本人の `--principal-id` を明示し、無条件 AllPrincipals grant は受講者手順から外す。
 - 対象 tenant、Frontend / Backend client ID、service principal object ID、scope、実行担当を確認してから同意を付与する。
 - 管理者支援は明示的な代替経路に限定する。Contributor-only 本線が成功した証拠として扱わず、受講者全員への Global Administrator / Application Administrator 付与を標準にしない。
-- 自己同意経路は tenant policy と CLI の挙動を確認して設計する。共有アプリの grant を壊し得るため、単に Principal に変更して繰り返す回避策は採用しない。
+- 自己同意経路は tenant policy と CLI の Graph 認可・既存 grant 置換挙動を確認して設計する。本人の完全な既存 grant は再利用し、同じ client/resource の競合 grant は変更せず停止する。共有・並行利用はしない。
 - Azure resource の Owner / Contributor と Entra の同意権限を混同しない。Azure RBAC 側は #16 と合わせて説明する。
 
 ### 検証と完了条件
@@ -114,6 +114,12 @@ High は受講者の完了を妨げる問題、依存関係の是正、失敗・
 - [ ] Grant の resource、scope、consentType、principalId を確認する。
 - [ ] Frontend の sign-in と Backend への認証付き API 呼び出しまで成立する。
 - [ ] 既存 grant を意図せず削除・置換せず、共有アプリの他受講者を壊さない。
+
+### 2026-10-14 の本人同意報告と Day 0 方針更新
+
+利用者が「新しく本人同意が成立しました」と明示したため、2026-10-13 のサインイン・認証 CRUD 成功報告を、既存同意の再利用と未分離のまま扱っていた判定を訂正する。**新規本人同意・本人ログイン・認証 CRUD は利用者報告による受け入れ結果**であり、エージェントによる token 検査・grant object の直接観測・Application Developer 単独での CLI 完走を意味しない。
+
+Day 0 の本人専用 Principal CLI 経路、tenant/本人/所有権確認、既存 grant 保護、grant の全項目確認を教材へ反映する。README、事前準備、旧 setup guide、講師ガイド、トラブルシューティング、Day 1 の同意画面の期待値も揃える。限定ロールでの実 CLI 検証と main 採用の確認は別に残し、#16 の Key Vault RBAC 条件とは混同しない。
 
 ## 5. #14 の Unicode 投稿と URL 互換性を解決する
 

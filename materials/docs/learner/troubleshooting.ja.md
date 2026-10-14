@@ -220,9 +220,24 @@ az ad app permission list-grants \
 
 - `requiredResourceAccess[].resourceAppId` が `$BACKEND_CLIENT_ID`
 - `requiredResourceAccess[].resourceAccess[].id` が `$ACCESS_SCOPE_ID`
-- `list-grants` の `scope` に `access_as_user`
+- `list-grants` の `clientId` は Frontend service principal object ID、`resourceId` は Backend service principal object ID（application の object ID / Client ID とは別）
+- `scope` に `access_as_user`、`consentType` は `Principal`、`principalId` は `az ad signed-in-user show --query id -o tsv` で取得する本人の user object ID
 
 CLI では見えるのに Portal で見えない場合は、ブラウザー更新、Portal 再ログイン、正しい tenant と Frontend app registration を開いているかを確認します。
+
+## Day 0 の本人同意が拒否される・既存 grant で停止する
+
+| 症状 | 確認と対処 |
+|---|---|
+| `permission grant` が権限不足 | `--consent-type Principal` と `--principal-id` があるか確認します。省略時は `AllPrincipals` となり、Application Developer 単独では不足します。 |
+| 正しい `Principal` でも拒否 | `az account show --query "{tenant:tenantId,userType:user.type}" -o jsonc` で対象 tenant と本人ログインを確認。Application Developer の PIM 有効化、所有アプリ、`type: User` の scope、適用 consent policy と CLI の Graph OAuth 認可を切り分けます。Azure Owner / Contributor では代替できません。 |
+| service principal の検索・grant の読み取りが失敗 | 読み取り拒否を「存在しない」と解釈して作成・上書きしません。実エラーを確認し、Graph 反映待ちなら時間をおいて Day 0 のガード付きブロックを再実行します。 |
+| 「別の grant があります」で停止 | 他ユーザーや全ユーザーへの既存同意を保護しています。grant を削除せず、本人専用の新規アプリで演習するか、既存アプリの管理担当に確認します。 |
+| Day 1 で同意画面が出ない | Day 0 で本人の `Principal` grant を作成済みなら正常です。本人の grant と認証 CRUD を確認します。同意画面が出ないことだけで新規同意の成否を判断しません。 |
+
+CLI バージョン (`az version`)、実効ロール・PIM 状態、失敗した操作、エラーコードと本文を記録してください。共有 Issue へ token、資格情報、本人の object ID などの個人情報を貼らないでください。講師への相談時も必要な tenant/client/scope の値は承認済みの連絡経路で共有します。管理者は対象・ポリシー・CLI 認可を調査する担当であり、受講者全員への管理者ロール付与や無条件の組織全体同意を依頼する手順ではありません。
+
+参考: [CLI の consent type と principal ID](https://learn.microsoft.com/en-us/cli/azure/ad/app/permission?view=azure-cli-latest#az-ad-app-permission-grant)、[Application Developer の権限](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference#application-developer)。
 
 ## ログイン時に `AADSTS900144` が出る
 

@@ -43,7 +43,10 @@ The application requires **two app registrations** in Microsoft Entra ID:
 ## Prerequisites
 
 - Azure subscription with access to Microsoft Entra ID
-- Permission to create app registrations (Application Administrator or Global Administrator role)
+- **Application Developer** in the target tenant, activated through PIM if applicable, for creating and configuring your own isolated workshop applications and consenting for yourself.
+- Azure Owner / Contributor is separate from Entra permissions. Application Administrator / Cloud Application Administrator / Global Administrator and tenant-wide consent are not prerequisites for the learner path.
+
+Use the [Cloud Shell Day 0 guide](../materials/docs/learner/day-0-entra-id.ja.md) as the canonical command path. The portal steps below explain the same registration settings. Self-consent remains subject to applicable policies, scopes and the CLI's Graph authorization; stop and diagnose actual errors instead of escalating roles or changing tenant policies.
 
 ## Step 1: Get Your Tenant ID
 
@@ -147,13 +150,13 @@ Your API permissions should now show:
 - `Microsoft Graph` > `User.Read` (default)
 - `PaaS BlogApp Backend API` > `access_as_user`
 
-### 3.5 Grant Admin Consent (Optional but Recommended)
+### 3.5 Grant Consent for the Signed-In Learner
 
-If you have admin rights:
-1. Click **Grant admin consent for [Your Organization]**
-2. Click **Yes** to confirm
+Follow [Day 0 section 4](../materials/docs/learner/day-0-entra-id.ja.md): resolve your user object ID with `az ad signed-in-user show`, create service principals for your owned applications if absent, and use the guarded `az ad app permission grant` with **`--consent-type Principal --principal-id "$USER_OBJECT_ID"`**.
 
-This prevents users from seeing a consent prompt on first login.
+Do not omit `--consent-type`: its default is `AllPrincipals`, which Application Developer alone cannot grant. The CLI may replace existing grants for the same client/resource; use the entire guard, not an isolated grant command, and never share this application pair for parallel consent operations.
+
+Verify `clientId` and `resourceId` against the Frontend and Backend **service principal object IDs**, `scope` includes `access_as_user`, `consentType` is `Principal`, and `principalId` is the signed-in user's object ID. A complete existing self-grant is reused; conflicting grants are left unchanged. Sign in as the same user on Day 1. A consent prompt need not reappear after the Day 0 grant.
 
 ### 3.6 Summary - Frontend Values
 
@@ -226,9 +229,9 @@ VITE_API_CLIENT_ID=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
 
 **Cause**: User hasn't consented to API permissions.
 
-**Fix**: 
-1. Grant admin consent in Azure Portal (Step 3.5), or
-2. Have users consent on first login
+**Fix**:
+1. Check the current tenant, user, Application Developer activation, owned applications, and the Principal grant using the guarded Day 0 procedure.
+2. If browser consent is requested for an additional permission, the user must review it themselves. If approval is required or CLI consent is denied, record the actual error and diagnose applicable policy and Graph authorization. Do not use tenant-wide admin consent as an automatic fallback.
 
 ## Production Configuration
 
@@ -255,7 +258,7 @@ Add these as **Application Settings** (or use Key Vault references):
 1. **Use separate app registrations** for Frontend and Backend
 2. **Don't expose client secrets** - SPA uses PKCE, no secrets needed
 3. **Limit redirect URIs** - Only add URIs you actually use
-4. **Use admin consent** for organizational apps to avoid user consent prompts
+4. **Use Principal self-consent** for the isolated learner application; do not grant tenant-wide consent merely to suppress prompts
 5. **Review permissions** regularly and remove unused ones
 
 ## Quick Reference
@@ -277,7 +280,7 @@ Add these as **Application Settings** (or use Key Vault references):
 | Add redirect URI | App registration > Authentication |
 | Add API permissions | App registration > API permissions |
 | Expose an API | App registration > Expose an API |
-| Grant admin consent | App registration > API permissions > Grant admin consent |
+| Verify Principal self-consent | Guarded Cloud Shell commands in Day 0 section 4; API permissions configuration alone is not the grant |
 
 ## Related Documents
 

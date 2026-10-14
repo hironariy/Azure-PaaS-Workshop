@@ -63,6 +63,8 @@ echo "https://$SWA_HOSTNAME"
 
 サポートによる本人認証の代行や、無条件の管理者同意はこの確認に含めません。管理者の承認が必要と表示された場合は、Azure Owner / Contributor であることだけでは解消できないため、ブロックとして記録します。
 
+Day 0 で `Principal` grant を作成済みなら同意画面が再表示されなくても正常です。ブラウザーでも Day 0 と同じ本人アカウントを使い、[Day 0 の grant 確認](day-0-entra-id.ja.html)と認証 CRUD を併せて確認してください。別ユーザーにはこの grant は適用されません。
+
 `AADSTS50011` などの戻り先エラーの場合は、Day 0 で作成した Frontend アプリの **SPA** 設定に、現在ブラウザーで開いている `https://$SWA_HOSTNAME` が登録されているか確認します。localhost のみ、別の SWA hostname、または Web 設定だけへの登録では、このアプリの戻り先を満たしません。
 
 ```bash

@@ -125,7 +125,7 @@ Day 1 を終えている参加者が多い場合は、比較ポイント（責�
    - 症状: “Invalid scope”
    - 対処: Backend API → “Expose an API” でスコープ作成
 
-**時短のヒント:** 参加者が Entra ID で詰まる場合、事前にアプリ登録を作って Client ID を配布する運用も検討してください。
+**本人だけへの同意:** 本線は Entra の Application Developer を有効化した本人が、専用 Backend / Frontend を作成し、[Day 0](../materials/docs/learner/day-0-entra-id.ja.md) のガード付き `--consent-type Principal --principal-id` で自分だけに同意する経路です。API permission の要求設定と実際の grant を区別し、client/resource の service principal object ID、scope、consentType、principalId を確認します。全受講者への管理者ロール付与、共有アプリの grant 再作成、講師による事前作成は前提にしません。拒否時は tenant、PIM、所有権、適用ポリシー・Graph 認可を調査し、Azure Owner / Contributor の成功を Entra 権限の証拠にしないでください。
 
 ### Bicep デプロイ
 
