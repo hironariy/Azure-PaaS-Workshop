@@ -6,8 +6,6 @@ title: "Day 0: 事前準備 2 サブスクリプション確認、リソース�
 
 このページでは、Cloud Shell から Azure PaaS リソースを作成するためのサブスクリプション、Provider、リージョン、費用の前提を確認します。
 
-> **Azure サブスクリプションの Owner が受講者の必須前提です。** Contributor のみの経路は本線では扱いません。Owner は Azure RBAC の権限で、Entra のアプリ登録・本人同意には別途 Application Developer を使います。
-
 ## 1. アーキテクチャを確認する
 
 ![Azure PaaS Workshop アーキテクチャ](../assets/images/architecture.png)

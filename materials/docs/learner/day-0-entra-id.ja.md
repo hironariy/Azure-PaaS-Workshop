@@ -6,11 +6,9 @@ title: "Day 0: Entra ID と認証設定"
 
 このアプリは Microsoft Entra ID でサインインし、フロントエンド SPA がバックエンド API を呼び出します。Cloud Shell から 2 つのアプリ登録を作成します。
 
-> **Entra の必要ロールは Application Developer（アプリケーション開発者）です。** 自分が作成・所有する演習専用アプリと、自分だけへの `Principal` 同意を使います。Application Administrator / Cloud Application Administrator / Global Administrator による組織全体同意は不要です。Azure の Owner / Contributor は別の権限であり、Entra ロールの代わりにはなりません。
+> **Entra の必要ロールは Application Developer（アプリケーション開発者）です。** 自分が作成・所有する演習専用アプリと、自分だけへの `Principal` 同意を使います。Application Administrator / Cloud Application Administrator / Global Administrator による組織全体同意は不要です。
 >
-> Application Developer が PIM の対象の場合は開始前に有効化してください。本人同意にもテナントの適用ポリシー・対象 scope・CLI の Graph 認可が関係します。拒否された場合はエラーを記録し、[トラブルシューティング](troubleshooting.ja.html)で切り分けます。管理者ロールの追加やテナントポリシーの変更で自動回避しません。
-
-Azure リソース側の受講前提はサブスクリプションの **Owner** です。ここで使う Application Developer と本人専用 `Principal` 同意は、Owner 前提に変更しても維持します。
+> Application Developer が PIM の対象の場合は開始前に有効化してください。
 
 ## 1. 名前を決める
 
