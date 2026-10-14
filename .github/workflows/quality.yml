@@ -8,6 +8,7 @@ on:
       - ".github/workflows/quality.yml"
       - "materials/backend/**"
       - "materials/frontend/**"
+      - "materials/bicep/**"
       - "scripts/check-public-lock.cjs"
       - "scripts/configure-frontend.cjs"
       - "scripts/test/**"
@@ -147,6 +148,43 @@ jobs:
         run: npm run lint
       - name: Run regression tests
         run: npm test
+      - name: Verify type, lint, build and test failures are detected
+        shell: bash
+        env:
+          APPLICATION: ${{ matrix.application }}
+        run: |
+          fixture="$RUNNER_TEMP/negative-$APPLICATION"
+          mkdir "$fixture"
+          git archive HEAD "materials/$APPLICATION" | tar -xf - -C "$fixture"
+          ln -s "$PWD/node_modules" "$fixture/materials/$APPLICATION/node_modules"
+          cd "$fixture/materials/$APPLICATION"
+          expect_failure() {
+            local log="$RUNNER_TEMP/negative-$APPLICATION-$1.log"
+            if npm run "$1" >"$log" 2>&1; then
+              echo "::error::$APPLICATION $1 accepted an intentional failure"
+              exit 1
+            fi
+            cat "$log"
+            grep -F "$2" "$log"
+          }
+          printf 'const qualityFailure: string = 42;\n' > src/quality-failure.ts
+          expect_failure type-check TS2322
+          expect_failure lint no-unused-vars
+          expect_failure build TS2322
+          rm src/quality-failure.ts
+          if [ "$APPLICATION" = backend ]; then
+            printf '%s\n' \
+              "import assert from 'node:assert/strict';" \
+              "import test from 'node:test';" \
+              "test('quality gate intentional failure', () => assert.fail('quality gate intentional failure'));" \
+              > test/quality-failure.test.ts
+          else
+            printf '%s\n' \
+              "import { expect, it } from 'vitest';" \
+              "it('quality gate intentional failure', () => expect.fail('quality gate intentional failure'));" \
+              > src/quality-failure.test.ts
+          fi
+          expect_failure test 'quality gate intentional failure'
       - name: Build production artifact
         run: npm run build
       - name: Verify shared frontend runtime configuration on the real build
@@ -274,3 +312,32 @@ jobs:
         env:
           WORKSHOP_TEST_MONGO_PORT: ${{ job.services.mongo.ports['27017'] }}
         run: npm run test:integration
+
+  bicep:
+    name: Bicep artifact parity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Compile with the distributed artifact's Bicep version
+        shell: bash
+        run: |
+          az bicep install --version v0.44.1
+          az bicep build --file materials/bicep/main.bicep --outfile "$RUNNER_TEMP/main.json"
+      - name: Require the distributed ARM template to match source
+        run: diff -u materials/bicep/main.json "$RUNNER_TEMP/main.json"
+      - name: Compile standard and fastpath parameter templates
+        shell: bash
+        run: |
+          for parameter_file in \
+            materials/bicep/main.bicepparam \
+            materials/bicep/dev.bicepparam \
+            materials/bicep/main.fastpath.bicepparam \
+            materials/bicep/dev.fastpath.bicepparam
+          do
+            az bicep build-params --file "$parameter_file" \
+              --outfile "$RUNNER_TEMP/$(basename "$parameter_file").json"
+          done
