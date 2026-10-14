@@ -44,6 +44,11 @@ BACKEND_OBJECT_ID="$(az ad app show \
   --query id -o tsv)"
 export BACKEND_OBJECT_ID
 
+SIGNED_IN_USER_ID="${SIGNED_IN_USER_ID:-$(az ad signed-in-user show --query id -o tsv)}"
+if [ -z "$(az ad app owner list --id "$BACKEND_CLIENT_ID" --query "[?id=='$SIGNED_IN_USER_ID'].id" -o tsv)" ]; then
+  az ad app owner add --id "$BACKEND_CLIENT_ID" --owner-object-id "$SIGNED_IN_USER_ID"
+fi
+
 az ad app update \
   --id "$BACKEND_CLIENT_ID" \
   --identifier-uris "api://$BACKEND_CLIENT_ID"
@@ -51,7 +56,7 @@ az ad app update \
 
 続けて、フロントエンドから委任アクセスするための `access_as_user` スコープを公開します。
 
-> **補足:** 新規作成した直後のアプリ登録に対して `az ad app update --set api.oauth2PermissionScopes=...` を実行すると、`api` プロパティが未初期化のためエラーになることがあります。ここでは Microsoft Graph REST API（`az rest`）を使ってオブジェクト ID（`BACKEND_OBJECT_ID`）へ直接 PATCH します。
+> **補足:** 新規作成した直後のアプリ登録に対して `az ad app update --set api.oauth2PermissionScopes=...` を実行すると、`api` プロパティが未初期化のためエラーになることがあります。ここでは Microsoft Graph REST API（`az rest`）を使ってオブジェクト ID（`BACKEND_OBJECT_ID`）へ直接 PATCH します。既存のアプリ登録に `access_as_user` スコープが存在する場合はそのスコープ ID を引き継ぎます。
 
 ```bash
 export BACKEND_OBJECT_ID="$(az ad app show \
@@ -59,6 +64,11 @@ export BACKEND_OBJECT_ID="$(az ad app show \
   --query id -o tsv)"
 
 echo "BACKEND_OBJECT_ID=$BACKEND_OBJECT_ID"
+
+EXISTING_SCOPE_ID="$(az ad app show \
+  --id "$BACKEND_CLIENT_ID" \
+  --query "api.oauth2PermissionScopes[?value=='access_as_user'].id | [0]" -o tsv)"
+export ACCESS_SCOPE_ID="${EXISTING_SCOPE_ID:-${ACCESS_SCOPE_ID:-$(node -p 'require("node:crypto").randomUUID()')}}"
 
 SCOPES_JSON="$(jq -nc --arg id "$ACCESS_SCOPE_ID" '[{
   id: $id,
@@ -111,6 +121,11 @@ FRONTEND_OBJECT_ID="$(az ad app show \
   --id "$FRONTEND_CLIENT_ID" \
   --query id -o tsv)"
 export FRONTEND_OBJECT_ID
+
+SIGNED_IN_USER_ID="${SIGNED_IN_USER_ID:-$(az ad signed-in-user show --query id -o tsv)}"
+if [ -z "$(az ad app owner list --id "$FRONTEND_CLIENT_ID" --query "[?id=='$SIGNED_IN_USER_ID'].id" -o tsv)" ]; then
+  az ad app owner add --id "$FRONTEND_CLIENT_ID" --owner-object-id "$SIGNED_IN_USER_ID"
+fi
 ```
 
 この時点では本番の Static Web Apps の URL がまだ決まっていないため、まずローカル検証用のリダイレクト URI（`http://localhost:4280`）を SPA として登録します。Static Web Apps の本番 URL は Day 1 のインフラデプロイ後に追加します。
