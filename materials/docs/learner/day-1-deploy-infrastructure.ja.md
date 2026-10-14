@@ -247,9 +247,25 @@ Day 0 で作成したフロントエンドのアプリ登録に対して、手�
   az rest \
     --method PATCH \
     --uri "https://graph.microsoft.com/v1.0/applications/$FRONTEND_OBJECT_ID" \
-    --body "$SPA_PATCH"
+    --body "$SPA_PATCH" && \
+  echo "SPA リダイレクト URI を更新しました: https://$SWA_HOSTNAME"
 )
 ```
+
+#### 出力メッセージと状態一覧
+
+上のコマンドブロックを実行した際の出力メッセージと、それぞれの状態・対処方法は以下のとおりです。
+
+| 出力メッセージ | 現在の状態 | 次のアクション |
+|---|---|---|
+| `SPA リダイレクト URI を更新しました: https://<SWA_HOSTNAME>` | **正常完了**<br>既存の SPA リダイレクト URI（`http://localhost:4280` など）を保持したまま、`https://$SWA_HOSTNAME` がフロントエンドアプリ登録に追加（または既に登録済みの場合は維持）された状態です。 | そのまま下の `az ad app show` コマンドで登録結果を確認してください。 |
+| `Azure のログイン状態を確認できません。` | **未ログイン・セッション切れ**<br>`az account show` で現在の Azure CLI セッション情報を取得できませんでした。 | `az login` でサインインし直してから再実行してください。 |
+| `現在のテナントが Day 0 の TENANT_ID と一致しません。更新を中止します。` | **テナント不一致・環境変数未設定**<br>現在のサインイン先テナントが `TENANT_ID` と異なるか、シェル変数 `TENANT_ID` が空になっています。 | `source ~/Azure-PaaS-Workshop/scripts/workshop-state.sh && workshop_state_load deployed` で変数を復元するか、`az login --tenant "$TENANT_ID"` を実行してください。 |
+| `手順 6 の SWA_HOSTNAME を確認してください。` | **`SWA_HOSTNAME` の未設定**<br>手順 6 の Bicep デプロイ出力から Static Web Apps のホスト名が取得できていません（空または `null`）。 | 手順 6 のコードブロックを実行して `SWA_HOSTNAME` にホスト名が入っていることを確認してから再実行してください。 |
+| `Frontend アプリ登録を取得できません。テナント、Client ID、アプリの所有権を確認してください。` | **アプリ登録の取得失敗**<br>`FRONTEND_CLIENT_ID` が未設定であるか、対象のアプリ登録が Entra ID 上に存在しません。 | `echo "$FRONTEND_CLIENT_ID"` で GUID が設定されているか確認し、空の場合は `workshop_state_load deployed`（または `identity`）で復元してください。 |
+| `Frontend アプリ登録の Client ID と Object ID を確認できませんでした。` | **アプリ登録 ID の不整合**<br>取得したアプリ登録の `appId` が `FRONTEND_CLIENT_ID` と一致しないか、Microsoft Graph 更新用の Object ID（`.id`）を取得できませんでした。 | `az ad app show --id "$FRONTEND_CLIENT_ID" --query "{appId:appId,id:id}" -o jsonc` で対象アプリの状態を確認してください。 |
+| `既存の SPA リダイレクト URI を読み取れないため、更新を中止します。` | **既存 `redirectUris` の形式不正**<br>アプリ登録の `spa.redirectUris` が文字列配列として読み取れなかったため、既存設定の破損を防ぐために中断しました。 | `az ad app show --id "$FRONTEND_CLIENT_ID" --query "spa.redirectUris" -o jsonc` で現在の設定値を確認してください。 |
+| `Authorization_RequestDenied` / `Insufficient privileges...` | **アプリ更新権限の不足**<br>サインイン中のユーザーがフロントエンドアプリ登録の所有者（`owners`）に含まれていないため、Microsoft Graph の PATCH が拒否されました。 | [Day 0: Entra ID と認証設定の手順 3](day-0-entra-id.ja.html) の所有者追加コマンドを実行し、自分が `owners` に登録されていることを確認してから再実行してください。 |
 
 リダイレクト URI が正しく登録されたことを確認します。
 
