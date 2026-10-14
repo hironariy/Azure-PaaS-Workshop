@@ -40,6 +40,14 @@ az account show --output table
 
 ## 3. リソースグループ名を確認する
 
+### Day 0 の Entra 権限を先に確認する
+
+Azure の Owner / Contributor は PaaS リソース操作の権限です。アプリ登録・本人同意には別途 **Entra の Application Developer** を使います。PIM の eligible assignment は有効化してから進めてください。ロールは対象テナントの **Microsoft Entra ID > Roles and administrators** または **Privileged Identity Management > My roles** で確認します。
+
+Day 0 は本人が作成・所有する演習専用の Backend / Frontend と、`--consent-type Principal --principal-id <本人の user object ID>` による本人だけへの同意で完結させます。Application Administrator / Cloud Application Administrator / Global Administrator の追加付与、全ユーザーへの `AllPrincipals` 同意、講師によるアプリの事前作成は本線の前提にしません。実際の ID は [Entra ID 手順](day-0-entra-id.ja.html)で CLI から取得します。
+
+本人同意が拒否される場合は対象テナント、Application Developer の有効化、対象 scope、適用ポリシー、CLI の Graph 認可を切り分け、エラーを記録して停止します。ロール名だけで任意のテナントの成功を保証するものではありません。また、この Entra 手順の完了は Day 1 の Key Vault role assignment に必要な Azure RBAC 権限（#16）を満たしたことにはなりません。
+
 ```bash
 echo "Resource group: $RESOURCE_GROUP"
 echo "Primary region: $LOCATION"

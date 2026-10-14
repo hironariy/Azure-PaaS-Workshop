@@ -7,7 +7,7 @@ English version: [README.md](./README.md)
 
 このリポジトリは、マルチユーザー ブログ アプリケーションを Azure PaaS で構築しながら、App Service、Static Web Apps、Azure DocumentDB、Key Vault、Managed Identity、Application Insights などのマネージドサービス設計・デプロイ・運用を学ぶためのハンズオン教材です。
 
-> **採用状況:** アプリ改善と credential-free tests を、deployment / IaC / learner 手順の改善とは分けて採用しています。アプリ CI の成功は Azure deployment や workshop-ready の証拠ではありません。旧 SWA CLI の advisories、fresh Contributor-only の Key Vault RBAC 制約、browser consent、real Azure acceptance は未解消です。既存 deployment 手順を実証済みの完走経路として扱わないでください。[採用戦略](design/WorkshopImprovementPlan.md#pr-merge-strategy) と [アプリ検証](docs/application-testing.md) を参照してください。
+> **採用状況:** アプリ改善と credential-free tests を、deployment / IaC / learner 手順の改善とは分けて採用しています。アプリ CI の成功は Azure deployment や workshop-ready の証拠ではありません。利用者本人から実環境での新規本人同意・サインイン・認証 CRUD の成功報告を受けていますが、Application Developer 単独での Day 0 CLI 完走の実証とは区別します。旧 SWA CLI の advisories、fresh Contributor-only の Key Vault RBAC 制約、残る real Azure acceptance は未解消です。既存 deployment 手順を実証済みの完走経路として扱わないでください。[採用戦略](design/WorkshopImprovementPlan.md#pr-merge-strategy) と [アプリ検証](docs/application-testing.md) を参照してください。
 
 ## まずどこから始めるか
 
@@ -38,6 +38,12 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 | 13 | [クイックリファレンス](materials/docs/reference/quick-reference-card.ja.md) | 変数、主要 URL、ヘルスチェック、ログ、redirect URI、Cleanup コマンド |
 
 通常のワークショップ参加では、ローカル PC に Azure CLI、Azure PowerShell、Bicep CLI、Node.js、Docker、WSL、PowerShell をインストールする必要はありません。CLI とデプロイ作業は Azure Cloud Shell Bash を標準にします。
+
+### Day 0 の Entra 権限
+
+**Application Developer** を本人の対象テナントで有効にし、自分が作成・所有する演習専用アプリを使います。[Day 0](materials/docs/learner/day-0-entra-id.ja.md) の `permission grant` は `--consent-type Principal` と本人の `--principal-id` を明示し、既存 grant を保護したうえで本人だけへの同意を付与します。全ユーザーへの `AllPrincipals` 同意や Application Administrator / Global Administrator の付与は必要としません。
+
+アプリ登録作成、API permission 要求、実際の同意は別操作です。Azure Owner / Contributor は Entra ロールの代わりではありません。適用ポリシーや CLI の Graph 認可で拒否される場合は実エラーを切り分け、権限を自動昇格しません。Day 1 の Key Vault role assignment に必要な Azure RBAC 権限は別途確認します。
 
 ## ワークショップ概要
 
