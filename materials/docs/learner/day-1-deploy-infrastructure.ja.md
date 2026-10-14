@@ -6,6 +6,8 @@ title: "Day 1: PaaS インフラをデプロイ"
 
 Cloud Shell から Bicep を実行し、PaaS リソースを作成します。このページでは `dev.bicepparam` をコピーして **標準 mode (`deploymentMode = 'standard'`)** でデプロイします。バックエンドのアプリケーションコードは次のページでリポジトリから build して App Service に ZIP deploy するため、外部の既成コンテナイメージには依存しません。
 
+> **利用するサブスクリプションの Owner が必須です。** Bicep は App Service の Managed Identity に Key Vault Secrets User を割り当てます。Contributor のみでは `Microsoft.Authorization/roleAssignments/write` がなく、この処理を実行できません。[Day 0 の Owner 確認](day-0-prerequisites.ja.html)を済ませてから進めてください。Owner でも policy、Deny Assignment、quota などの制約は別途確認します。
+
 ## 1. 変数と作業ディレクトリを確認する
 
 ```bash

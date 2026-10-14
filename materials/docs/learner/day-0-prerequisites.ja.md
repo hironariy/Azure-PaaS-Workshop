@@ -6,6 +6,8 @@ title: "Day 0: 事前準備 2 サブスクリプション確認、リソース�
 
 このページでは、Cloud Shell から Azure PaaS リソースを作成するためのサブスクリプション、Provider、リージョン、費用の前提を確認します。
 
+> **Azure サブスクリプションの Owner が受講者の必須前提です。** Contributor のみの経路は本線では扱いません。Owner は Azure RBAC の権限で、Entra のアプリ登録・本人同意には別途 Application Developer を使います。
+
 ## 1. アーキテクチャを確認する
 
 ![Azure PaaS Workshop アーキテクチャ](../assets/images/architecture.png)
@@ -38,15 +40,41 @@ az account set --subscription "<subscription-id-or-name>"
 az account show --output table
 ```
 
+### サブスクリプションの Owner を確認する
+
+対象サブスクリプションまたはその親スコープから継承した **Owner** が必要です。リソースグループだけの Owner では、この本線のサブスクリプション準備作業を満たしません。PIM を使う場合は有効化してから確認します。次の読み取りはロールを付与・変更しません。
+
+```bash
+(
+  set -euo pipefail
+  SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+  USER_OBJECT_ID="$(az ad signed-in-user show --query id -o tsv)"
+  OWNER_ASSIGNMENTS="$(az role assignment list \
+    --assignee "$USER_OBJECT_ID" \
+    --scope "/subscriptions/$SUBSCRIPTION_ID" \
+    --include-inherited \
+    --include-groups \
+    -o json)"
+  if ! jq -e 'type == "array" and any(.[]; .roleDefinitionName == "Owner")' \
+    <<< "$OWNER_ASSIGNMENTS" >/dev/null; then
+    echo "ERROR: 対象サブスクリプションの Owner を確認できません。演習を開始せず講師に確認してください。" >&2
+    exit 1
+  fi
+  echo "対象サブスクリプションの Owner 割り当てを確認しました。"
+)
+```
+
+読み取り自体が拒否された場合も、権限ありとは扱いません。Azure Portal の **Subscriptions > 対象 subscription > Access control (IAM) > View my access** で対象スコープと PIM の有効化を講師と確認してください。このチェックは Owner の割り当て確認であり、Deny Assignment、Azure Policy、quota、実容量やデプロイ成功を保証するものではありません。
+
 ## 3. リソースグループ名を確認する
 
 ### Day 0 の Entra 権限を先に確認する
 
-Azure の Owner / Contributor は PaaS リソース操作の権限です。アプリ登録・本人同意には別途 **Entra の Application Developer** を使います。PIM の eligible assignment は有効化してから進めてください。ロールは対象テナントの **Microsoft Entra ID > Roles and administrators** または **Privileged Identity Management > My roles** で確認します。
+Azure の **Owner** は PaaS リソースと必要なロール割り当てを操作するための前提です。アプリ登録・本人同意には別途 **Entra の Application Developer** を使います。PIM の eligible assignment は有効化してから進めてください。Entra ロールは対象テナントの **Microsoft Entra ID > Roles and administrators** または **Privileged Identity Management > My roles** で確認します。
 
 Day 0 は本人が作成・所有する演習専用の Backend / Frontend と、`--consent-type Principal --principal-id <本人の user object ID>` による本人だけへの同意で完結させます。Application Administrator / Cloud Application Administrator / Global Administrator の追加付与、全ユーザーへの `AllPrincipals` 同意、講師によるアプリの事前作成は本線の前提にしません。実際の ID は [Entra ID 手順](day-0-entra-id.ja.html)で CLI から取得します。
 
-本人同意が拒否される場合は対象テナント、Application Developer の有効化、対象 scope、適用ポリシー、CLI の Graph 認可を切り分け、エラーを記録して停止します。ロール名だけで任意のテナントの成功を保証するものではありません。また、この Entra 手順の完了は Day 1 の Key Vault role assignment に必要な Azure RBAC 権限（#16）を満たしたことにはなりません。
+本人同意が拒否される場合は対象テナント、Application Developer の有効化、対象 scope、適用ポリシー、CLI の Graph 認可を切り分け、エラーを記録して停止します。Owner でも Entra の制約は回避できません。Day 1 の Key Vault role assignment は Azure Owner として受講者本人が実行します。
 
 ```bash
 echo "Resource group: $RESOURCE_GROUP"

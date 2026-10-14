@@ -7,7 +7,9 @@ English version: [README.md](./README.md)
 
 このリポジトリは、マルチユーザー ブログ アプリケーションを Azure PaaS で構築しながら、App Service、Static Web Apps、Azure DocumentDB、Key Vault、Managed Identity、Application Insights などのマネージドサービス設計・デプロイ・運用を学ぶためのハンズオン教材です。
 
-> **採用状況:** アプリ改善と credential-free tests を、deployment / IaC / learner 手順の改善とは分けて採用しています。アプリ CI の成功は Azure deployment や workshop-ready の証拠ではありません。利用者本人から実環境での新規本人同意・サインイン・認証 CRUD の成功報告を受けていますが、Application Developer 単独での Day 0 CLI 完走の実証とは区別します。旧 SWA CLI の advisories、fresh Contributor-only の Key Vault RBAC 制約、残る real Azure acceptance は未解消です。既存 deployment 手順を実証済みの完走経路として扱わないでください。[採用戦略](design/WorkshopImprovementPlan.md#pr-merge-strategy) と [アプリ検証](docs/application-testing.md) を参照してください。
+> **受講者の必須前提:** 利用する Azure サブスクリプションの **Owner** と、対象 Entra テナントの **Application Developer** が必要です。PIM の対象ロールは開始前に有効化します。Contributor のみでの完走は本線の対応範囲外です。Azure Owner と Entra の権限は別です。
+>
+> **採用状況:** アプリ改善と credential-free tests を、deployment / IaC / learner 手順の改善とは分けて採用しています。Principal 同意の CLI は限定ロールの実環境で成功し、新規本人同意・サインイン・認証 CRUD は利用者報告で受け入れ済みです。ただし、Owner 前提への変更やアプリ CI の成功だけで全 Cloud Shell 手順の完走を保証しません。旧 SWA CLI の advisories と残る real Azure acceptance は別途確認します。[採用戦略](design/WorkshopImprovementPlan.md#pr-merge-strategy) と [アプリ検証](docs/application-testing.md) を参照してください。
 
 ## まずどこから始めるか
 
@@ -43,7 +45,7 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 
 **Application Developer** を本人の対象テナントで有効にし、自分が作成・所有する演習専用アプリを使います。[Day 0](materials/docs/learner/day-0-entra-id.ja.md) の `permission grant` は `--consent-type Principal` と本人の `--principal-id` を明示し、既存 grant を保護したうえで本人だけへの同意を付与します。全ユーザーへの `AllPrincipals` 同意や Application Administrator / Global Administrator の付与は必要としません。
 
-アプリ登録作成、API permission 要求、実際の同意は別操作です。Azure Owner / Contributor は Entra ロールの代わりではありません。適用ポリシーや CLI の Graph 認可で拒否される場合は実エラーを切り分け、権限を自動昇格しません。Day 1 の Key Vault role assignment に必要な Azure RBAC 権限は別途確認します。
+アプリ登録作成、API permission 要求、実際の同意は別操作です。Azure Owner は Entra ロールの代わりではありません。適用ポリシーや CLI の Graph 認可で拒否される場合は実エラーを切り分け、権限を自動昇格しません。Day 1 の Key Vault role assignment はサブスクリプションの Owner として受講者本人が実行します。
 
 ## ワークショップ概要
 
