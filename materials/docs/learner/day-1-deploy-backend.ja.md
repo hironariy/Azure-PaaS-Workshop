@@ -17,6 +17,35 @@ echo "$RESOURCE_GROUP"
 echo "$APP_SERVICE_NAME"
 ```
 
+### デプロイ前に状態ファイルを保存・検証する
+
+バックエンドのデプロイスクリプトは、引数のリソースグループ名と App Service 名だけでなく、**`$WORKSHOP_STATE_DIR/paas-workshop.json` に保存された設定値**を読み込みます。環境変数を設定しただけでは、この JSON ファイルは更新されません。同じ Cloud Shell セッションで続けて作業している場合も、手順 3 に進む前に以下の保存・検証を実行してください。
+
+共通変数は[事前準備 1: Cloud Shell 設定](cloud-shell-quickstart.ja.html)で設定済みであることに加え、次の変数が必要です。
+
+| 変数 | 値の取得元 |
+|---|---|
+| `BACKEND_CLIENT_ID`、`FRONTEND_CLIENT_ID` | [Day 0: Entra ID と認証設定](day-0-entra-id.ja.html)の手順 2・3 で作成したアプリ登録の Client ID |
+| `ACCESS_SCOPE_ID` | 同ページの手順 1・2 で設定した `access_as_user` スコープの ID |
+| `APP_SERVICE_NAME`、`SWA_NAME`、`SWA_HOSTNAME` | [Day 1: PaaS インフラのデプロイ](day-1-deploy-infrastructure.ja.html)の手順 6 で取得したデプロイ先の情報 |
+
+変数を `export` して保存処理に渡し、`deployed` 段階で必要な値をまとめて JSON に保存します。その後、保存した JSON を再読み込みして、必須項目と Azure のサブスクリプション・テナントが正しいことを検証します。
+
+```bash
+export BACKEND_CLIENT_ID FRONTEND_CLIENT_ID ACCESS_SCOPE_ID
+export APP_SERVICE_NAME SWA_NAME SWA_HOSTNAME
+
+source "$WORKSHOP_REPO_DIR/scripts/workshop-state.sh" &&
+workshop_state_save deployed &&
+workshop_state_load deployed &&
+printf 'デプロイ用の状態を保存・検証しました: %s/paas-workshop.json\n' "$WORKSHOP_STATE_DIR"
+```
+
+最後に `デプロイ用の状態を保存・検証しました: .../paas-workshop.json` と表示されることを確認してから、次の手順へ進んでください。
+
+> **`Workshop state error: Missing state value: BACKEND_CLIENT_ID` などが出た場合:**
+> 必要な変数が未設定、未保存、または別の `WORKSHOP_STATE_DIR` を参照しています。上の表の取得元で不足している変数を設定し、保存・検証を再実行してください。アプリ登録やスコープの ID は作成済みの値を使い、新しい ID に置き換えないでください。保存前に `workshop_state_load base` を実行すると、JSON に未保存の Client ID などが空に上書きされるため、現在のシェルに値がある場合は先に保存してください。
+
 ## 2. ビルド・デプロイ用のツールを確認する
 
 ```bash
