@@ -16,12 +16,25 @@ npm --version
 az version
 command -v zip
 command -v unzip
-command -v swa || npm install -g @azure/static-web-apps-cli@2.0.10
 printf 'SWA: %s\nHost: %s\n' "$SWA_NAME" "$SWA_HOSTNAME"
 printf 'Tenant: %s\nFrontend: %s\nBackend: %s\n' "$TENANT_ID" "$FRONTEND_CLIENT_ID" "$BACKEND_CLIENT_ID"
 ```
 
 Static Web Apps 名、ホスト名、Entra ID の各 ID が表示されることを確認します。
+
+### SWA CLI をユーザー領域にインストールする
+
+Cloud Shell の既定のグローバルインストール先（`/usr/lib/node_modules` など）は一般ユーザーでは書き込めないため、インストール先をユーザー領域の `$HOME/.local` に指定します。実行ファイルの保存先（`$HOME/.local/bin`）を `PATH` に追加してから、SWA CLI が見つからない場合だけインストールします。
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+(command -v swa || npm install --global --prefix "$HOME/.local" @azure/static-web-apps-cli@2.0.10) &&
+  swa --version
+```
+
+SWA CLI のバージョンが表示されることを確認してから、手順 2 へ進んでください。新規インストールした場合は `2.0.10` が表示されます。インストールが失敗した場合は次へ進まず、表示された npm のエラーを確認してください。
+
+> **Cloud Shell に再接続した場合も、このコマンドブロックを再実行してください。** `PATH` は現在のシェルと、そこから実行するデプロイスクリプトに引き継がれますが、`workshop_state_load deployed` では復元されません。インストール済みなら再インストールは不要です。`sudo npm install` や `/usr` 配下の権限変更は行いません。
 
 ## 2. フロントエンドをビルドして Static Web Apps へデプロイする
 

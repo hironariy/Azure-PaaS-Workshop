@@ -104,6 +104,90 @@ test('failed upload, stale published HTML, unhealthy API and ambiguous SWA selec
   }
 });
 
+function swaInstallProcedure() {
+  const page = fs.readFileSync(path.join(repository, 'materials/docs/learner/day-1-deploy-frontend.ja.md'), 'utf8');
+  const section = page.split('### SWA CLI をユーザー領域にインストールする')[1].split('## 2.')[0];
+  return section.match(/```bash\n([\s\S]*?)```/)[1];
+}
+
+function swaInstallFixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'paas-swa-install-'));
+  t.after(() => fs.rmSync(root, { recursive: true }));
+  const home = path.join(root, 'home with spaces');
+  const bin = path.join(root, 'bin');
+  fs.mkdirSync(home);
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(home, '.npmrc'), 'prefix=/usr\n');
+  const log = path.join(root, 'npm-calls.jsonl');
+  const cli = `#!${process.execPath}\nconsole.log('2.0.10');\n`;
+  const npm = `#!${process.execPath}
+const fs = require('node:fs'), path = require('node:path');
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.INSTALL_LOG, JSON.stringify(args) + '\\n');
+if (process.env.INSTALL_FAILURE === '1') {
+  console.error('CLI installation failed fixture');
+  process.exit(17);
+}
+const prefix = args[args.indexOf('--prefix') + 1];
+if (prefix !== path.join(process.env.HOME, '.local')) {
+  console.error('Refusing system installation fixture');
+  process.exit(19);
+}
+fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
+fs.writeFileSync(path.join(prefix, 'bin/swa'), ${JSON.stringify(cli)}, { mode: 0o755 });
+`;
+  fs.writeFileSync(path.join(bin, 'npm'), npm, { mode: 0o755 });
+  const env = { ...process.env, HOME: home, PATH: bin, NPM_CONFIG_PREFIX: '/usr', INSTALL_LOG: log,
+    INSTALL_FAILURE: '0' };
+  const run = () => spawnSync('/bin/bash', ['-c', swaInstallProcedure()], {
+    env, encoding: 'utf8', timeout: 10000,
+  });
+  const calls = () => fs.existsSync(log)
+    ? fs.readFileSync(log, 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
+  return { home, bin, env, run, calls };
+}
+
+test('exact learner SWA CLI install uses a user prefix and leaves npm configuration unchanged', t => {
+  const f = swaInstallFixture(t);
+  const run = f.run();
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /^2\.0\.10$/m);
+  assert.deepEqual(f.calls(), [[
+    'install', '--global', '--prefix', path.join(f.home, '.local'), '@azure/static-web-apps-cli@2.0.10',
+  ]]);
+  assert.equal(fs.readFileSync(path.join(f.home, '.npmrc'), 'utf8'), 'prefix=/usr\n');
+});
+
+test('exact learner SWA CLI install restores PATH after reconnect without reinstalling', t => {
+  const f = swaInstallFixture(t);
+  assert.equal(f.run().status, 0);
+  const reconnected = f.run();
+  assert.equal(reconnected.status, 0, reconnected.stderr);
+  assert(reconnected.stdout.includes(path.join(f.home, '.local/bin/swa')));
+  assert.match(reconnected.stdout, /^2\.0\.10$/m);
+  assert.equal(f.calls().length, 1);
+});
+
+test('exact learner SWA CLI install preserves an existing CLI on PATH', t => {
+  const f = swaInstallFixture(t);
+  fs.writeFileSync(path.join(f.bin, 'swa'), `#!${process.execPath}\nconsole.log('existing-cli');\n`, { mode: 0o755 });
+  const run = f.run();
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /^existing-cli$/m);
+  assert.deepEqual(f.calls(), []);
+});
+
+test('exact learner SWA CLI install propagates npm failure without running an unavailable CLI', t => {
+  const f = swaInstallFixture(t);
+  f.env.INSTALL_FAILURE = '1';
+  const run = f.run();
+  assert.equal(run.status, 17, run.stderr);
+  assert.match(run.stderr, /CLI installation failed fixture/);
+  assert.doesNotMatch(run.stderr, /command not found/);
+  assert.doesNotMatch(run.stdout, /2\.0\.10/);
+  assert.equal(f.calls().length, 1);
+});
+
 function spaProcedure() {
   const page = fs.readFileSync(path.join(repository, 'materials/docs/learner/day-1-deploy-infrastructure.ja.md'), 'utf8');
   const section = page.split('## 7. Static Web Apps URL を Entra ID に追加する')[1].split('## 8.')[0];

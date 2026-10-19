@@ -34,6 +34,19 @@ Day 0 の Entra ID 設定まで完了している場合は `workshop_state_load 
 
 もしサブスクリプションの不一致エラーが出た場合は、`az account set --subscription "$SUBSCRIPTION_ID"` を実行してから再度読み込んでください。
 
+## SWA CLI のインストールが `EACCES` で失敗する
+
+**症状:**
+`npm install -g @azure/static-web-apps-cli@2.0.10` で `EACCES: permission denied, mkdir '/usr/lib/node_modules/@azure'` などが表示される。
+
+**原因:**
+npm がシステム領域へグローバルインストールしようとしています。Cloud Shell の一般ユーザーにはそのディレクトリへの書き込み権限がありません。Azure の Owner ロールや Entra ID の権限とは別の、OS のファイルアクセス権限の問題です。
+
+**対処と確認:**
+[Day 1: フロントエンドのデプロイ](day-1-deploy-frontend.ja.html)の「SWA CLI をユーザー領域にインストールする」を実行してください。`--prefix "$HOME/.local"` でインストール先を指定し、`$HOME/.local/bin` を `PATH` に追加します。`swa --version` が成功してから、同じ Cloud Shell でデプロイを再開します。
+
+`sudo` やシステムディレクトリの権限変更は不要です。再接続後に `swa: command not found` となった場合も、同じ手順で `PATH` を再設定してください。
+
 ## リソースプロバイダーの登録で失敗する
 
 **症状:**
