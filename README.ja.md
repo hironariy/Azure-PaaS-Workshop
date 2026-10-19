@@ -41,7 +41,7 @@ GitHub Pages を有効化したコピーリポジトリでは、公開 URL は�
 
 通常のワークショップ参加では、ローカル PC に Azure CLI、Azure PowerShell、Bicep CLI、Node.js、Docker、WSL、PowerShell をインストールする必要はありません。CLI とデプロイ作業は Azure Cloud Shell Bash を標準にします。
 
-**Frontend tooling の更新候補:** [ARM ZIP deployment](materials/docs/learner/day-1-deploy-frontend.ja.md) は npm SWA CLI / SWA deployment token を使わず、prepared ZIP を許可済み HTTPS 保管先から公式 API に渡します。Storage 作成・追加ロール付与は行いません。Checksum、ARM completion、exact HTML と公開 readiness を確認しますが、保管先・実 upload・browser acceptance は別途確認します。Legacy CLI の audit advisory は解消済みとは扱いません。
+**Frontend tooling の更新候補:** [ARM ZIP deployment](materials/docs/learner/day-1-deploy-frontend.ja.md) は npm SWA CLI / SWA deployment token を使わず、prepared ZIP を許可済み HTTPS 保管先から公式 API に渡します。スクリプトは Storage 作成・追加ロール付与を自動実行しません。代替手順には、受講者が一時 Blob Storage と本人のデータアクセスロールを用意し、短期の読み取り専用 SAS でデプロイした後に削除する方法を記載しています。Checksum、ARM completion、exact HTML と公開 readiness を確認しますが、保管先・実 upload・browser acceptance は別途確認します。Legacy CLI の audit advisory は解消済みとは扱いません。
 
 ### Day 0 の Entra 権限と Azure Owner 前提
 
