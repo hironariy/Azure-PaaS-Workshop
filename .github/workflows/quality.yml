@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/quality.yml"
+      - ".github/workflows/blog-app-dependencies.yml"
       - "materials/backend/**"
       - "materials/frontend/**"
       - "materials/bicep/**"

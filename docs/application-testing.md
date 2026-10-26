@@ -175,6 +175,30 @@ Audit SWA CLI separately: a clean application audit does not establish that its
 deployment tool is clean. Do not use `npm audit fix --force`, ignore registry
 errors, or report unresolved upstream advisories as fixed.
 
+## Quarterly dependency vulnerability checks
+
+[Blog app dependencies](../.github/workflows/blog-app-dependencies.yml) runs on
+January, April, July and October 1 at **03:24 UTC (12:24 JST)**. It can also be
+started from **Actions > Blog app dependencies > Run workflow** after the
+workflow is merged into the default branch. Scheduled runs use that branch.
+
+Four independent jobs audit the committed backend/frontend lockfiles, each
+with all dependencies (including development tools) or production dependencies
+only. They use Node.js 24, the public-source guard and public npm, without
+installing packages or running dependency lifecycle scripts. A failing job
+does not cancel the other scopes. Reports appear in each job's audit log.
+This checks npm dependency advisories, not application code, containers, IaC
+or the separately managed legacy SWA CLI.
+
+Unlike the informational audits in the existing PR quality workflow, this
+dedicated workflow **fails on Low or higher advisories**, as well as registry
+or lockfile verification errors. It does not modify dependencies or deploy
+anything. Review findings and update dependencies in a separate PR.
+
+GitHub may disable scheduled workflows in public repositories after 60 days
+without repository activity. If quarterly runs stop, check **Actions** and
+re-enable the workflow; manual execution is also available.
+
 ## Pull request quality gates
 
 `.github/workflows/quality.yml` runs the application type-check, lint, tests,
