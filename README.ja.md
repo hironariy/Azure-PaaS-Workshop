@@ -118,6 +118,12 @@ Application Gateway、Bastion、VM への SSH、Azure Site Recovery などの Ia
 
 Bicep の構造を理解したい場合は、[Bicep ガイド](materials/docs/bicep-guide.ja.md) と [materials/bicep/README.md](materials/bicep/README.md) を参照してください。既存のデプロイスクリプトを確認したい場合は、[デプロイスクリプトガイド（任意）](materials/docs/development/deployment-scripts-guide.ja.md) を参照してください。
 
+### 四半期ごとの依存関係の脆弱性検査
+
+[Blog app dependencies](.github/workflows/blog-app-dependencies.yml) は、毎年 **1・4・7・10月1日 12:24（日本時間）** に default branch のフロントエンド・バックエンドの lockfile を検査します。開発用を含む全依存関係と本番依存関係をそれぞれ検査し、**Low 以上の脆弱性、レジストリ障害、lockfile 検証エラーで失敗**します。既存の PR 品質チェックの報告のみの audit 方針は変更しません。
+
+default branch へマージ後、**Actions > Blog app dependencies > Run workflow** から手動実行し、各ジョブの audit ログで結果を確認できます。依存関係のインストール・自動修正・Azure デプロイは行わず、旧 SWA CLI は検査対象外です。公開リポジトリで 60 日間アクティビティがないと定期実行が無効化される場合があるため、停止時は Actions で再有効化してください。詳細は [定期検査の説明](docs/application-testing.md#quarterly-dependency-vulnerability-checks) を参照してください。
+
 ## GitHub Pages の公開
 
 このリポジトリは GitHub Actions-based Pages を使います。管理者は GitHub の **Settings > Pages** で source を **GitHub Actions** に設定してください。`main` ブランチに `materials/docs/**`、`assets/**`、または `.github/workflows/pages.yml` の変更が push されると、受講者ポータルがビルド・公開されます。

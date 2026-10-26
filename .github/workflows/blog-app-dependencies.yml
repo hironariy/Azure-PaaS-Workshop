@@ -1,0 +1,43 @@
+name: Blog app dependencies
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Quarterly on Jan/Apr/Jul/Oct 1 at 03:24 UTC (12:24 JST).
+    - cron: "24 3 1 1,4,7,10 *"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Dependency audit (${{ matrix.application }}, ${{ matrix.audit.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        application: [backend, frontend]
+        audit:
+          - name: all
+            flag: --include=dev
+          - name: production
+            flag: --omit=dev
+    defaults:
+      run:
+        working-directory: materials/${{ matrix.application }}
+    steps:
+      - name: Checkout without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - name: Require portable public npm package sources
+        run: node ../../scripts/check-public-lock.cjs package-lock.json
+      - name: Audit committed dependencies without installing packages
+        env:
+          AUDIT_FLAG: ${{ matrix.audit.flag }}
+        run: npm audit --package-lock-only "$AUDIT_FLAG" --audit-level=low --registry=https://registry.npmjs.org
